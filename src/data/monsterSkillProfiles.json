@@ -1,0 +1,418 @@
+{
+  "archetypes": {
+    "beast": {
+      "starter": "bite",
+      "levels": {
+        "10": "howl",
+        "40": "pounce",
+        "80": "tail_sweep"
+      }
+    },
+    "avian": {
+      "starter": "peck",
+      "levels": {
+        "10": "howl",
+        "40": "wing_cleave",
+        "80": "spark"
+      }
+    },
+    "aquatic": {
+      "starter": "water_jet",
+      "levels": {
+        "10": "healing_pulse",
+        "40": "tentacle_crush",
+        "80": "tail_sweep"
+      }
+    },
+    "plant": {
+      "starter": "vine_whip",
+      "levels": {
+        "10": "healing_pulse",
+        "40": "spore_burst",
+        "80": "web_snare"
+      }
+    },
+    "insect": {
+      "starter": "bite",
+      "levels": {
+        "10": "stone_skin",
+        "40": "web_snare",
+        "80": "spore_burst"
+      }
+    },
+    "construct": {
+      "starter": "stone_fist",
+      "levels": {
+        "10": "stone_skin",
+        "40": "crushing_slam",
+        "80": "horn_charge"
+      }
+    },
+    "undead": {
+      "starter": "quick_claw",
+      "levels": {
+        "10": "howl",
+        "40": "spirit_drain",
+        "80": "venom_spit"
+      }
+    },
+    "humanoid": {
+      "starter": "tackle",
+      "levels": {
+        "10": "howl",
+        "40": "claw_swipe",
+        "80": "crushing_slam"
+      }
+    },
+    "mystic": {
+      "levels": {
+        "10": "healing_pulse",
+        "40": "crystal_shard",
+        "80": "mystic_burst"
+      },
+          "packHunter": {
+      "starter": "bite",
+      "levels": {
+        "10": "howl",
+        "40": "wolf_leap",
+        "80": "pack_hunt"
+      }
+    },
+    "venomous": {
+      "starter": "poison_sting",
+      "levels": {
+        "10": "stone_skin",
+        "40": "venom_spit",
+        "80": "basilisk_gaze"
+      }
+    },
+    "seaColossus": {
+      "starter": "water_jet",
+      "levels": {
+        "10": "healing_pulse",
+        "40": "hydra_barrage",
+        "80": "tentacle_crush"
+      }
+    },
+    "skyHunter": {
+      "starter": "peck",
+      "levels": {
+        "10": "howl",
+        "40": "wing_cleave",
+        "80": "spark"
+      }
+    },
+    "shadowCaster": {
+      "starter": "quick_claw",
+      "levels": {
+        "10": "stone_skin",
+        "40": "spirit_drain",
+        "80": "venom_spit"
+      }
+    },
+    "forestKeeper": {
+      "starter": "vine_whip",
+      "levels": {
+        "10": "healing_pulse",
+        "40": "spore_burst",
+        "80": "root_snare"
+      }
+    },
+        "armoredGuardian": {
+      "starter": "stone_fist",
+      "levels": {
+        "10": "stone_skin",
+        "40": "crushing_slam",
+        "80": "horn_charge"
+      }
+    },
+    "arcaneCaster": {
+      "levels": {
+        "10": "healing_pulse",
+        "40": "crystal_shard",
+        "80": "mystic_burst"
+      }
+    },
+    "raider": {
+      "starter": "quick_claw",
+      "levels": {
+        "10": "howl",
+        "40": "goblin_trick",
+        "80": "crushing_slam"
+      }
+    },
+    "restlessDead": {
+      "starter": "quick_claw",
+      "levels": {
+        "10": "howl",
+        "40": "spirit_drain",
+        "80": "venom_spit"
+      }
+    }
+
+
+    }
+  },
+  "speciesArchetypes": {
+    "beast": [
+      "basilisk", "cave_bear", "cave_worm", "cerberus", "chimera",
+      "cinderback_salamander", "cockatrice", "comet_tail_fox",
+      "emberhorn_ram", "galecrest_lynx", "hellhound", "manticore",
+      "mossveil_lynx", "nightglass_stalker", "wild_boar",
+      "windscar_stalker", "zephyr_hound"
+    ],
+    "avian": [
+      "ashen_kestrel", "cloudmantle_owl", "griffin", "harpy",
+      "hippogriff", "pegasus", "phoenix", "roc",
+      "skyribbon_serpent", "stormneedle_manta", "thunderkite",
+      "whistlewing_bat", "wyvern"
+    ],
+    "aquatic": [
+      "brineglass_jelly", "coral_guardian", "drowned_bellkeeper",
+      "hydra", "kraken", "leviathan_spawn", "merfolk_warrior",
+      "pearlback_tortoise", "sea_serpent", "siltjaw_eel", "siren",
+      "water_elemental", "water_nymph"
+    ],
+    "plant": [
+      "briarbound_wisp", "dryad", "forest_sprite", "pollen_oracle",
+      "sporeback_toad", "thornroot_stag", "treant"
+    ],
+    "insect": [
+      "barkplate_pangolin", "crystal_spider", "giant_spider",
+      "sootveil_moth", "starwake_moth", "sunshard_beetle"
+    ],
+    "construct": [
+      "behemoth", "crystal_golem", "earth_elemental", "gargoyle",
+      "ice_golem", "iron_guardian", "rock_elemental", "stone_golem"
+    ],
+    "undead": [
+      "death_knight", "ghost", "gloamweaver", "hollow_lantern",
+      "lich", "skeleton", "vampire", "wraith", "zombie"
+    ],
+    "humanoid": [
+      "balor", "cyclops", "demon_warrior", "forest_troll",
+      "goblin", "hobgoblin", "imp", "incubus", "minotaur",
+      "mountain_troll", "ogre", "orc_shaman", "orc_warrior",
+      "pit_fiend", "succubus", "troll"
+    ],
+    "mystic": [
+      "air_elemental", "arcane_wisp", "dawncoil_serpent", "djinn",
+      "fire_elemental", "moon_stag", "prism_herald", "sphinx",
+      "star_seraph", "unicorn"
+    ],
+        "armoredGuardian": [
+      "behemoth",
+      "crystal_golem",
+      "gargoyle",
+      "iron_guardian",
+      "stone_golem"
+    ],
+    "arcaneCaster": [
+      "arcane_wisp",
+      "djinn",
+      "orc_shaman",
+      "prism_herald",
+      "sphinx",
+      "star_seraph",
+      "unicorn"
+    ],
+    "raider": [
+      "hobgoblin",
+      "minotaur",
+      "ogre",
+      "orc_warrior",
+      "forest_troll",
+      "mountain_troll",
+      "troll",
+      "balor",
+      "demon_warrior",
+      "imp",
+      "incubus",
+      "succubus",
+      "pit_fiend"
+    ],
+    "restlessDead": [
+      "ghost",
+      "hollow_lantern",
+      "skeleton",
+      "vampire",
+      "wraith",
+      "zombie",
+      "death_knight"
+    ]
+
+  },
+  "profiles": {
+    "dire_wolf": {
+      "starter": "bite",
+      "levels": {
+        "10": "howl",
+        "20": "briar_rend",
+        "40": "wolf_leap",
+        "80": "pack_hunt"
+      },
+      "bondSkill": "elderbloom_aegis"
+    },
+    "basilisk": {
+      "starter": "poison_sting",
+      "levels": {
+        "10": "stone_skin",
+        "20": "briar_rend",
+        "40": "basilisk_gaze",
+        "80": "venom_spit"
+      },
+      "bondSkill": "elderbloom_aegis"
+    },
+    "hydra": {
+      "starter": "water_jet",
+      "levels": {
+        "10": "healing_pulse",
+        "20": "undertow_fang",
+        "40": "hydra_barrage",
+        "80": "tentacle_crush"
+      },
+      "bondSkill": "abyssal_current"
+    },
+    "phoenix": {
+      "starter": "ember_breath",
+      "levels": {
+        "10": "healing_pulse",
+        "20": "cinder_maw",
+        "40": "wing_cleave",
+        "80": "ash_rebirth"
+      },
+      "bondSkill": "worldfire_crown"
+    },
+    "lich": {
+      "starter": "quick_claw",
+      "levels": {
+        "10": "stone_skin",
+        "20": "gloomfang",
+        "40": "spirit_drain",
+        "80": "venom_spit"
+      },
+      "bondSkill": "abyssal_unmaking"
+    },
+    "siren": {
+      "starter": "water_jet",
+      "levels": {
+        "10": "healing_pulse",
+        "20": "undertow_fang",
+        "40": "siren_song",
+        "80": "tail_sweep"
+      },
+      "bondSkill": "abyssal_current"
+    },
+    "treant": {
+      "starter": "vine_whip",
+      "levels": {
+        "10": "stone_skin",
+        "20": "briar_rend",
+        "40": "spore_burst",
+        "80": "root_snare"
+      },
+      "bondSkill": "elderbloom_aegis"
+    },
+    "goblin": {
+      "starter": "quick_claw",
+      "levels": {
+        "10": "howl",
+        "20": "faultbreaker",
+        "40": "goblin_trick",
+        "80": "crushing_slam"
+      },
+      "bondSkill": "mountain_verdict"
+    },
+    "ignaroth": {
+      "starter": "magma_claw",
+      "levels": {
+        "10": "cinder_ward",
+        "20": "volcanic_breath",
+        "40": "magma_burst",
+        "80": "ash_rebirth"
+      },
+      "bondSkill": "worldfire_crown"
+    },
+    "frostmourn": {
+      "starter": "frostfang",
+      "levels": {
+        "10": "permafrost_shell",
+        "20": "glacial_breath",
+        "40": "rime_lance",
+        "80": "winter_mend"
+      },
+      "bondSkill": "absolute_zero"
+    },
+    "nythrakar": {
+      "starter": "shadow_talon",
+      "levels": {
+        "10": "dread_howl",
+        "20": "soul_curse",
+        "40": "umbral_rend",
+        "80": "void_renewal"
+      },
+      "bondSkill": "abyssal_unmaking"
+    },
+    "aurelion": {
+      "starter": "starlight_claw",
+      "levels": {
+        "10": "constellation_aegis",
+        "20": "starfire_ray",
+        "40": "celestial_spear",
+        "80": "dawn_mend"
+      },
+      "bondSkill": "genesis_starlight"
+    },
+        "vampire": {
+      "starter": "bite",
+      "levels": {
+        "10": "howl",
+        "20": "gloomfang",
+        "40": "spirit_drain",
+        "80": "venom_spit"
+      },
+      "bondSkill": "abyssal_unmaking"
+    },
+    "orc_shaman": {
+      "starter": "poison_sting",
+      "levels": {
+        "10": "healing_pulse",
+        "20": "gloomfang",
+        "40": "spirit_drain",
+        "80": "venom_spit"
+      },
+      "bondSkill": "abyssal_unmaking"
+    },
+    "pegasus": {
+      "starter": "claw_swipe",
+      "levels": {
+        "10": "healing_pulse",
+        "20": "starwake_lance",
+        "40": "wing_cleave",
+        "80": "mystic_burst"
+      },
+      "bondSkill": "celestial_convergence"
+    },
+    "sphinx": {
+      "starter": "claw_swipe",
+      "levels": {
+        "10": "howl",
+        "20": "starwake_lance",
+        "40": "crystal_shard",
+        "80": "mystic_burst"
+      },
+      "bondSkill": "celestial_convergence"
+    },
+    "pollen_oracle": {
+      "starter": "spore_burst",
+      "levels": {
+        "10": "healing_pulse",
+        "20": "briar_rend",
+        "40": "poison_sting",
+        "80": "web_snare"
+      },
+      "bondSkill": "elderbloom_aegis"
+    }
+
+  }
+}

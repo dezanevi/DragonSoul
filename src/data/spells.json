@@ -1,0 +1,36 @@
+[
+  {"id":"fire_spark","name":"Ohnivá jiskra","description":"Zasáhne nepřítele prudkou ohnivou střelou.","school":"fire","manaCost":4,"damage":7,"range":4,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"enemy"},
+  {"id":"flame_wall","name":"Plamenná stěna","description":"Vyšle na cíl široký závoj plamenů.","school":"fire","manaCost":7,"damage":11,"range":4,"area":0,"statusEffect":null,"requiredMastery":2,"targetType":"enemy"},
+  {"id":"meteor","name":"Meteorický úder","description":"Zasáhne nepřítele žhavým úlomkem z nebe.","school":"fire","manaCost":11,"damage":16,"range":6,"area":0,"statusEffect":null,"requiredMastery":3,"targetType":"enemy"},
+  {"id":"inferno","name":"Pekelný žár","description":"Udeří do cíle ničivou vlnou žáru.","school":"fire","manaCost":16,"damage":23,"range":6,"area":0,"statusEffect":null,"requiredMastery":4,"targetType":"enemy"},
+
+  {"id":"ice_bolt","name":"Ledový střep","description":"Vystřelí na nepřítele ostrý kus ledu.","school":"water","manaCost":4,"damage":7,"range":5,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"enemy"},
+  {"id":"frost_nova","name":"Mrazivá vlna","description":"Zasáhne cíl soustředěnou vlnou mrazu.","school":"water","manaCost":7,"damage":11,"range":4,"area":0,"statusEffect":null,"requiredMastery":2,"targetType":"enemy"},
+  {"id":"glacier_spear","name":"Ledovcové kopí","description":"Probodne nepřítele dlouhým ledovým hrotem.","school":"water","manaCost":11,"damage":16,"range":7,"area":0,"statusEffect":null,"requiredMastery":3,"targetType":"enemy"},
+  {"id":"winter_surge","name":"Zimní příval","description":"Udeří do cíle silou horské sněhové bouře.","school":"water","manaCost":16,"damage":23,"range":7,"area":0,"statusEffect":null,"requiredMastery":4,"targetType":"enemy"},
+
+  {"id":"stone_spike","name":"Kamenný hrot","description":"Vyrazí ze země pod cílem ostrý kámen.","school":"earth","manaCost":4,"damage":7,"range":4,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"enemy"},
+  {"id":"rock_burst","name":"Kamenný výbuch","description":"Zasype nepřítele střepinami kamene.","school":"earth","manaCost":7,"damage":11,"range":4,"area":0,"statusEffect":null,"requiredMastery":2,"targetType":"enemy"},
+  {"id":"fault_line","name":"Zlom země","description":"Udeří do cíle prudkým otřesem země.","school":"earth","manaCost":11,"damage":16,"range":6,"area":0,"statusEffect":null,"requiredMastery":3,"targetType":"enemy"},
+  {"id":"crystal_spear","name":"Křišťálové kopí","description":"Zasáhne nepřítele kopím z tvrdého krystalu.","school":"earth","manaCost":16,"damage":23,"range":6,"area":0,"statusEffect":null,"requiredMastery":4,"targetType":"enemy"},
+
+  {"id":"air_gale_needle","name":"Jehla větru","description":"Vystřelí na nepřítele ostrý úlomek zformovaný ze vzduchu.","school":"air","manaCost":4,"damage":6,"range":10,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"enemy"},
+  {"id":"gust_blade","name":"Čepel vichru","description":"Pošle na cíl úzkou čepel stlačeného vzduchu.","school":"air","manaCost":7,"damage":11,"range":6,"area":0,"statusEffect":null,"requiredMastery":2,"targetType":"enemy"},
+  {"id":"thunder_strike","name":"Hromový zásah","description":"Udeří do nepřítele bleskem z bouřkového mraku.","school":"air","manaCost":11,"damage":16,"range":8,"area":0,"statusEffect":null,"requiredMastery":3,"targetType":"enemy"},
+  {"id":"cyclone_lance","name":"Kopí cyklónu","description":"Zasáhne vzdálený cíl soustředěným vzdušným vírem.","school":"air","manaCost":16,"damage":23,"range":10,"area":0,"statusEffect":null,"requiredMastery":4,"targetType":"enemy"},
+
+  {"id":"sunbeam","name":"Sluneční paprsek","description":"Zasáhne nepřítele paprskem čistého světla.","school":"light","manaCost":4,"damage":7,"range":5,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"enemy"},
+  {"id":"radiant_lance","name":"Zářivé kopí","description":"Probodne cíl soustředěnou září.","school":"light","manaCost":7,"damage":11,"range":5,"area":0,"statusEffect":null,"requiredMastery":2,"targetType":"enemy"},
+  {"id":"starfall","name":"Pád hvězdy","description":"Dopadne na nepřítele třpytem hvězdné energie.","school":"light","manaCost":11,"damage":16,"range":7,"area":0,"statusEffect":null,"requiredMastery":3,"targetType":"enemy"},
+  {"id":"dawn_surge","name":"Úsvitní příval","description":"Udeří do cíle mocnou vlnou nebeského světla.","school":"light","manaCost":16,"damage":23,"range":7,"area":0,"statusEffect":null,"requiredMastery":4,"targetType":"enemy"},
+
+  {"id":"shadow_bolt","name":"Stínový šíp","description":"Vystřelí na nepřítele střelu temné energie.","school":"dark","manaCost":4,"damage":7,"range":5,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"enemy"},
+  {"id":"void_lance","name":"Kopí prázdnoty","description":"Zasáhne cíl úlomkem z temné dimenze.","school":"dark","manaCost":7,"damage":11,"range":5,"area":0,"statusEffect":null,"requiredMastery":2,"targetType":"enemy"},
+  {"id":"soul_rend","name":"Trhlina duše","description":"Zraní nepřítele prudkým zábleskem temné síly.","school":"dark","manaCost":11,"damage":16,"range":7,"area":0,"statusEffect":null,"requiredMastery":3,"targetType":"enemy"},
+  {"id":"abyssal_ray","name":"Paprsek propasti","description":"Udeří do cíle ničivým paprskem z Abyssu.","school":"dark","manaCost":16,"damage":23,"range":8,"area":0,"statusEffect":null,"requiredMastery":4,"targetType":"enemy"},
+
+  {"id":"air_tailwind","name":"Zadní vítr","description":"Spojenec dostane vítr do zad: na 2 tahy +3 Tempo.","school":"air","manaCost":3,"damage":0,"range":10,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"ally","effect":{"type":"buff","stat":"speed","amount":3,"duration":2}},
+  {"id":"water_mending","name":"Léčivý pramen","description":"Obnoví spojenci 10 HP.","school":"water","manaCost":4,"damage":0,"range":10,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"ally","effect":{"type":"heal","amount":10}},
+  {"id":"earth_stoneskin","name":"Kamenná kůže","description":"Na 2 tahy +3 Zbroj spojence.","school":"earth","manaCost":4,"damage":0,"range":10,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"ally","effect":{"type":"buff","stat":"defense","amount":3,"duration":2}},
+  {"id":"light_blessing","name":"Požehnání","description":"Na 2 tahy +3 Síla spojence.","school":"light","manaCost":4,"damage":0,"range":10,"area":0,"statusEffect":null,"requiredMastery":1,"targetType":"ally","effect":{"type":"buff","stat":"attack","amount":3,"duration":2}}
+]

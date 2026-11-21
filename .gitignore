@@ -1,0 +1,11 @@
+# Závislosti a sestavená hra (GitHub si hru sestaví sám, viz .github/workflows)
+node_modules/
+dist/
+
+# Archiv verzí (ZIPy) zůstává jen na disku
+archiv/
+
+# Místní nastavení
+.claude/settings.local.json
+.vscode/
+*.log

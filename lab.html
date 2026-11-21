@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dragon Souls – laboratoř terénů</title>
+    <style>
+      :root {
+        --bg: #10151a;
+        --panel: #182028;
+        --panel-2: #212b35;
+        --line: #33414e;
+        --text: #f1e6c8;
+        --muted: #a9a08a;
+        --accent: #d9a74a;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.45 system-ui, sans-serif;
+      }
+
+      body {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        overflow: hidden;
+      }
+
+      aside {
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        overflow-y: auto;
+        padding: 16px;
+      }
+
+      h1 {
+        font-size: 17px;
+        margin: 0 0 4px;
+        color: var(--accent);
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 0 0 14px;
+      }
+
+      section {
+        border-top: 1px solid var(--line);
+        padding: 12px 0;
+      }
+
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 10px;
+        color: var(--muted);
+      }
+
+      label {
+        display: block;
+        margin: 8px 0 4px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .row input[type='range'] { flex: 1; }
+
+      output {
+        min-width: 52px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+      }
+
+      .info {
+        background: var(--panel-2);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+        white-space: pre-line;
+      }
+
+      button, select {
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 10px;
+        font: inherit;
+      }
+
+      button:hover { border-color: var(--accent); cursor: pointer; }
+
+      select { width: 100%; }
+
+      .drop {
+        border: 2px dashed var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .drop.active { border-color: var(--accent); color: var(--text); }
+
+      #textures {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+      }
+
+      #textures li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      #textures li.selected { background: var(--panel-2); outline: 1px solid var(--accent); }
+
+      #textures img {
+        width: 36px;
+        height: 36px;
+        object-fit: cover;
+        border-radius: 4px;
+      }
+
+      #textures span {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #stage {
+        position: relative;
+        min-width: 0;
+      }
+
+      #stage canvas { display: block; }
+    </style>
+  </head>
+
+  <body>
+    <aside>
+      <h1>Laboratoř terénů</h1>
+      <p class="hint">
+        Oddělené od hry. Pohyb WASD / šipky, zoom kolečkem.
+        Rozměry polí odpovídají hře.
+      </p>
+
+      <section>
+        <h2>Hrdina</h2>
+        <label for="heroHeight">Výška na obrazovce</label>
+        <div class="row">
+          <input id="heroHeight" type="range" min="48" max="256" step="2" />
+          <output id="heroHeightOut"></output>
+        </div>
+        <div class="info" id="heroInfo"></div>
+      </section>
+
+      <section>
+        <h2>Zobrazení</h2>
+        <label for="view">Pohled</label>
+        <select id="view">
+          <option value="iso">Izometrický (kamera z JV, pole 128 × 64 px)</option>
+          <option value="square">Čtvercový shora (pole 64 × 64 px)</option>
+        </select>
+        <label for="zoom">Zoom kamery</label>
+        <div class="row">
+          <input id="zoom" type="range" min="0.3" max="3" step="0.05" />
+          <output id="zoomOut"></output>
+        </div>
+        <div class="check"><input id="grid" type="checkbox" /><label for="grid">Mřížka polí</label></div>
+        <div class="check"><input id="smooth" type="checkbox" /><label for="smooth">Vyhlazování textur (hra ho má vypnuté)</label></div>
+        <label for="baseColor">Barva podkladu bez textury</label>
+        <input id="baseColor" type="color" />
+      </section>
+
+      <section>
+        <h2>Terény</h2>
+        <div class="drop" id="drop">Přetáhni sem obrázky textur<br />nebo klikni a vyber</div>
+        <input id="file" type="file" accept="image/*" multiple hidden />
+        <ul id="textures"></ul>
+
+        <label for="kind">Typ obrázku</label>
+        <select id="kind">
+          <option value="seamless">Opakovatelná textura shora (promítne se do izometrie)</option>
+          <option value="tile">Hotová izometrická dlaždice (kosočtverec)</option>
+        </select>
+
+        <label for="tiles">Jedna kopie textury pokryje</label>
+        <div class="row">
+          <input id="tiles" type="range" min="1" max="16" step="1" />
+          <output id="tilesOut"></output>
+        </div>
+        <div class="info" id="textureInfo">Žádná textura.</div>
+
+        <div class="check"><input id="fillBase" type="checkbox" /><label for="fillBase">Vybraná textura jako celý podklad</label></div>
+        <p class="hint">
+          Štětec: levé tlačítko myši maluje vybranou texturu do pole,
+          pravé pole maže. Vzor navazuje přes pole stejně jako ve hře.
+        </p>
+        <div class="row">
+          <button id="clearPaint">Smazat malbu</button>
+          <button id="export">Kopírovat nastavení</button>
+        </div>
+      </section>
+    </aside>
+
+    <main id="stage"></main>
+
+    <script type="module" src="/src/lab/lab.js"></script>
+  </body>
+</html>
