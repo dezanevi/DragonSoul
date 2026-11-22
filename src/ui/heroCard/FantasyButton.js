@@ -19,10 +19,13 @@ export default class FantasyButton {
     this.onClick = options.onClick ?? (() => {});
     this.onHover = options.onHover ?? null;
     this.onOut = options.onOut ?? null;
+    // Volá se při každé změně stavu (pro tlačítka kreslená obrázky stavů).
+    this.onStateChange = options.onStateChange ?? null;
 
     this.active = Boolean(options.active);
     // false = aktivní stav kreslí někdo jiný (např. modrý obrázek záložky).
     this.drawActive = options.drawActive ?? true;
+    this.drawHover = options.drawHover ?? true;
     this.disabled = Boolean(options.disabled);
     this.hovered = false;
     this.pressed = false;
@@ -94,12 +97,21 @@ export default class FantasyButton {
     return this;
   }
 
+  // Stav pro obrázkové varianty: disabled / active (stisk) / hover / normal.
+  get visualState() {
+    if (this.disabled) return 'disabled';
+    if (this.pressed) return 'active';
+    if (this.hovered) return 'hover';
+    return 'normal';
+  }
+
   redraw() {
     const g = this.graphics;
     const { x, y, w, h } = this.area;
     const r = this.radius;
 
     g.clear();
+    this.onStateChange?.(this);
 
     if (this.disabled) {
       // Šedý závoj tlumí barvy namalovaného tlačítka.
@@ -107,11 +119,11 @@ export default class FantasyButton {
       g.lineStyle(2, 0x9a9a9a, 0.8).strokeRoundedRect(x + 1, y + 1, w - 2, h - 2, r);
     } else {
       const showActive = this.active && this.drawActive;
-      const style = this.pressed
+      const style = this.pressed && this.drawHover
         ? STYLE.pressed
         : showActive
           ? STYLE.active
-          : this.hovered
+          : this.hovered && this.drawHover
             ? STYLE.hover
             : null;
 
@@ -126,7 +138,7 @@ export default class FantasyButton {
         g.strokeRoundedRect(x + 1.5, y + 1.5, w - 3, h - 3, r);
 
         // Aktivní prvek pod myší dostane navíc zlatý vnitřní lem.
-        if (showActive && this.hovered && !this.pressed) {
+        if (showActive && this.hovered && this.drawHover && !this.pressed) {
           g.lineStyle(2, STYLE.hover.stroke, 0.9);
           g.strokeRoundedRect(x + 5, y + 5, w - 10, h - 10, Math.max(2, r - 4));
         }

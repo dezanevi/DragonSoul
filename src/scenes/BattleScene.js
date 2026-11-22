@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { normalizeInventory, getItemCount, removeItem, addItem, rollDrops } from '../systems/InventorySystem.js';
+import { getItem } from '../data/items.js';
 import spellRows from '../data/spells.json';
 import {
   applyStatusEffect,
@@ -46,12 +48,24 @@ import {
 } from '../systems/MonsterSystem.js';
 import { applyHeroLevelUp } from '../systems/HeroProgressionSystem.js';
 import { normalizeElement } from '../systems/ElementSystem.js';
-import { HERO_TEXTURE, heroIdleFrame } from '../entities/heroSprite.js';
+import {
+  getTalentBonuses,
+  getEffectiveSpellPower,
+  getSpellManaCost,
+  getMasteryExpMultiplier,
+  getSpellDamageMultiplier
+} from '../systems/TalentSystem.js';
+import { heroTexture, heroIdleFrame } from '../entities/heroSprite.js';
 import { objectTextureKey, SHEET_SCALE } from '../entities/objectSprites.js';
 
 // Souboj: tahový boj na mřížce 10 × 8 v perspektivním pohledu.
-// Herní pravidla (poškození, schopnosti, AI, odchyt, odměny) jsou převzatá
+// Herní pravidla (poškození, schopnosti, AI, ochočení, odměny) jsou převzatá
 // z původní scény; nové je vykreslení, ovládání a zvýrazňování dosahu.
+
+// Počet divokých monster v náhodném setkání podle oblasti [min, max].
+const ENCOUNTER_SIZE = { Greenvale: [1, 3], default: [1, 5] };
+// Startovní pole nepřátel (nejvýš 5).
+const ENEMY_POSITIONS = [{ x: 8, y: 3 }, { x: 8, y: 5 }, { x: 9, y: 1 }, { x: 9, y: 6 }, { x: 7, y: 7 }];
 
 const COLUMNS = 10;
 const ROWS = 8;
@@ -136,13 +150,15 @@ export default class BattleScene extends Phaser.Scene {
     this.logLines = [];
 
     this.state.party ??= [];
-    this.state.inventory ??= {};
+    normalizeInventory(this.state);
     this.state.bestiary ??= {};
     this.state.spellbook ??= [];
     this.state.magicMastery ??= {};
 
-    this.createWildMonster();
-    this.units = [...this.createPartyUnits(), this.createEnemyUnit()];
+    // Účinky talentů a pasivního bonusu specializace (TalentSystem).
+    this.talentBonuses = getTalentBonuses(this.state);
+    this.createWildMonsters();
+    this.units = [...this.createPartyUnits(), ...this.createEnemyUnits()];
 
     this.view = new BoardProjection({
       columns: COLUMNS,
@@ -166,44 +182,75 @@ export default class BattleScene extends Phaser.Scene {
     this.time.delayedCall(350, () => this.beginTurn());
   }
 
-  createWildMonster() {
+  // Divoká monstra souboje. Náhodné setkání: počet podle oblasti (systém umí 1–5,
+  // začáteční Greenvale zatím 1–3). Jeskynní sliz má s sebou 2 gobliny 5. úrovně.
+  createWildMonsters() {
     const currentRegion = this.state.region || 'Greenvale';
     const playerLevel = Number(this.state.level) || 1;
     this.isBoss = this.encounter?.type === 'greenvale_cave_boss';
+    this.wildMonsters = [];
 
     if (this.isBoss) {
       const bossLevel = Math.max(3, Math.min(10, playerLevel + 2));
-      this.wildMonster = createMonster('cave_worm', bossLevel);
-      this.wildMonster.name = 'Jeskynní strážce';
+      const slime = createMonster('cave_slime', bossLevel);
+      slime.name = 'Jeskynní sliz';
+      slime.isBoss = true;
+      this.wildMonsters.push(slime, createMonster('goblin', 5), createMonster('goblin', 5));
     } else {
       let availableSpecies = MONSTER_SPECIES.filter(
         (species) => species.region === currentRegion && species.rarity !== 'rare'
       );
-
       if (availableSpecies.length === 0) {
         availableSpecies = MONSTER_SPECIES.filter((species) => species.rarity === 'common');
       }
 
-      const chosenSpecies = availableSpecies[Phaser.Math.Between(0, availableSpecies.length - 1)];
-      this.wildMonster = createMonster(chosenSpecies.id, Math.max(1, playerLevel));
+      const [min, max] = this.encounter?.count
+        ? [this.encounter.count, this.encounter.count]
+        : ENCOUNTER_SIZE[currentRegion] ?? ENCOUNTER_SIZE.default;
+      const count = Phaser.Math.Clamp(Phaser.Math.Between(min, max), 1, ENEMY_POSITIONS.length);
+      for (let i = 0; i < count; i++) {
+        const chosenSpecies = availableSpecies[Phaser.Math.Between(0, availableSpecies.length - 1)];
+        this.wildMonsters.push(createMonster(chosenSpecies.id, Math.max(1, playerLevel)));
+      }
     }
 
-    const seenRecord = this.state.bestiary[this.wildMonster.speciesId] ?? { seen: 0, caught: 0, defeated: 0 };
-    seenRecord.seen += 1;
-    this.state.bestiary[this.wildMonster.speciesId] = seenRecord;
+    // Stejná jména odliší písmeno (Goblin A, Goblin B).
+    const counts = {};
+    for (const monster of this.wildMonsters) counts[monster.name] = (counts[monster.name] ?? 0) + 1;
+    const used = {};
+    for (const monster of this.wildMonsters) {
+      if (counts[monster.name] > 1) {
+        const n = used[monster.name] = (used[monster.name] ?? 0) + 1;
+        monster.name = `${monster.name} ${String.fromCharCode(64 + n)}`;
+      }
+    }
+
+    // Hlavní monstrum (boss / první) – pro starší části kódu.
+    this.wildMonster = this.wildMonsters[0];
+
+    for (const monster of this.wildMonsters) {
+      const seenRecord = this.state.bestiary[monster.speciesId] ?? { seen: 0, caught: 0, defeated: 0 };
+      seenRecord.seen += 1;
+      this.state.bestiary[monster.speciesId] = seenRecord;
+    }
   }
 
-  createEnemyUnit() {
-    const wildStats = this.wildMonster.stats;
+  createEnemyUnits() {
+    return this.wildMonsters.map((monster, index) => this.createEnemyUnit(monster, ENEMY_POSITIONS[index]));
+  }
+
+  createEnemyUnit(monster, position) {
+    const wildStats = monster.stats;
     const wildBattleHp = Math.max(12, Math.ceil(wildStats.vitality * 0.65));
 
     return {
-      id: this.wildMonster.instanceId,
-      name: this.wildMonster.name,
+      id: monster.instanceId,
+      name: monster.name,
       side: 'enemy',
-      x: 8,
-      y: 3,
-      hp: Math.min(this.wildMonster.currentHp, wildBattleHp),
+      x: position.x,
+      y: position.y,
+      boss: Boolean(monster.isBoss),
+      hp: Math.min(monster.currentHp, wildBattleHp),
       maxHp: wildBattleHp,
       attack: Math.max(2, Math.floor(wildStats.force * 0.4)),
       aether: Number(wildStats.aether) || 1,
@@ -215,7 +262,7 @@ export default class BattleScene extends Phaser.Scene {
       range: 1,
       guarding: false,
       movedThisTurn: false,
-      monster: this.wildMonster
+      monster
     };
   }
 
@@ -248,11 +295,13 @@ export default class BattleScene extends Phaser.Scene {
       return true;
     });
 
+    // Velitelský bonus = statistika hrdiny / 5 + talenty stromu Souboj (rozkazy, Dračí taktika).
+    const talents = this.talentBonuses;
     const commanderBonus = {
-      physicalAttack: Math.floor(Math.max(0, Number(this.state.attack) || 0) / 5),
-      magicAttack: Math.floor(Math.max(0, Number(this.state.magicAttack) || 0) / 5),
-      defense: Math.floor(Math.max(0, Number(this.state.defense) || 0) / 5),
-      magicResistance: Math.floor(Math.max(0, Number(this.state.magicResistance) || 0) / 5)
+      physicalAttack: Math.floor(Math.max(0, Number(this.state.attack) || 0) / 5) + talents.commanderAttack,
+      magicAttack: Math.floor(Math.max(0, Number(this.state.magicAttack) || 0) / 5) + talents.commanderMagicAttack,
+      defense: Math.floor(Math.max(0, Number(this.state.defense) || 0) / 5) + talents.commanderDefense,
+      magicResistance: Math.floor(Math.max(0, Number(this.state.magicResistance) || 0) / 5) + talents.commanderMagicResistance
     };
 
     return readyMonsters.slice(0, startingPositions.length).map((monster, index) => {
@@ -273,7 +322,8 @@ export default class BattleScene extends Phaser.Scene {
         defense: armor,
         armor,
         resolve: monster.stats.resolve + commanderBonus.magicResistance,
-        speed: monster.stats.tempo + bondBonus.speed,
+        speed: monster.stats.tempo + bondBonus.speed + talents.monsterTempo, // Vůdce smečky
+        statusChanceReduction: talents.statusChanceReduction, // Nezlomné velení
         move: monster.stats.tempo >= 12 ? 3 : 2,
         range: 1,
         guarding: false,
@@ -374,7 +424,7 @@ export default class BattleScene extends Phaser.Scene {
         speciesId: unit.monster?.speciesId,
         element: unit.monster?.element,
         side: unit.side,
-        boss: unit.side === 'enemy' && this.isBoss
+        boss: unit.side === 'enemy' && unit.boss
       });
       unit.bars = this.add.graphics();
       unit.label = uiText(this, 0, 0, '', {
@@ -441,7 +491,7 @@ export default class BattleScene extends Phaser.Scene {
     const x = unit.model.x;
     const y = unit.model.y;
     const scale = unit.model.scale;
-    const top = y - (this.isBoss && unit.side === 'enemy' ? 205 : 160) * scale;
+    const top = y - (unit.boss ? 205 : 160) * scale;
     const width = 120 * scale;
     const height = 10;
     const ratio = Phaser.Math.Clamp(unit.hp / unit.maxHp, 0, 1);
@@ -495,8 +545,8 @@ export default class BattleScene extends Phaser.Scene {
     this.arionAura.setPosition(feet.x, feet.y);
     this.drawArionAura();
 
-    if (this.textures.exists(HERO_TEXTURE)) {
-      this.arion = this.add.sprite(feet.x, feet.y + 8, HERO_TEXTURE, heroIdleFrame('east'))
+    if (this.textures.exists(heroTexture(this.state.gender))) {
+      this.arion = this.add.sprite(feet.x, feet.y + 8, heroTexture(this.state.gender), heroIdleFrame('east'))
         .setOrigin(0.5, 1)
         .setDisplaySize(195, 260)
         .setDepth(DEPTH.units + feet.y);
@@ -542,8 +592,8 @@ export default class BattleScene extends Phaser.Scene {
     hero.fillStyle(0x0b1a26, 1).fillCircle(96, 90, 50);
     hero.lineStyle(3, 0xb48cff, 0.8).strokeCircle(96, 90, 50);
 
-    if (this.textures.exists(HERO_TEXTURE)) {
-      const portrait = this.add.image(96, 112, HERO_TEXTURE, heroIdleFrame('south'))
+    if (this.textures.exists(heroTexture(this.state.gender))) {
+      const portrait = this.add.image(96, 112, heroTexture(this.state.gender), heroIdleFrame('south'))
         .setDisplaySize(92, 123)
         .setDepth(DEPTH.ui + 1);
       const maskShape = this.make.graphics({ add: false }).fillCircle(96, 90, 47);
@@ -584,7 +634,7 @@ export default class BattleScene extends Phaser.Scene {
       new BattleButton(this, 0, 0, 136, 76, { label, accent, hotkey, sub: ' ', onClick, onHover: (b) => this.showActionTip(b), onOut: () => this.tooltip.hide() });
 
     this.spellButton = action('Kouzla', 0xb48cff, 'Q', () => this.toggleSpellMenu());
-    this.captureButton = action('Odchyt', 0xffd27a, 'C', () => this.chooseCapture());
+    this.captureButton = action('Ochočení', 0xffd27a, 'C', () => this.chooseCapture());
     this.waitButton = action('Čekat', 0x9fb3c4, 'Mezera', () => this.wait());
     this.fleeButton = action('Útěk', 0xff8a8a, 'F', () => this.runAway());
     this.spellButton.tipId = 'spell';
@@ -664,7 +714,7 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
-  // Lišta: schopnosti aktuálního monstra + Kouzla, Odchyt, Čekat, Útěk.
+  // Lišta: schopnosti aktuálního monstra + Kouzla, Ochočení, Čekat, Útěk.
   buildActionBar() {
     for (const button of this.skillButtons) button.container.destroy();
     this.skillButtons = [];
@@ -715,15 +765,15 @@ export default class BattleScene extends Phaser.Scene {
 
   refreshActionButtons() {
     const playerTurn = !this.finished && this.phase === 'units' && this.currentUnit?.side === 'player' && this.mode !== 'busy';
-    const crystals = this.state.inventory?.basic_crystal ?? 0;
-    const affordable = this.availableSpells('enemy').some((spell) => this.state.mp >= spell.manaCost);
+    const crystals = getItemCount(this.state, 'basic_crystal');
+    const affordable = this.availableSpells('enemy').some((spell) => this.state.mp >= this.spellManaCost(spell));
 
     this.spellButton
       .setContent('Kouzla', this.spellReady ? `MP ${this.state.mp}/${this.state.maxMp}` : 'po tazích monster', 'Q')
       .setDisabled(!playerTurn || !this.spellReady || !affordable)
       .setSelected(this.mode === 'spellTarget' || this.popover?.kind === 'spells');
     this.captureButton
-      .setContent('Odchyt', `krystaly ${crystals}`, 'C')
+      .setContent('Ochočení', `krystaly ${crystals}`, 'C')
       .setDisabled(!playerTurn || crystals <= 0 || this.isBoss)
       .setSelected(this.mode === 'capture');
     this.waitButton.setContent('Čekat', 'přeskočit tah', 'Mezera').setDisabled(!playerTurn);
@@ -749,7 +799,7 @@ export default class BattleScene extends Phaser.Scene {
   showActionTip(button) {
     const tips = {
       spell: ['Útočná kouzla Arionova Spellbooku.', 'Podpůrná kouzla: klikni na své monstrum.', 'Arion kouzlí jednou za kolo tvých monster.'],
-      capture: ['Pokus o získání divokého monstra krystalem.', 'Nižší HP a stavové efekty zvyšují šanci.', 'Krystal se spotřebuje i při neúspěchu.'],
+      capture: ['Pokus o ochočení divokého monstra krystalem.', 'Nižší HP a stavové efekty zvyšují šanci.', 'Krystal se spotřebuje i při neúspěchu.'],
       wait: ['Monstrum přeskočí tah (bez pohybu i útoku).'],
       flee: [`Šance na útěk ${ESCAPE_CHANCE} %. Při neúspěchu tah končí.`]
     };
@@ -966,9 +1016,9 @@ export default class BattleScene extends Phaser.Scene {
         const inRange = spell.range >= spellDistance;
         entries.push({
           label: `${spell.name} (Arion)`,
-          sub: `Kouzlo · ${spell.manaCost} MP · poškození ${spell.damage}${inRange ? '' : ' · mimo dosah'}`,
+          sub: `Kouzlo · ${this.spellManaCost(spell)} MP · poškození ${spell.damage}${inRange ? '' : ' · mimo dosah'}`,
           accent: elementColor(spell.school),
-          disabled: !inRange || this.state.mp < spell.manaCost,
+          disabled: !inRange || this.state.mp < this.spellManaCost(spell),
           onClick: () => {
             this.closePopover();
             this.selectedSpell = spell;
@@ -1193,6 +1243,7 @@ export default class BattleScene extends Phaser.Scene {
       (spell) =>
         (spell.targetType ?? 'enemy') === targetType &&
         this.state.spellbook.includes(spell.id) &&
+        this.state.magicMastery?.[spell.school]?.unlocked !== false && // zamčená škola
         (this.state.magicMastery?.[spell.school]?.level ?? 0) >= (spell.requiredMastery ?? 0)
     );
   }
@@ -1210,9 +1261,9 @@ export default class BattleScene extends Phaser.Scene {
 
     const entries = this.availableSpells('enemy').map((spell) => ({
       label: spell.name,
-      sub: `${spell.manaCost} MP · dosah ${spell.range} · poškození ${spell.damage}`,
+      sub: `${this.spellManaCost(spell)} MP · dosah ${spell.range} · poškození ${spell.damage}`,
       accent: elementColor(spell.school),
-      disabled: this.state.mp < spell.manaCost,
+      disabled: this.state.mp < this.spellManaCost(spell),
       onClick: () => this.selectBattleSpell(spell)
     }));
 
@@ -1221,7 +1272,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   selectBattleSpell(spell) {
-    if (this.state.mp < spell.manaCost) {
+    if (this.state.mp < this.spellManaCost(spell)) {
       this.log(`Na ${spell.name} nemáš dost many.`);
       return;
     }
@@ -1241,9 +1292,9 @@ export default class BattleScene extends Phaser.Scene {
     for (const spell of this.availableSpells('ally')) {
       entries.push({
         label: spell.name,
-        sub: `${spell.manaCost} MP · ${spell.description}`,
+        sub: `${this.spellManaCost(spell)} MP · ${spell.description}`,
         accent: elementColor(spell.school),
-        disabled: !ready || this.state.mp < spell.manaCost,
+        disabled: !ready || this.state.mp < this.spellManaCost(spell),
         onClick: () => this.castSupportSpell(spell, ally)
       });
     }
@@ -1299,50 +1350,59 @@ export default class BattleScene extends Phaser.Scene {
 
   chooseCapture() {
     if (!this.isPlayerActing()) return;
-    if ((this.state.inventory?.basic_crystal ?? 0) <= 0) {
+    if (getItemCount(this.state, 'basic_crystal') <= 0) {
       this.log('Nemáš žádný Basic Soul Crystal.');
       return;
     }
     this.closePopover();
     this.mode = this.mode === 'capture' ? 'act' : 'capture';
-    this.setHint(this.mode === 'capture' ? 'Klikni na divoké monstrum, které chceš získat (Esc zruší).' : this.actHint());
+    this.setHint(this.mode === 'capture' ? 'Klikni na divoké monstrum, které chceš ochočit (Esc zruší).' : this.actHint());
     this.refreshBoard();
     this.refreshActionButtons();
   }
 
   captureTarget(target) {
-    if (!this.wildMonster) return;
+    const wild = target?.monster;
+    if (!wild || target.side !== 'enemy') return;
 
-    const crystals = this.state.inventory.basic_crystal ?? 0;
-    if (crystals <= 0) {
+    if (!removeItem(this.state, 'basic_crystal', 1)) {
       this.log('Nemáš žádný Basic Soul Crystal.');
       return;
     }
 
-    this.state.inventory.basic_crystal = crystals - 1;
-    this.wildMonster.currentHp = target.hp;
+    wild.currentHp = target.hp;
     this.mode = 'busy';
     this.refreshBoard();
     this.refreshActionButtons();
 
     const activeStatus = (target.statusEffects ?? []).find((effect) => effect.remaining > 0);
-    const result = tryCaptureMonster(this.wildMonster, 'basic', activeStatus?.id ?? null);
+    const result = tryCaptureMonster(wild, 'basic', activeStatus?.id ?? null);
 
     this.fxProjectile(this.currentUnit.model, target.model, 0xffd27a, () => {
       this.fxBurst(target.model.x, target.model.y - 70 * target.model.scale, 0xffd27a);
 
       if (result.success) {
-        const destination = addMonsterToCollection(this.state, this.wildMonster);
-        this.finished = true;
+        const destination = addMonsterToCollection(this.state, wild);
+        wild.captured = true;
         const where = destination === 'party' ? 'Přidáno do party.' : 'Party je plná – monstrum jde do úschovny.';
-        this.log(`${this.wildMonster.name} se podařilo získat! ${where}`);
+        this.log(`${wild.name} se podařilo ochočit! ${where}`);
+        const othersAlive = this.units.some((unit) => unit.side === 'enemy' && unit !== target && unit.hp > 0);
+        if (othersAlive) {
+          // Další nepřátelé bojují dál.
+          target.hp = 0;
+          this.faintUnit(target);
+          floatingText(this, target.model.x, target.model.y - 150 * target.model.scale, 'Ochočeno!', '#ffe3a0', 28);
+          this.time.delayedCall(900, () => this.endTurn());
+          return;
+        }
+        this.finished = true;
         target.hp = 0;
         this.faintUnit(target);
-        this.showResult('Monstrum získáno', [`${this.wildMonster.name} se přidává k tobě.`, where], '#ffe3a0');
+        this.showResult('Monstrum ochočeno', [`${wild.name} se přidává k tobě.`, where], '#ffe3a0');
         this.returnToWorld(2600);
       } else {
-        this.log(`Odchyt selhal (${Math.round(result.chance * 100)} %). Krystal se spotřeboval.`);
-        floatingText(this, target.model.x, target.model.y - 150 * target.model.scale, 'Vysmekl se!', '#ffd27a', 28);
+        this.log(`Ochočení selhalo (${Math.round(result.chance * 100)} %). Krystal se spotřeboval.`);
+        floatingText(this, target.model.x, target.model.y - 150 * target.model.scale, 'Zvíře se nenechalo ochočit', '#ffd27a', 26);
         this.time.delayedCall(700, () => this.endTurn());
       }
     });
@@ -1386,6 +1446,7 @@ export default class BattleScene extends Phaser.Scene {
 
       const baseDamage = Math.max(1, Math.floor(skill.power + attackPower * 0.5 - targetDefense * 0.5));
       const damageResult = calculateElementalDamage(baseDamage, skill.element, target.monster?.element);
+      damageResult.damage = this.applyTalentDamage(damageResult, attacker, target, skill.category);
 
       target.hp = Math.max(0, target.hp - damageResult.damage);
       if (target.monster) target.monster.currentHp = target.hp;
@@ -1432,6 +1493,31 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
+  // Cena kouzla po slevě z talentů (Šetření manou), nikdy pod 1 MP.
+  spellManaCost(spell) {
+    return getSpellManaCost(this.state, spell);
+  }
+
+  // Úprava poškození schopnosti monstra podle talentů a pasivního bonusu:
+  // útočník hráče +% (formace, pasivní bonus, Lovec příležitostí při elementové výhodě),
+  // zasažené monstrum hráče −% (Zocelená družina, pasivní bonus). Bonusy stejného
+  // typu se nejprve sečtou a použijí najednou.
+  applyTalentDamage(damageResult, attacker, target, category) {
+    const t = this.talentBonuses;
+    const physical = category !== 'magical';
+    let multiplier = 1;
+
+    if (attacker?.side === 'player') {
+      multiplier += physical ? t.monsterPhysicalDamage : t.monsterMagicalDamage;
+      if (damageResult.multiplier > 1) multiplier += t.elementalAdvantageBonus;
+    }
+    if (target?.side === 'player') {
+      multiplier *= 1 - (physical ? t.monsterPhysicalTaken : t.monsterMagicalTaken);
+    }
+
+    return Math.max(1, Math.round(damageResult.damage * multiplier));
+  }
+
   addBuff(unit, sourceId, stat, amount, duration) {
     unit.activeBuffs ??= [];
     const existing = unit.activeBuffs.find((buff) => buff.skillId === sourceId && buff.stat === stat);
@@ -1448,8 +1534,10 @@ export default class BattleScene extends Phaser.Scene {
   // ============================================================== kouzla
 
   spellCost(spell) {
-    this.state.mp -= spell.manaCost;
-    const mastery = gainMagicExperience(this.state, spell.school, 5);
+    this.state.mp -= this.spellManaCost(spell);
+    // Pevná koncentrace / Široké znalosti zvyšují zkušenosti školy.
+    const expGain = Math.max(1, Math.round(5 * getMasteryExpMultiplier(this.state, spell.school)));
+    const mastery = gainMagicExperience(this.state, spell.school, expGain);
     this.spellReady = false;
     this.actedPlayerIds.clear();
 
@@ -1465,13 +1553,17 @@ export default class BattleScene extends Phaser.Scene {
   castSelectedSpell(target) {
     const spell = this.selectedSpell;
     if (!spell || !this.spellReady) return;
-    if (this.state.mp < spell.manaCost) {
+    if (this.state.mp < this.spellManaCost(spell)) {
       this.log('Nemáš dost many.');
       return;
     }
 
     const note = this.spellCost(spell);
-    const baseDamage = Math.max(1, Math.floor(spell.damage + (Number(this.state.magicPower) || 0) / 2));
+    const spellPower = getEffectiveSpellPower(this.state);
+    const baseDamage = Math.max(
+      1,
+      Math.floor((spell.damage + spellPower / 2) * getSpellDamageMultiplier(this.state, spell.school))
+    );
     const damageResult = calculateElementalDamage(baseDamage, spell.school, target.monster?.element);
 
     target.hp = Math.max(0, target.hp - damageResult.damage);
@@ -1497,7 +1589,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   castSupportSpell(spell, ally) {
-    if (!this.spellReady || this.state.mp < spell.manaCost) return;
+    if (!this.spellReady || this.state.mp < this.spellManaCost(spell)) return;
     this.closePopover();
 
     const note = this.spellCost(spell);
@@ -1830,22 +1922,38 @@ export default class BattleScene extends Phaser.Scene {
     this.mode = 'busy';
     this.refreshActionButtons();
 
-    const reward = 18;
-    const lines = [`${this.state.playerName ?? 'Arion'}: +${reward} EXP, +8 zlatých`];
-
+    // Odměna roste s počtem divokých monster. Peníze hrdina nezíská – jen materiály (drop).
+    const enemyCount = Math.max(1, this.wildMonsters?.length ?? 1);
+    const reward = 18 + 10 * (enemyCount - 1);
+    const lines = [`${this.state.playerName ?? 'Arion'}: +${reward} EXP`];
     this.state.exp += reward;
-    this.state.gold += 8;
+
+    const loot = {};
+    for (const wild of this.wildMonsters ?? []) {
+      if (wild.captured) continue;
+      for (const drop of rollDrops(wild.speciesId)) loot[drop.id] = (loot[drop.id] ?? 0) + drop.qty;
+    }
+    const gained = [];
+    let lost = 0;
+    for (const [id, qty] of Object.entries(loot)) {
+      const left = addItem(this.state, id, qty);
+      if (qty - left > 0) gained.push(`${getItem(id)?.name ?? id}${qty - left > 1 ? ` ×${qty - left}` : ''}`);
+      lost += left;
+    }
+    lines.push(gained.length ? `Získáno: ${gained.join(', ')}` : 'Žádný materiál.');
+    if (lost > 0) lines.push('Inventář je plný – část materiálu zůstala na bojišti.');
 
     if (this.isBoss) {
       this.state.flags ??= {};
       this.state.flags.greenvaleCaveBossDefeated = true;
-      lines.push('Jeskynní strážce padl. Vrať se za rychtářem.');
+      lines.push('Jeskynní sliz je mrtvý. Vrať se za starostou Edricem na radnici.');
     }
 
-    if (this.wildMonster) {
-      const record = this.state.bestiary[this.wildMonster.speciesId] ?? { seen: 1, caught: 0, defeated: 0 };
+    for (const wild of this.wildMonsters ?? []) {
+      if (wild.captured) continue;
+      const record = this.state.bestiary[wild.speciesId] ?? { seen: 1, caught: 0, defeated: 0 };
       record.defeated += 1;
-      this.state.bestiary[this.wildMonster.speciesId] = record;
+      this.state.bestiary[wild.speciesId] = record;
     }
 
     for (const monster of this.state.party ?? []) {

@@ -8,15 +8,17 @@
 //   offsetY  posun dolů (px) pod přední (jihovýchodní) roh půdorysu – schody, stín
 
 export const BUILDING_SPRITES = {
-  greenvale_town_hall: { path: 'assets/buildings/greenvale/town-hall.webp', scale: 1, offsetY: 12 },
-  greenvale_tavern: { path: 'assets/buildings/greenvale/tavern.webp', scale: 1, offsetY: 12 },
-  greenvale_market: { path: 'assets/buildings/greenvale/market.webp', scale: 1, offsetY: 12 },
+  greenvale_town_hall: { path: 'assets/buildings/greenvale/town-hall.png', scale: 1, offsetY: 12 },
+  greenvale_tavern: { path: 'assets/buildings/greenvale/tavern.png', scale: 1, offsetY: 12 },
+  // Tržiště u náměstí = dva stánky (potraviny a zboží).
+  greenvale_market: { path: 'assets/buildings/greenvale/stallfood.png', scale: 1, offsetY: 12 },
+  greenvale_market_wares: { path: 'assets/buildings/greenvale/stallmats.png', scale: 1, offsetY: 12 },
   greenvale_smithy: { path: 'assets/buildings/greenvale/smithy.webp', scale: 1, offsetY: 12 },
-  greenvale_fishing_hut: { path: 'assets/buildings/greenvale/fishing-hut.webp', scale: 1, offsetY: 12 },
-  greenvale_hunter_lodge: { path: 'assets/buildings/greenvale/hunter-lodge.webp', scale: 1, offsetY: 12 },
-  greenvale_home_1: { path: 'assets/buildings/greenvale/home-a.webp', scale: 1, offsetY: 12 },
-  greenvale_home_2: { path: 'assets/buildings/greenvale/home-b.webp', scale: 1, offsetY: 12 },
-  greenvale_home_3: { path: 'assets/buildings/greenvale/home-c.webp', scale: 1, offsetY: 12 }
+  greenvale_fishing_hut: { path: 'assets/buildings/greenvale/fishing-hut.png', scale: 1, offsetY: 12 },
+  greenvale_hunter_lodge: { path: 'assets/buildings/greenvale/hunter-lodge.png', scale: 1, offsetY: 12 },
+  greenvale_home_1: { path: 'assets/buildings/greenvale/home-a.png', scale: 1, offsetY: 12 },
+  greenvale_home_2: { path: 'assets/buildings/greenvale/home-b.png', scale: 1, offsetY: 12 },
+  greenvale_home_3: { path: 'assets/buildings/greenvale/home-c.png', scale: 1, offsetY: 12 }
 };
 
 export function buildingTextureKey(buildingId) {

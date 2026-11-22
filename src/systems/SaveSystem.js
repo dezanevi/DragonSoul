@@ -2,17 +2,19 @@ import {
   createMonster,
   migrateMonsterStats
 } from './MonsterSystem.js';
-import { learnBondSkill } from './MonsterSkillSystem.js';
 import {
   createInitialUnlockedRegions,
   normalizeUnlockedRegions
 } from './RegionSystem.js';
 import { normalizeHeroStats } from './HeroProgressionSystem.js';
 import spellRows from '../data/spells.json';
+import { normalizeMagicSchools } from './MagicMasterySystem.js';
+import { HERO_ATTRIBUTE_DEFAULTS, normalizeHeroAttributes } from './HeroStatsSystem.js';
 import {
   createInitialTalentProgress,
   normalizeTalentProgress
 } from './TalentSystem.js';
+import { INVENTORY_SIZE, normalizeInventory } from './InventorySystem.js';
 
 
 
@@ -20,14 +22,16 @@ import {
 const SAVE_KEY = 'dragon-souls-save';
 const SAVE_VERSION = 2;
 
+// Školy magie se odemykají postupně (MagicMasterySystem.unlockMagicSchool);
+// na začátku je odemčená jen Air.
 function createStartingMagicMastery() {
   return {
-    fire: { level: 0, exp: 0 },
-    water: { level: 0, exp: 0 },
-    earth: { level: 0, exp: 0 },
-    air: { level: 1, exp: 0 },
-    light: { level: 0, exp: 0 },
-    dark: { level: 0, exp: 0 }
+    fire: { level: 0, exp: 0, unlocked: false },
+    water: { level: 0, exp: 0, unlocked: false },
+    earth: { level: 0, exp: 0, unlocked: false },
+    air: { level: 1, exp: 0, unlocked: true },
+    light: { level: 0, exp: 0, unlocked: false },
+    dark: { level: 0, exp: 0, unlocked: false }
   };
 }
 function normalizePlayerName(value) {
@@ -40,21 +44,21 @@ function normalizePlayerName(value) {
   return name || 'Arion';
 }
 
-function createTestDireWolf() {
-  const monster = createMonster('dire_wolf', 100);
-  monster.bond = 100;
-
-  const bondResult = learnBondSkill(monster);
-
-  if (!bondResult.success) {
-    throw new Error(
-      `Dire Wolf nezískal Bond schopnost: ${bondResult.reason}`
-    );
-  }
-
+// První lovecký společník nové hry: Dire Wolf 5. úrovně, důvěra (bond) 0.
+function createStarterDireWolf() {
+  const monster = createMonster('dire_wolf', 5);
+  monster.bond = 0;
   return monster;
 }
 
+
+// Počáteční inventář: 5 krystalů ochočení a 50 lektvarů many.
+function createStartingInventory() {
+  const slots = new Array(INVENTORY_SIZE).fill(null);
+  slots[0] = { id: 'mana_potion', qty: 50 };
+  slots[1] = { id: 'basic_crystal', qty: 5 };
+  return { slots };
+}
 
 export const SaveSystem = {
  createNew(playerName = 'Arion') {
@@ -79,17 +83,18 @@ magicAttack: 7,
 magicResistance: 3,
 intellect: 5,
 magicPower: 0,
+      // Rychlost, Štěstí, Charisma – viz HeroStatsSystem.js.
+      ...HERO_ATTRIBUTE_DEFAULTS,
 gold: 25,
 
-      flags: {},
+      // starterManaPotions: 50 lektvarů many je už v počátečním inventáři.
+      flags: { starterManaPotions: true },
 talentProgress: createInitialTalentProgress(1),
 
-      party: [createTestDireWolf()],
+      party: [createStarterDireWolf()],
       monsterStorage: [],
       bestiary: {},
-      inventory: {
-        basic_crystal: 5
-      },
+      inventory: createStartingInventory(),
       // Vybavení hrdiny – sloty viz EquipmentSystem.js (zatím prázdné).
       equipment: {
         weapon: null,
@@ -122,8 +127,7 @@ talentProgress: createInitialTalentProgress(1),
       data.party ??= [];
       data.monsterStorage ??= [];
       data.bestiary ??= {};
-      data.inventory ??= {};
-      data.inventory.basic_crystal ??= 5;
+      normalizeInventory(data);
       data.region ??= 'Greenvale';
 data.unlockedRegions = normalizeUnlockedRegions(
   data.unlockedRegions,
@@ -173,10 +177,13 @@ data.unlockedRegions = normalizeUnlockedRegions(
       );
 
       data.magicMastery.air.exp ??= 0;
+      normalizeMagicSchools(data);
+      normalizeHeroAttributes(data);
 
       // Kouzla, na která už hrdina má mistrovství (např. nově přidaná
       // podpůrná kouzla), patří do Spellbooku – stejně jako při postupu školy.
       for (const spell of spellRows) {
+        if (!data.magicMastery[spell.school]?.unlocked) continue;
         const level = Number(data.magicMastery[spell.school]?.level) || 0;
         if ((Number(spell.requiredMastery) || 0) <= level && !data.spellbook.includes(spell.id)) {
           data.spellbook.push(spell.id);

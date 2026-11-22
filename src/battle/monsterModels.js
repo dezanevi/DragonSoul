@@ -1,5 +1,6 @@
+import { createAnimatedBody } from './monsterAnimations.js';
 import Phaser from 'phaser';
-import { normalizeElement } from '../systems/ElementSystem.js';
+import { normalizeElement, ELEMENT_NAMES } from '../systems/ElementSystem.js';
 
 // Jednoduché provizorní modely monster kreslené vektorově (Phaser Graphics).
 // Tvar se odvodí z názvu druhu (vlk → čtvernožec, drak → drak s křídly,
@@ -7,26 +8,18 @@ import { normalizeElement } from '../systems/ElementSystem.js';
 // stačí nahradit createMonsterModel.
 
 export const ELEMENT_COLORS = {
-  flame: 0xff7a3d,
+  fire: 0xff7a3d,
   water: 0x3fa9ff,
-  stone: 0xb89463,
+  earth: 0xb89463,
   air: 0xb8e6ff,
   verdant: 0x62c96c,
-  shadow: 0x8a6bff,
-  astral: 0xf3d36b,
+  dark: 0x8a6bff,
+  light: 0xf3d36b,
   neutral: 0xc8c8c8
 };
 
-export const ELEMENT_LABELS = {
-  flame: 'Plamen',
-  water: 'Voda',
-  stone: 'Kámen',
-  air: 'Vzduch',
-  verdant: 'Příroda',
-  shadow: 'Stín',
-  astral: 'Astrál',
-  neutral: 'Neutrální'
-};
+// Zobrazované názvy elementů = názvy škol magie (viz ElementSystem).
+export const ELEMENT_LABELS = ELEMENT_NAMES;
 
 const ARCHETYPES = [
   ['dragon', /dragon|drake|wyvern|wyrm/],
@@ -74,11 +67,16 @@ export function createMonsterModel(scene, { speciesId, element, side, boss = fal
   shadowG.fillStyle(0x000000, 0.35).fillEllipse(0, 2, 96, 26);
 
   const body = scene.add.container(0, 0);
-  const g = scene.add.graphics();
-  body.add(g);
-  drawArchetype(g, archetype, color);
-
-  if (side === 'enemy') body.setScale(-1, 1);
+  // Druh s animací z obrázků (např. Dire Wolf) – jinak kreslený tvar podle archetypu.
+  const animated = createAnimatedBody(scene, speciesId, side);
+  if (animated) {
+    body.add(animated);
+  } else {
+    const g = scene.add.graphics();
+    body.add(g);
+    drawArchetype(g, archetype, color);
+    if (side === 'enemy') body.setScale(-1, 1);
+  }
   if (boss) body.setScale(body.scaleX * 1.35, 1.35);
 
   container.add([shadowG, ring, body]);
@@ -86,7 +84,7 @@ export function createMonsterModel(scene, { speciesId, element, side, boss = fal
 
   // Klidové „dýchání“ – plovoucí tvary se vznášejí víc.
   const floating = archetype === 'floater' || archetype === 'avian';
-  scene.tweens.add({
+  if (!animated) scene.tweens.add({
     targets: body,
     y: floating ? -12 : -4,
     scaleY: body.scaleY * (floating ? 1 : 1.03),

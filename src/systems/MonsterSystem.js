@@ -49,7 +49,7 @@ const LEGACY_STAT_NAMES = {
 };
 
 const ELEMENT_STAT_MODIFIERS = Object.freeze({
-  Flame: {
+  Fire: {
     force: 2,
     aether: 1,
     armor: -2,
@@ -61,7 +61,7 @@ const ELEMENT_STAT_MODIFIERS = Object.freeze({
     tempo: -2,
     force: -1
   },
-  Stone: {
+  Earth: {
     vitality: 2,
     armor: 2,
     tempo: -2,
@@ -79,13 +79,13 @@ const ELEMENT_STAT_MODIFIERS = Object.freeze({
     force: -2,
     tempo: -2
   },
-  Shadow: {
+  Dark: {
     force: 2,
     tempo: 2,
     vitality: -2,
     resolve: -2
   },
-  Astral: {
+  Light: {
     aether: 2,
     resolve: 2,
     armor: -2,

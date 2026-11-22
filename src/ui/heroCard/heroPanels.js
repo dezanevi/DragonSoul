@@ -1,5 +1,13 @@
 import { cardText, drawBarFill } from './cardText.js';
-import { FIELDS, MAGIC_BAR, MAGIC_SCHOOLS } from './cardLayout.js';
+import { FIELDS, MAGIC_SCHOOLS } from './cardLayout.js';
+import FantasyButton from './FantasyButton.js';
+import { getItemCount } from '../../systems/InventorySystem.js';
+import { magicStateKey, spriteState } from './heroButtonSprites.js';
+
+// Karty magických škol: plocha karty, velikost obrázku stavu a ukazatel zkušeností v něm.
+const MAGIC_CARD = { y: 437, h: 136, spriteW: 104, spriteH: 122, barY: 547, barW: 66, barH: 12 };
+import { getHeroSpeed, getHeroLuck, getHeroCharisma } from '../../systems/HeroStatsSystem.js';
+import { getEffectiveSpellPower } from '../../systems/TalentSystem.js';
 
 // Panely záložky Hrdina, které jen zobrazují data ze stavu hry.
 // Nic nepočítají – hodnoty berou tak, jak je uložily herní systémy.
@@ -9,7 +17,6 @@ const number = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const optionalStat = (value) => (value === undefined || value === null ? '—' : number(value));
 
 // Jméno, úroveň, zkušenosti a mana.
 export class HeroOverview {
@@ -64,10 +71,10 @@ export class HeroStats {
   refresh(state) {
     const hero = [
       number(state.intellect),
-      number(state.magicPower),
-      optionalStat(state.speed),
-      optionalStat(state.luck),
-      optionalStat(state.charisma)
+      getEffectiveSpellPower(state), // včetně talentů Kouzelníka
+      getHeroSpeed(state), // včetně pasivního bonusu monster v partě
+      getHeroLuck(state),
+      getHeroCharisma(state)
     ];
     const commander = [
       number(state.attack),
@@ -82,39 +89,118 @@ export class HeroStats {
 }
 
 // Šest magických škol: úroveň v rohu karty a postup v prázdném ukazateli.
+// Zamčené školy (odemykají se postupně během hry) jsou ztmavené s nápisem Zamčeno.
 export class MagicSchoolsPanel {
-  constructor(scene, parent) {
+  // onSelect(school, info) – klik na školu (zlatý výběr); info = { level, exp, needed, unlocked }.
+  constructor(scene, parent, onSelect = null) {
+    this.onSelect = onSelect;
+    this.selectedId = null;
+    this.mastery = {};
+
+    // Výchozí podklad karet škol je namalovaný vysoký, obrázky stavů jsou čtvercové –
+    // namalovanou kartu překryje tmavý podklad a přes něj obrázek ve správném stavu.
+    const hasSprites = MAGIC_SCHOOLS.every((school) => scene.textures.exists(magicStateKey(school.id, 'normal')));
+    this.plates = scene.add.graphics();
+    parent.add(this.plates);
+    this.sprites = MAGIC_SCHOOLS.map((school) => {
+      if (!hasSprites) return null;
+      this.plates.fillStyle(0x0a1322, 1).fillRoundedRect(school.x - 50, MAGIC_CARD.y - 3, 100, MAGIC_CARD.h + 6, 8);
+      const sprite = scene.add.image(school.x, MAGIC_CARD.y + MAGIC_CARD.h / 2, magicStateKey(school.id, 'normal'));
+      sprite.setDisplaySize(MAGIC_CARD.spriteW, MAGIC_CARD.spriteH);
+      parent.add(sprite);
+      return sprite;
+    });
+
     this.bars = scene.add.graphics();
-    parent.add(this.bars);
+    this.locks = scene.add.graphics();
+    parent.add([this.bars, this.locks]);
+
+    this.buttons = MAGIC_SCHOOLS.map((school, index) =>
+      new FantasyButton(scene, parent, { x: school.x - 48, y: MAGIC_CARD.y, w: 96, h: MAGIC_CARD.h }, {
+        label: school.label,
+        radius: 10,
+        drawHover: !hasSprites,
+        drawActive: !hasSprites,
+        onClick: () => this.select(school.id),
+        onStateChange: (button) => this.updateSprite(index, button)
+      })
+    );
 
     this.levels = MAGIC_SCHOOLS.map((school) =>
-      cardText(scene, parent, school.x + 36, MAGIC_BAR.levelY - 36, '', {
-        size: 22,
+      cardText(scene, parent, school.x, MAGIC_CARD.barY + MAGIC_CARD.barH / 2, '', {
+        size: 13,
         originX: 0.5,
-        color: '#ffffff'
+        color: '#ffffff',
+        strokeThickness: 4
+      })
+    );
+    this.lockLabels = MAGIC_SCHOOLS.map((school) =>
+      cardText(scene, parent, school.x, MAGIC_CARD.barY + MAGIC_CARD.barH / 2, 'Zamčeno', {
+        size: 13,
+        originX: 0.5,
+        color: '#c9d3dd',
+        strokeThickness: 4
       })
     );
   }
 
+  info(id) {
+    const data = this.mastery[id] ?? {};
+    const level = Math.max(0, number(data.level));
+    return {
+      level,
+      exp: Math.max(0, number(data.exp)),
+      needed: 20 * (level + 1), // pravidlo z MagicMasterySystem
+      unlocked: data.unlocked ?? level > 0
+    };
+  }
+
+  updateSprite(index, button) {
+    const sprite = this.sprites?.[index];
+    if (!sprite) return;
+    const school = MAGIC_SCHOOLS[index];
+    const state = spriteState(button, { locked: !this.info(school.id).unlocked, selected: this.selectedId === school.id });
+    sprite.setTexture(magicStateKey(school.id, state)).setDisplaySize(MAGIC_CARD.spriteW, MAGIC_CARD.spriteH);
+  }
+
+  select(id) {
+    this.selectedId = id;
+    this.buttons.forEach((button, index) => {
+      button.setActive(MAGIC_SCHOOLS[index].id === id);
+      this.updateSprite(index, button);
+    });
+    const school = MAGIC_SCHOOLS.find((s) => s.id === id);
+    this.onSelect?.(school, this.info(id));
+  }
+
   refresh(state) {
-    const mastery = state.magicMastery ?? {};
+    this.mastery = state.magicMastery ?? {};
 
     this.bars.clear();
+    this.locks.clear();
+    const hasSprites = this.sprites.every(Boolean);
 
     MAGIC_SCHOOLS.forEach((school, index) => {
-      const data = mastery[school.id] ?? {};
-      const level = Math.max(0, number(data.level));
-      const exp = Math.max(0, number(data.exp));
-      const needed = 20 * (level + 1); // pravidlo z MagicMasterySystem
+      const { level, exp, needed, unlocked } = this.info(school.id);
+      this.updateSprite(index, this.buttons[index]);
 
-      this.levels[index].setText(level);
+      this.lockLabels[index].setVisible(!unlocked);
+      this.levels[index].setVisible(unlocked);
+      if (!unlocked) {
+        if (!hasSprites) {
+          this.locks.fillStyle(0x04070d, 0.72).fillRoundedRect(school.x - 47, 437, 94, 136, 8);
+        }
+        return;
+      }
+
+      this.levels[index].setText(`Úr. ${level}`);
       drawBarFill(
         this.bars,
         {
-          x: school.x - MAGIC_BAR.width / 2,
-          y: MAGIC_BAR.y,
-          w: MAGIC_BAR.width,
-          h: MAGIC_BAR.height
+          x: school.x - MAGIC_CARD.barW / 2,
+          y: MAGIC_CARD.barY,
+          w: MAGIC_CARD.barW,
+          h: MAGIC_CARD.barH
         },
         exp / needed,
         0x7a5cff,
@@ -152,7 +238,7 @@ export class GameInfoPanel {
   }
 
   refresh(state) {
-    const crystals = Math.max(0, number(state.inventory?.basic_crystal));
+    const crystals = getItemCount(state, 'basic_crystal');
     const stones = state.magicStones ?? crystals;
 
     this.gold.setText(Math.max(0, number(state.gold)));

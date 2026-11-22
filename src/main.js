@@ -10,6 +10,8 @@ import SpellbookScene from './scenes/SpellbookScene.js';
 import HeroScene from './scenes/HeroScene.js';
 import InteriorScene from './scenes/InteriorScene.js';
 import CharacterCreateScene from './scenes/CharacterCreateScene.js';
+import TalentScene from './scenes/TalentScene.js';
+import InventoryScene from './scenes/InventoryScene.js';
 
 
 // Výchozí písmo pro všechny texty vytvořené ve hře.
@@ -27,7 +29,7 @@ if (typeof originalText === 'function') {
   };
 }
 
-new Phaser.Game({
+const game = new Phaser.Game({
   ...gameConfig,
   scene: [
     BootScene,
@@ -39,6 +41,13 @@ new Phaser.Game({
     BestiaryScene,
     SpellbookScene,
     HeroScene,
+    TalentScene,
+    InventoryScene,
     InteriorScene   
   ]
 });
+
+// Jen při vývoji (npm run dev): hra je dostupná v konzoli prohlížeče jako window.game.
+if (import.meta.env.DEV) {
+  window.game = game;
+}

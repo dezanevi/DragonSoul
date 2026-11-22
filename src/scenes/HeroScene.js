@@ -21,6 +21,12 @@ import {
   GameInfoPanel
 } from '../ui/heroCard/heroPanels.js';
 import { cardText } from '../ui/heroCard/cardText.js';
+import { closeStateKey } from '../ui/heroCard/tabSprites.js';
+import { describeQuests } from '../systems/QuestSystem.js';
+import { HERO_CARD_FEMALE } from '../ui/heroCard/heroButtonSprites.js';
+
+// Šířka obrázku tlačítka Zavřít v souřadnicích podkladu (namalované tlačítko je ~270 px).
+const CLOSE_IMAGE_WIDTH = 310;
 import { EQUIPMENT_CHANGED, normalizeEquipment } from '../systems/EquipmentSystem.js';
 
 // Události karty na this.game.events (pro ostatní systémy hry).
@@ -42,6 +48,7 @@ export default class HeroScene extends Phaser.Scene {
   create(data) {
     this.state = data?.state ?? SaveSystem.load();
     this.returnScene = data?.returnScene ?? 'World';
+    this.storageAccess = Boolean(data?.storageAccess);
     // Phaser instanci scény znovu používá – příznak z minulého zavření vynulovat.
     this.closing = false;
 
@@ -66,8 +73,10 @@ export default class HeroScene extends Phaser.Scene {
     );
     this.card.setScale(scale);
 
-    if (this.textures.exists(CARD_TEXTURE)) {
-      this.card.add(this.add.image(0, 0, CARD_TEXTURE).setOrigin(0));
+    // Ženská postava má vlastní podklad karty (stejné rozložení).
+    const cardTexture = this.state.gender === 'female' && this.textures.exists(HERO_CARD_FEMALE) ? HERO_CARD_FEMALE : CARD_TEXTURE;
+    if (this.textures.exists(cardTexture)) {
+      this.card.add(this.add.image(0, 0, cardTexture).setOrigin(0));
     } else {
       this.card.add(
         this.add
@@ -90,10 +99,29 @@ export default class HeroScene extends Phaser.Scene {
 
     this.tabs = new CharacterTabs(this, this.uiLayer, (tab) => this.showTab(tab));
 
+    // Zavřít: obrázek ze „Čtyři stavy fantasy tlačítka Zavřít“ přes namalované tlačítko
+    // (klid / pod myší / stisk / nedostupné). Záře tlačítka jen jako záloha bez grafiky.
+    const closeSprites = this.textures.exists(closeStateKey('normal'));
+    const closeImage = closeSprites
+      ? this.add.image(
+          CLOSE_BUTTON.x + CLOSE_BUTTON.w / 2,
+          CLOSE_BUTTON.y + CLOSE_BUTTON.h / 2,
+          closeStateKey('normal')
+        )
+      : null;
+    if (closeImage) this.uiLayer.add(closeImage);
+
     this.closeButton = new FantasyButton(this, this.uiLayer, CLOSE_BUTTON, {
       label: 'Zavřít',
       radius: 22,
-      onClick: () => this.closeCard()
+      drawHover: !closeSprites,
+      onClick: () => this.closeCard(),
+      onStateChange: (button) => {
+        if (!closeImage) return;
+        closeImage.setTexture(closeStateKey(button.visualState));
+        // Stejná šířka pro všechny stavy; výška podle poměru obrázku.
+        closeImage.setScale(CLOSE_IMAGE_WIDTH / closeImage.width);
+      }
     });
 
     // Hlášení (vybraný slot, dovednost) – s vlastním podkladem, ať je čitelné přes rám.
@@ -111,6 +139,12 @@ export default class HeroScene extends Phaser.Scene {
     this.refresh();
     this.setupKeyboard();
 
+    // Otevřeno z lišty jiné karty na záložce bez vlastní karty (Inventář, Mapa…).
+    const initialTab = data?.initialTab;
+    if (initialTab && !['hero', 'talents', 'party', 'inventory'].includes(initialTab)) {
+      this.tabs.select(initialTab);
+    }
+
     this.onEquipmentChanged = () => this.refresh();
     this.game.events.on(EQUIPMENT_CHANGED, this.onEquipmentChanged);
 
@@ -126,7 +160,13 @@ export default class HeroScene extends Phaser.Scene {
     this.panels = [
       new HeroOverview(this, this.heroLayer),
       new HeroStats(this, this.heroLayer),
-      new MagicSchoolsPanel(this, this.heroLayer),
+      new MagicSchoolsPanel(this, this.heroLayer, (school, info) => {
+        this.setStatus(
+          info.unlocked
+            ? `Škola ${school.label}: úroveň ${info.level} · zkušenosti ${info.exp} / ${info.needed}`
+            : `Škola ${school.label}: zamčeno – odemkne se v průběhu hry.`
+        );
+      }),
       new GameInfoPanel(this, this.heroLayer)
     ];
 
@@ -166,7 +206,7 @@ export default class HeroScene extends Phaser.Scene {
       originX: 0.5,
       color: '#ffd76a'
     });
-    cardText(
+    this.otherBody = cardText(
       this,
       this.otherLayer,
       x + w / 2,
@@ -174,24 +214,60 @@ export default class HeroScene extends Phaser.Scene {
       'Obsah této záložky se připravuje.',
       { size: 28, originX: 0.5, bold: false, color: '#d8e7f5' }
     );
+
+    // Záložka Úkoly: seznam přijatých úkolů.
+    this.questText = cardText(this, this.otherLayer, x + 90, y + 120, '', {
+      size: 26,
+      bold: false,
+      originY: 0,
+      color: '#e8eef5'
+    });
+    this.questText.setWordWrapWidth(w - 180);
   }
 
   showTab(tab) {
+    // Záložky Talenty a Party otevřou samostatné karty (stejné jako klávesy T a P).
+    const cardScenes = { talents: 'Talents', party: 'Party', inventory: 'Inventory' };
+    if (cardScenes[tab.id]) {
+      const sceneKey = cardScenes[tab.id];
+      SaveSystem.save(this.state);
+      this.closing = true;
+      this.scene.stop();
+      this.scene.launch(sceneKey, { state: this.state, returnScene: this.returnScene, storageAccess: this.storageAccess });
+      this.scene.bringToTop(sceneKey);
+      return;
+    }
+
     const isHero = tab.id === 'hero';
 
     this.heroLayer.setVisible(isHero);
     this.otherLayer.setVisible(!isHero);
     this.otherTitle.setText(tab.label);
+    this.showQuestList(tab.id === 'quests');
     this.tooltip.hide();
 
     // Skryté vrstvy nesmí chytat myš.
-    [...this.equipment.buttons, ...this.skills.buttons].forEach((button) =>
+    [...this.equipment.buttons, ...this.skills.buttons, ...this.panels[2].buttons].forEach((button) =>
       button.setVisible(isHero)
     );
 
     this.setStatus('');
     this.clearFocus();
     this.game.events.emit(HERO_CARD_EVENTS.tabChanged, { tab, state: this.state });
+  }
+
+  showQuestList(visible) {
+    const { y, h } = CONTENT_AREA;
+    this.otherTitle.setY(visible ? y + 60 : y + h / 2 - 50);
+    this.otherBody.setVisible(!visible);
+    this.questText.setVisible(visible);
+    if (!visible) return;
+    const quests = describeQuests(this.state);
+    this.questText.setText(
+      quests.length
+        ? quests.map((quest) => `◆ ${quest.title}\n${quest.text}`).join('\n\n')
+        : 'Zatím nemáš žádný úkol. Zajdi za starostou Edricem na radnici Greenvale.'
+    );
   }
 
   setStatus(text) {
@@ -234,7 +310,7 @@ export default class HeroScene extends Phaser.Scene {
 
   focusables() {
     const heroButtons = this.heroLayer.visible
-      ? [...this.equipment.buttons, ...this.skills.buttons]
+      ? [...this.equipment.buttons, ...this.skills.buttons, ...this.panels[2].buttons]
       : [];
 
     return [...this.tabs.buttons, ...heroButtons, this.closeButton].filter(
@@ -252,7 +328,7 @@ export default class HeroScene extends Phaser.Scene {
   }
 
   clearFocus() {
-    [...this.tabs.buttons, ...this.equipment.buttons, ...this.skills.buttons, this.closeButton]
+    [...this.tabs.buttons, ...this.equipment.buttons, ...this.skills.buttons, ...this.panels[2].buttons, this.closeButton]
       .forEach((button) => button.setFocused(false));
     this.focusIndex = -1;
   }

@@ -8,6 +8,27 @@
 export const HERO_TEXTURE = 'hero-walk';
 export const HERO_SHEET_PATH = 'assets/hero/hero-walk.png';
 
+// Podoba hrdiny podle pohlaví zvoleného při vytvoření postavy (state.gender).
+// Oba listy mají stejnou mřížku a stejné pořadí řad; ženský list má pod nohama
+// 6 px místo 8 (jeden snímek je vyšší).
+export const HERO_VARIANTS = {
+  male: { texture: HERO_TEXTURE, path: HERO_SHEET_PATH, feetPadding: 8 },
+  female: { texture: 'hero-female-walk', path: 'assets/hero/hero-female-walk.png', feetPadding: 6 }
+};
+
+export function heroVariant(gender) {
+  return HERO_VARIANTS[gender] ?? HERO_VARIANTS.male;
+}
+
+export function heroTexture(gender) {
+  return heroVariant(gender).texture;
+}
+
+// Svislý počátek sprite tak, aby bod (x, y) byl u nohou.
+export function heroFeetOriginY(gender) {
+  return (HERO_FRAME_HEIGHT - heroVariant(gender).feetPadding) / HERO_FRAME_HEIGHT;
+}
+
 export const HERO_FRAME_WIDTH = 192;
 export const HERO_FRAME_HEIGHT = 256;
 export const HERO_FEET_PADDING = 8;
@@ -31,35 +52,39 @@ export const HERO_DIRECTIONS = {
 };
 
 export function loadHeroSprite(scene) {
-  if (scene.textures.exists(HERO_TEXTURE)) return;
-
-  scene.load.spritesheet(HERO_TEXTURE, HERO_SHEET_PATH, {
-    frameWidth: HERO_FRAME_WIDTH,
-    frameHeight: HERO_FRAME_HEIGHT
-  });
-}
-
-export function createHeroAnimations(scene) {
-  for (const [name, direction] of Object.entries(HERO_DIRECTIONS)) {
-    const key = heroAnimationKey(name);
-
-    if (scene.anims.exists(key)) continue;
-
-    const first = direction.row * HERO_FRAMES_PER_DIRECTION;
-
-    scene.anims.create({
-      key,
-      frames: scene.anims.generateFrameNumbers(HERO_TEXTURE, {
-        frames: [first, first + 1, first, first + 2]
-      }),
-      frameRate: 8,
-      repeat: -1
+  for (const variant of Object.values(HERO_VARIANTS)) {
+    if (scene.textures.exists(variant.texture)) continue;
+    scene.load.spritesheet(variant.texture, variant.path, {
+      frameWidth: HERO_FRAME_WIDTH,
+      frameHeight: HERO_FRAME_HEIGHT
     });
   }
 }
 
-export function heroAnimationKey(directionName) {
-  return `hero-walk-${directionName}`;
+export function createHeroAnimations(scene) {
+  for (const [gender, variant] of Object.entries(HERO_VARIANTS)) {
+    if (!scene.textures.exists(variant.texture)) continue;
+
+    for (const [name, direction] of Object.entries(HERO_DIRECTIONS)) {
+      const key = heroAnimationKey(name, gender);
+      if (scene.anims.exists(key)) continue;
+
+      const first = direction.row * HERO_FRAMES_PER_DIRECTION;
+      scene.anims.create({
+        key,
+        frames: scene.anims.generateFrameNumbers(variant.texture, {
+          frames: [first, first + 1, first, first + 2]
+        }),
+        frameRate: 8,
+        repeat: -1
+      });
+    }
+  }
+}
+
+// Mužská animace má klíč hero-walk-<směr>, ženská hero-female-walk-<směr>.
+export function heroAnimationKey(directionName, gender = 'male') {
+  return `${heroTexture(gender)}-${directionName}`;
 }
 
 export function heroIdleFrame(directionName) {

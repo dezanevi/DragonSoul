@@ -6,8 +6,11 @@ import {
   HERO_FEET_PADDING,
   HERO_DISPLAY_HEIGHT,
   heroAnimationKey,
-  heroIdleFrame
+  heroIdleFrame,
+  heroTexture,
+  heroFeetOriginY
 } from './heroSprite.js';
+import { getMovementMultiplier } from '../systems/HeroStatsSystem.js';
 
 // Hrdina v izometrickém světě.
 //
@@ -46,8 +49,9 @@ export default class WorldHero {
     scene.physics.add.existing(this.mover);
     this.mover.body.setCollideWorldBounds(true);
 
-    this.view = scene.add.sprite(0, 0, HERO_TEXTURE, heroIdleFrame('south'))
-      .setOrigin(0.5, (HERO_FRAME_HEIGHT - HERO_FEET_PADDING) / HERO_FRAME_HEIGHT)
+    this.gender = state?.gender ?? 'male';
+    this.view = scene.add.sprite(0, 0, heroTexture(this.gender), heroIdleFrame('south'))
+      .setOrigin(0.5, heroFeetOriginY(this.gender))
       .setScale(HERO_DISPLAY_HEIGHT / HERO_FRAME_HEIGHT);
 
     this.syncView();
@@ -77,9 +81,11 @@ export default class WorldHero {
 
     if (x !== 0 || y !== 0) {
       this.face(DIRECTION_BY_SCREEN_VECTOR[`${x},${y}`]);
-      this.view.anims.play(heroAnimationKey(this.facing), true);
+      this.view.anims.play(heroAnimationKey(this.facing, this.gender), true);
 
-      const screen = new Phaser.Math.Vector2(x, y).normalize().scale(SCREEN_SPEED);
+      // Rychlost hrdiny (a pasivní bonus monster v partě) zrychluje chůzi.
+      const speed = SCREEN_SPEED * getMovementMultiplier(this.state);
+      const screen = new Phaser.Math.Vector2(x, y).normalize().scale(speed);
       const logical = this.projection.screenVectorToLogical(screen.x, screen.y);
       this.mover.body.setVelocity(logical.x, logical.y);
     } else {

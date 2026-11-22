@@ -23,6 +23,7 @@
       }
 
       #game {
+        position: relative;
         width: min(100vw, 1920px, calc(100vh * 16 / 9));
         aspect-ratio: 16 / 9;
       }
@@ -34,11 +35,197 @@
         image-rendering: pixelated;
         border: 2px solid #8d744b;
       }
+
+      /* Načítací obrazovka (loading-screen.webp): vynoří se ze tmy, po načtení hry se zatmí. */
+      #loading {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        display: grid;
+        place-items: center;
+        background: #05070a;
+        border: 2px solid #8d744b;
+        box-sizing: border-box;
+        cursor: default;
+      }
+
+      #loading .art {
+        position: absolute;
+        inset: 0 0 46px 0;
+        background: url('loading-screen.webp') center / contain no-repeat;
+        animation: loading-in 1.4s ease-out both;
+      }
+
+      /* Jemná vinětace okrajů, která pomalu „dýchá“. */
+      #loading .art::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+        animation: loading-breathe 4s ease-in-out infinite;
+      }
+
+      #loading .bar {
+        position: absolute;
+        left: 50%;
+        bottom: 16px;
+        width: min(60%, 720px);
+        height: 12px;
+        transform: translateX(-50%);
+        border: 2px solid #d6a23a;
+        border-radius: 8px;
+        background: #0b1220;
+        overflow: hidden;
+      }
+
+      #loading .bar span {
+        display: block;
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, #8a5a14, #ffd76a);
+        transition: width 0.25s ease-out;
+      }
+
+      /* Po načtení ukazatel zmizí a na jeho místě se objeví výzva ke kliknutí. */
+      #loading .bar {
+        transition: opacity 0.4s;
+      }
+
+      #loading.ready .bar {
+        opacity: 0;
+      }
+
+      #loading .hint {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        letter-spacing: 0.04em;
+        font: 600 14px Georgia, 'Times New Roman', serif;
+        color: #f2d28a;
+        opacity: 0;
+        transition: opacity 0.4s;
+      }
+
+      #loading.ready {
+        cursor: pointer;
+      }
+
+      #loading.ready .hint {
+        opacity: 0.9;
+        animation: loading-hint 1.6s ease-in-out 0.4s infinite;
+      }
+
+      @keyframes loading-hint {
+        0%,
+        100% {
+          opacity: 0.9;
+        }
+        50% {
+          opacity: 0.45;
+        }
+      }
+
+      /* Zatmavení: nejdřív ztmavne obraz, pak zmizí celá vrstva a ukáže se hra. */
+      #loading.closing .art {
+        animation: loading-dark 0.9s ease-in forwards;
+      }
+
+      #loading.closing .bar,
+      #loading.closing .hint {
+        transition: opacity 0.6s ease-in;
+        opacity: 0;
+      }
+
+      @keyframes loading-dark {
+        from {
+          opacity: 1;
+          filter: brightness(1);
+        }
+        to {
+          opacity: 1;
+          filter: brightness(0);
+        }
+      }
+
+      #loading.closing {
+        animation: loading-out 0.7s ease-out 0.9s forwards;
+      }
+
+      @keyframes loading-in {
+        from {
+          opacity: 0;
+          filter: brightness(0);
+        }
+        to {
+          opacity: 1;
+          filter: brightness(1);
+        }
+      }
+
+      @keyframes loading-breathe {
+        0%,
+        100% {
+          opacity: 0.6;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      @keyframes loading-out {
+        to {
+          opacity: 0;
+          visibility: hidden;
+        }
+      }
     </style>
   </head>
 
   <body>
-    <div id="game"></div>
+    <div id="game">
+      <div id="loading" aria-label="Načítání hry">
+        <div class="art"></div>
+        <div class="bar"><span></span></div>
+        <div class="hint">Klikni pro pokračování</div>
+      </div>
+    </div>
+    <script>
+      // Načítací obrazovka: průběh posílá BootScene (událost ds-loading-progress),
+      // dokončení ds-loading-done. Obrazovka zůstane nejméně 3 s (příběh na obrázku),
+      // klik ji po načtení přeskočí.
+      (function () {
+        // ?loading v adrese = obrazovka zůstane, dokud se na ni neklikne (prohlížení).
+        var MIN_TIME = /[?&]loading\b/.test(location.search) ? Infinity : 3000;
+        var start = Date.now();
+        var loading = document.getElementById('loading');
+        var bar = loading.querySelector('.bar span');
+        var done = false;
+        var closed = false;
+
+        function close() {
+          if (closed) return;
+          closed = true;
+          loading.classList.add('closing');
+          setTimeout(function () { loading.remove(); }, 1800);
+        }
+
+        window.addEventListener('ds-loading-progress', function (event) {
+          bar.style.width = Math.round((event.detail || 0) * 100) + '%';
+        });
+        window.addEventListener('ds-loading-done', function () {
+          done = true;
+          bar.style.width = '100%';
+          loading.classList.add('ready');
+          // Nekonečno by setTimeout bral jako 0 – při ?loading se zavírá jen klikem.
+          if (MIN_TIME !== Infinity) setTimeout(close, Math.max(0, MIN_TIME - (Date.now() - start)));
+        });
+        loading.addEventListener('click', function () {
+          if (done) close();
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

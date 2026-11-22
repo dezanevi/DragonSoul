@@ -46,7 +46,7 @@
 {
   "id": "vine_whip",
   "name": "Bič z lián",
-  "element": "nature",
+  "element": "verdant",
   "category": "physical",
   "power": 7,
   "accuracy": 0.9,
@@ -90,7 +90,7 @@
   {
     "id": "frost_bite",
     "name": "Ledové kousnutí",
-    "element": "ice",
+    "element": "water",
     "category": "physical",
     "power": 7,
     "accuracy": 0.9,
@@ -184,7 +184,7 @@
   {
     "id": "cinder_maw",
     "name": "Žhavý chřtán",
-    "element": "flame",
+    "element": "fire",
     "category": "magical",
     "power": 12,
     "accuracy": 0.9,
@@ -208,7 +208,7 @@
   {
     "id": "faultbreaker",
     "name": "Lamač zemského zlomu",
-    "element": "stone",
+    "element": "earth",
     "category": "physical",
     "power": 13,
     "accuracy": 0.85,
@@ -244,7 +244,7 @@
   {
     "id": "gloomfang",
     "name": "Tesák šera",
-    "element": "shadow",
+    "element": "dark",
     "category": "magical",
     "power": 12,
     "accuracy": 0.9,
@@ -256,7 +256,7 @@
   {
     "id": "starwake_lance",
     "name": "Kopí hvězdné záře",
-    "element": "astral",
+    "element": "light",
     "category": "magical",
     "power": 12,
     "accuracy": 0.95,
@@ -267,7 +267,7 @@
   {
     "id": "caldera_heart",
     "name": "Srdce kaldery",
-    "element": "flame",
+    "element": "fire",
     "category": "magical",
     "power": 25,
     "accuracy": 0.85,
@@ -293,7 +293,7 @@
   {
     "id": "mountain_verdict",
     "name": "Rozsudek hor",
-    "element": "stone",
+    "element": "earth",
     "category": "physical",
     "power": 24,
     "accuracy": 0.85,
@@ -331,7 +331,7 @@
   {
     "id": "abyssal_eclipse",
     "name": "Zatmění propasti",
-    "element": "shadow",
+    "element": "dark",
     "category": "magical",
     "power": 24,
     "accuracy": 0.9,
@@ -344,7 +344,7 @@
     {
     "id": "celestial_convergence",
     "name": "Nebeské sjednocení",
-    "element": "astral",
+    "element": "light",
     "category": "magical",
     "power": 23,
     "accuracy": 0.95,
@@ -401,7 +401,7 @@
   {
     "id": "horn_charge",
     "name": "Rohatý nápor",
-    "element": "stone",
+    "element": "earth",
     "category": "physical",
     "power": 12,
     "accuracy": 0.85,
@@ -413,7 +413,7 @@
   {
     "id": "crushing_slam",
     "name": "Drtivý úder",
-    "element": "stone",
+    "element": "earth",
     "category": "physical",
     "power": 14,
     "accuracy": 0.8,
@@ -493,7 +493,7 @@
   {
     "id": "venom_spit",
     "name": "Jedovatý plivanec",
-    "element": "shadow",
+    "element": "dark",
     "category": "magical",
     "power": 8,
     "accuracy": 0.9,
@@ -505,7 +505,7 @@
   {
     "id": "spirit_drain",
     "name": "Vysátí ducha",
-    "element": "shadow",
+    "element": "dark",
     "category": "magical",
     "power": 10,
     "accuracy": 0.9,
@@ -517,7 +517,7 @@
   {
     "id": "crystal_shard",
     "name": "Křišťálový střep",
-    "element": "astral",
+    "element": "light",
     "category": "magical",
     "power": 10,
     "accuracy": 0.95,
@@ -528,7 +528,7 @@
     {
     "id": "ember_claw",
     "name": "Žhavý spár",
-    "element": "flame",
+    "element": "fire",
     "category": "physical",
     "power": 10,
     "accuracy": 0.9,
@@ -540,7 +540,7 @@
   {
     "id": "magma_claw",
     "name": "Magmatický spár",
-    "element": "flame",
+    "element": "fire",
     "category": "physical",
     "power": 8,
     "accuracy": 0.95,
@@ -552,7 +552,7 @@
   {
     "id": "cinder_ward",
     "name": "Popelavá ochrana",
-    "element": "flame",
+    "element": "fire",
     "category": "buff",
     "power": 0,
     "accuracy": 1,
@@ -564,7 +564,7 @@
   {
     "id": "volcanic_breath",
     "name": "Sopečný dech",
-    "element": "flame",
+    "element": "fire",
     "category": "magical",
     "power": 12,
     "accuracy": 0.9,
@@ -576,7 +576,7 @@
   {
     "id": "magma_burst",
     "name": "Výbuch magmatu",
-    "element": "flame",
+    "element": "fire",
     "category": "magical",
     "power": 16,
     "accuracy": 0.85,
@@ -588,7 +588,7 @@
   {
     "id": "ash_rebirth",
     "name": "Zrození z popela",
-    "element": "flame",
+    "element": "fire",
     "category": "healing",
     "power": 18,
     "accuracy": 1,
@@ -599,7 +599,7 @@
   {
     "id": "worldfire_crown",
     "name": "Koruna světového ohně",
-    "element": "flame",
+    "element": "fire",
     "category": "magical",
     "power": 28,
     "accuracy": 0.85,
@@ -682,7 +682,7 @@
   {
     "id": "shadow_talon",
     "name": "Stínový pařát",
-    "element": "shadow",
+    "element": "dark",
     "category": "physical",
     "power": 8,
     "accuracy": 0.95,
@@ -693,7 +693,7 @@
   {
     "id": "dread_howl",
     "name": "Zavytí děsu",
-    "element": "shadow",
+    "element": "dark",
     "category": "buff",
     "power": 0,
     "accuracy": 1,
@@ -705,7 +705,7 @@
   {
     "id": "soul_curse",
     "name": "Prokletí duše",
-    "element": "shadow",
+    "element": "dark",
     "category": "magical",
     "power": 12,
     "accuracy": 0.9,
@@ -717,7 +717,7 @@
   {
     "id": "umbral_rend",
     "name": "Roztržení stínu",
-    "element": "shadow",
+    "element": "dark",
     "category": "magical",
     "power": 16,
     "accuracy": 0.9,
@@ -729,7 +729,7 @@
   {
     "id": "void_renewal",
     "name": "Obnova z prázdnoty",
-    "element": "shadow",
+    "element": "dark",
     "category": "healing",
     "power": 18,
     "accuracy": 1,
@@ -740,7 +740,7 @@
   {
     "id": "abyssal_unmaking",
     "name": "Rozklad propasti",
-    "element": "shadow",
+    "element": "dark",
     "category": "magical",
     "power": 28,
     "accuracy": 0.85,
@@ -753,7 +753,7 @@
   {
     "id": "starlight_claw",
     "name": "Spár hvězdného světla",
-    "element": "astral",
+    "element": "light",
     "category": "physical",
     "power": 8,
     "accuracy": 0.95,
@@ -764,7 +764,7 @@
   {
     "id": "constellation_aegis",
     "name": "Štít souhvězdí",
-    "element": "astral",
+    "element": "light",
     "category": "buff",
     "power": 0,
     "accuracy": 1,
@@ -776,7 +776,7 @@
   {
     "id": "starfire_ray",
     "name": "Paprsek hvězdného ohně",
-    "element": "astral",
+    "element": "light",
     "category": "magical",
     "power": 12,
     "accuracy": 0.9,
@@ -788,7 +788,7 @@
   {
     "id": "celestial_spear",
     "name": "Nebeské kopí",
-    "element": "astral",
+    "element": "light",
     "category": "magical",
     "power": 16,
     "accuracy": 0.95,
@@ -799,7 +799,7 @@
   {
     "id": "dawn_mend",
     "name": "Léčení úsvitu",
-    "element": "astral",
+    "element": "light",
     "category": "healing",
     "power": 18,
     "accuracy": 1,
@@ -810,7 +810,7 @@
   {
     "id": "genesis_starlight",
     "name": "Zrození hvězdného světla",
-    "element": "astral",
+    "element": "light",
     "category": "magical",
     "power": 28,
     "accuracy": 0.85,
@@ -881,7 +881,7 @@
   {
     "id": "goblin_trick",
     "name": "Zákeřný chvat",
-    "element": "stone",
+    "element": "earth",
     "category": "physical",
     "power": 7,
     "accuracy": 0.95,

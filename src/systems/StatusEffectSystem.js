@@ -60,15 +60,18 @@ export function applyStatusEffect(target, effect, source = null) {
     effect.id
   );
 
-  const effectiveChance =
-    chanceBeforeResistance *
-    (1 - resistance) *
-    elementalMultiplier;
+  // Nezlomné velení (talent Souboj): odečte procentní body od výsledné šance.
+  const talentReduction = Math.max(0, Number(target.statusChanceReduction) || 0);
+
+  const effectiveChance = Math.max(
+    0,
+    chanceBeforeResistance * (1 - resistance) * elementalMultiplier - talentReduction
+  );
 
   if (Math.random() >= effectiveChance) {
     return {
       applied: false,
-      resisted: resistance > 0 || elementalMultiplier < 1,
+      resisted: resistance > 0 || elementalMultiplier < 1 || talentReduction > 0,
       chance: effectiveChance
     };
   }

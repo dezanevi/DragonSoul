@@ -3,7 +3,8 @@ import { SaveSystem } from '../systems/SaveSystem.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 
 // Vytvoření postavy po kliknutí na „Nová hra“: jméno a volba muž / žena.
-// Grafika z prototypu Dragon_Souls_Character_Select_Assets
+// Podklad je tabulka name-panel.png (rám s drakem, nápis Jméno a pole pro jméno),
+// avatary a tlačítka z prototypu Dragon_Souls_Character_Select_Assets
 // (public/assets/ui/character-select/). Neaktivní avatar je šedý,
 // aktivní svítí; tlačítko Potvrdit má stav pod myší.
 
@@ -14,6 +15,12 @@ const SPRITES = [
   'confirm_normal', 'confirm_hover'
 ];
 const key = (name) => `charsel-${name}`;
+const PANEL_KEY = 'charsel-name-panel';
+
+// Tabulka name-panel.png (1536 × 1024): umístění na obrazovce a pole pro jméno
+// v souřadnicích obrázku.
+const PANEL = { x: 192, y: 8, scale: 1 };
+const NAME_BOX = { x: 460, y: 378, w: 615, h: 94 };
 const MAX_NAME_LENGTH = 20;
 const FONT = 'Georgia, "Times New Roman", serif';
 
@@ -23,6 +30,9 @@ export default class CharacterCreateScene extends Phaser.Scene {
   }
 
   preload() {
+    if (!this.textures.exists(PANEL_KEY)) {
+      this.load.image(PANEL_KEY, `${ASSET_PATH}name-panel.png`);
+    }
     for (const name of SPRITES) {
       if (!this.textures.exists(key(name)) && !this.textures.exists(`${key(name)}-raw`)) {
         this.load.image(`${key(name)}-raw`, `${ASSET_PATH}${name}.png`);
@@ -45,23 +55,28 @@ export default class CharacterCreateScene extends Phaser.Scene {
     }
     this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x050b14, 0.62).setOrigin(0);
 
-    this.drawPanel(cx - 560, 40, 1120, 1000);
+    // Tabulka s rámem, nápisem Jméno a polem pro jméno.
+    if (this.textures.exists(PANEL_KEY)) {
+      this.add.image(PANEL.x, PANEL.y, PANEL_KEY).setOrigin(0).setScale(PANEL.scale);
+    } else {
+      this.drawPanel(cx - 640, 160, 1280, 760);
+    }
 
-    this.add.text(cx, 115, 'Vytvoření postavy', {
-      fontFamily: FONT, fontSize: '56px', fontStyle: 'bold', color: '#ffe7ae',
-      stroke: '#1a0f04', strokeThickness: 6
+    this.add.text(cx, this.panelY(262), 'Vytvoření postavy', {
+      fontFamily: FONT, fontSize: '34px', fontStyle: 'bold', color: '#ffe7ae',
+      stroke: '#1a0f04', strokeThickness: 5
     }).setOrigin(0.5).setResolution(2);
 
-    this.createNameInput(cx, 185);
+    this.createNameInput();
 
     this.choices = {
-      male: this.createChoice('male', cx - 230, 'Muž'),
-      female: this.createChoice('female', cx + 230, 'Žena')
+      male: this.createChoice('male', cx - 270, 'Muž'),
+      female: this.createChoice('female', cx + 270, 'Žena')
     };
 
-    this.createConfirm(cx, 935);
+    this.createConfirm(cx, 978);
 
-    this.status = this.add.text(cx, 1008, '', {
+    this.status = this.add.text(cx, 1058, '', {
       fontFamily: FONT, fontSize: '24px', color: '#dceaff'
     }).setOrigin(0.5).setResolution(2);
 
@@ -74,6 +89,9 @@ export default class CharacterCreateScene extends Phaser.Scene {
     back.on('pointerout', () => back.setColor('#f2d28a'));
     back.on('pointerdown', () => this.scene.start('Menu'));
 
+    // Pojistka: posluchač z předchozího otevření scény nesmí zůstat zapnutý
+    // (jinak se znaky zapisují dvakrát).
+    if (this.onKey) this.input.keyboard.off('keydown', this.onKey);
     this.onKey = (event) => this.handleKey(event);
     this.input.keyboard.on('keydown', this.onKey);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard.off('keydown', this.onKey));
@@ -91,14 +109,9 @@ export default class CharacterCreateScene extends Phaser.Scene {
       if (!this.textures.exists(rawKey)) continue;
 
       const source = this.textures.get(rawKey).getSourceImage();
-      const canvas = document.createElement('canvas');
-      canvas.width = source.width;
-      canvas.height = source.height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(source, 0, 0);
-      // Nad tlačítkem Potvrdit jsou zbytky sousedů těsně u okraje → nahoře ořez natěsno.
-      keepMainShape(ctx, canvas.width, canvas.height, name.startsWith('confirm') ? 6 : 18);
-      this.textures.addCanvas(key(name), canvas);
+      // Tlačítko Potvrdit má jen úzkou záři; avatary a symboly širší.
+      const glow = name.startsWith('confirm') ? 10 : 18;
+      this.textures.addCanvas(key(name), cleanCut(source, glow));
       this.textures.remove(rawKey);
     }
   }
@@ -113,39 +126,40 @@ export default class CharacterCreateScene extends Phaser.Scene {
 
   // Vlastní textové pole (Phaser nemá nativní input): psaní z klávesnice,
   // Backspace maže, Enter potvrdí, blikající kurzor.
-  createNameInput(cx, y) {
-    this.add.text(cx, y, 'Jméno', {
-      fontFamily: FONT, fontSize: '28px', color: '#ffe7ae'
+  panelX(x) { return PANEL.x + x * PANEL.scale; }
+  panelY(y) { return PANEL.y + y * PANEL.scale; }
+
+  createNameInput() {
+    const x = this.panelX(NAME_BOX.x);
+    const y = this.panelY(NAME_BOX.y);
+    const w = NAME_BOX.w * PANEL.scale;
+    const h = NAME_BOX.h * PANEL.scale;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    this.inputBox = { x, y, w, h };
+
+    if (!this.textures.exists(PANEL_KEY)) {
+      this.add.graphics().fillStyle(0x07182c, 1).fillRoundedRect(x, y, w, h, 10)
+        .lineStyle(3, 0xb98d4b, 1).strokeRoundedRect(x, y, w, h, 10);
+    }
+
+    this.nameText = this.add.text(cx, cy, '', {
+      fontFamily: FONT, fontSize: '36px', color: '#f9e6b8'
     }).setOrigin(0.5).setResolution(2);
 
-    const w = 520;
-    const h = 72;
-    const g = this.add.graphics();
-    g.fillStyle(0x07182c, 1).fillRoundedRect(cx - w / 2, y + 30, w, h, 10);
-    g.lineStyle(3, 0xb98d4b, 1).strokeRoundedRect(cx - w / 2, y + 30, w, h, 10);
-    this.inputBox = { g, x: cx - w / 2, y: y + 30, w, h };
-
-    this.nameText = this.add.text(cx, y + 30 + h / 2, '', {
-      fontFamily: FONT, fontSize: '34px', color: '#f9e6b8'
-    }).setOrigin(0.5).setResolution(2);
-
-    this.caret = this.add.rectangle(cx, y + 30 + h / 2, 3, 38, 0xf9e6b8).setOrigin(0, 0.5);
+    this.caret = this.add.rectangle(cx, cy, 3, 40, 0xf9e6b8).setOrigin(0, 0.5);
     this.tweens.add({ targets: this.caret, alpha: 0, duration: 520, yoyo: true, repeat: -1 });
 
-    this.add.text(cx, y + 30 + h + 22, `Nejvýše ${MAX_NAME_LENGTH} znaků · Enter potvrdí`, {
-      fontFamily: FONT, fontSize: '18px', color: '#9fb3c4'
+    this.add.text(cx, y + h + 18, `Nejvýše ${MAX_NAME_LENGTH} znaků · Enter potvrdí`, {
+      fontFamily: FONT, fontSize: '17px', color: '#9fb3c4'
     }).setOrigin(0.5).setResolution(2);
   }
 
   createChoice(gender, x, label) {
-    const avatar = this.add.image(x, 700, key(`${gender}_inactive`)).setOrigin(0.5, 1);
-    const button = this.add.image(x, 772, key(`${gender}_button_inactive`)).setOrigin(0.5);
-    const caption = this.add.text(x, 836, label, {
-      fontFamily: FONT, fontSize: '26px', color: '#c9b98f'
-    }).setOrigin(0.5, 0).setResolution(2);
-
+    const avatar = this.add.image(x, 765, key(`${gender}_inactive`)).setOrigin(0.5, 1);
+    const button = this.add.image(x, 820, key(`${gender}_button_inactive`)).setOrigin(0.5);
     // Kliknutelná plocha přes avatar i tlačítko.
-    const zone = this.add.zone(x, 600, 400, 500).setInteractive({ useHandCursor: true });
+    const zone = this.add.zone(x, 670, 420, 420).setInteractive({ useHandCursor: true });
     zone.on('pointerdown', () => {
       this.gender = gender;
       this.render();
@@ -153,7 +167,7 @@ export default class CharacterCreateScene extends Phaser.Scene {
     zone.on('pointerover', () => { choice.hover = true; this.render(); });
     zone.on('pointerout', () => { choice.hover = false; this.render(); });
 
-    const choice = { avatar, button, caption, hover: false };
+    const choice = { avatar, button, hover: false };
     return choice;
   }
 
@@ -176,12 +190,11 @@ export default class CharacterCreateScene extends Phaser.Scene {
     for (const [gender, choice] of Object.entries(this.choices)) {
       const active = gender === this.gender;
       const lift = choice.hover && !active ? 1.03 : 1;
-      this.fit(choice.avatar, key(`${gender}_${active ? 'selected' : 'inactive'}`), 320 * lift, 330 * lift);
-      this.fit(choice.button, key(`${gender}_button_${active ? 'active' : 'inactive'}`), 240 * lift, 112 * lift);
-      choice.caption.setColor(active ? '#ffe7ae' : '#8f8a7a');
+      this.fit(choice.avatar, key(`${gender}_${active ? 'selected' : 'inactive'}`), 260 * lift, 250 * lift);
+      this.fit(choice.button, key(`${gender}_button_${active ? 'active' : 'inactive'}`), 200 * lift, 84 * lift);
     }
 
-    this.fit(this.confirmButton, key(this.confirmHover ? 'confirm_hover' : 'confirm_normal'), 420, 125);
+    this.fit(this.confirmButton, key(this.confirmHover ? 'confirm_hover' : 'confirm_normal'), 400, 120);
 
     const shown = this.nameBuffer;
     this.nameText.setText(shown || 'Zadej jméno').setColor(shown ? '#f9e6b8' : '#6f7f92');
@@ -243,52 +256,91 @@ export default class CharacterCreateScene extends Phaser.Scene {
   }
 }
 
-// Ponechá jen největší souvislý pevný tvar (alfa > 200) a vše mimo jeho obdélník
-// (rozšířený o okraj na záři, nahoře méně – tam bývají zbytky sousedů) zprůhlední.
-function keepMainShape(ctx, width, height, topPad = 18) {
+// Čistý výřez: najde největší souvislý pevný tvar (alfa > 200) a ponechá jen
+// pixely, které jsou od něj nejvýš `glow` px daleko (záře, vyhlazený okraj).
+// Kousky sousedních obrázků ze spritesheetu tak zmizí, i když leží blízko.
+// Výsledek se ořízne na velikost ponechaného obsahu.
+function cleanCut(source, glow) {
+  const width = source.width;
+  const height = source.height;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0);
+
   const image = ctx.getImageData(0, 0, width, height);
   const data = image.data;
-  const label = new Int32Array(width * height);
+  const size = width * height;
+  const label = new Int32Array(size);
   let best = null;
   let id = 0;
 
-  for (let start = 0; start < width * height; start++) {
+  for (let start = 0; start < size; start++) {
     if (label[start] || data[start * 4 + 3] <= 200) continue;
     id += 1;
-    const stack = [start];
+    const pixels = [start];
     label[start] = id;
-    let count = 0;
-    let left = width, right = 0, top = height, bottom = 0;
-
-    while (stack.length) {
-      const p = stack.pop();
-      count += 1;
+    for (let i = 0; i < pixels.length; i++) {
+      const p = pixels[i];
       const x = p % width;
-      const y = (p - x) / width;
-      if (x < left) left = x;
-      if (x > right) right = x;
-      if (y < top) top = y;
-      if (y > bottom) bottom = y;
       for (const n of [p - 1, p + 1, p - width, p + width]) {
-        if (n < 0 || n >= width * height || label[n]) continue;
+        if (n < 0 || n >= size || label[n]) continue;
         if ((n === p - 1 && x === 0) || (n === p + 1 && x === width - 1)) continue;
         if (data[n * 4 + 3] > 200) {
           label[n] = id;
-          stack.push(n);
+          pixels.push(n);
         }
       }
     }
+    if (!best || pixels.length > best.length) best = pixels;
+  }
+  if (!best) return canvas;
 
-    if (!best || count > best.count) best = { count, left, right, top, bottom };
+  // Vzdálenost od hlavního tvaru (krokově, 8 směrů) jen přes nenulové pixely.
+  const distance = new Int16Array(size).fill(-1);
+  let frontier = best;
+  for (const p of frontier) distance[p] = 0;
+  for (let d = 1; d <= glow; d++) {
+    const next = [];
+    for (const p of frontier) {
+      const x = p % width;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= width) continue;
+          const n = p + dy * width + dx;
+          if (n < 0 || n >= size || distance[n] !== -1 || data[n * 4 + 3] === 0) continue;
+          distance[n] = d;
+          next.push(n);
+        }
+      }
+    }
+    frontier = next;
   }
 
-  if (!best) return;
-  const pad = 18;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const inside = x >= best.left - pad && x <= best.right + pad && y >= best.top - topPad && y <= best.bottom + pad;
-      if (!inside) data[(y * width + x) * 4 + 3] = 0;
+  let left = width;
+  let right = -1;
+  let top = height;
+  let bottom = -1;
+  for (let p = 0; p < size; p++) {
+    if (distance[p] === -1) {
+      data[p * 4 + 3] = 0;
+      continue;
     }
+    const x = p % width;
+    const y = (p - x) / width;
+    if (x < left) left = x;
+    if (x > right) right = x;
+    if (y < top) top = y;
+    if (y > bottom) bottom = y;
   }
   ctx.putImageData(image, 0, 0);
+
+  const trimmed = document.createElement('canvas');
+  trimmed.width = right - left + 1;
+  trimmed.height = bottom - top + 1;
+  trimmed.getContext('2d').drawImage(canvas, left, top, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+  return trimmed;
 }

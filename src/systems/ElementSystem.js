@@ -1,25 +1,29 @@
+// Elementy mají stejné názvy jako školy magie: Fire, Water, Earth, Air, Light, Dark.
+// Navíc je Verdant (příroda) – element monster bez vlastní školy magie.
+// Staré názvy (Flame, Stone, Shadow, Astral…) se převádějí na nové, takže starší
+// data a uložené hry fungují dál.
 const ELEMENT_ALIASES = Object.freeze({
-  flame: 'flame',
-  fire: 'flame',
+  fire: 'fire',
+  flame: 'fire',
 
   water: 'water',
   ice: 'water',
 
-  stone: 'stone',
-  earth: 'stone',
-  metal: 'stone',
+  earth: 'earth',
+  stone: 'earth',
+  metal: 'earth',
 
   air: 'air',
 
   verdant: 'verdant',
   nature: 'verdant',
 
-  shadow: 'shadow',
-  dark: 'shadow',
+  dark: 'dark',
+  shadow: 'dark',
 
-  astral: 'astral',
-  light: 'astral',
-  arcane: 'astral',
+  light: 'light',
+  astral: 'light',
+  arcane: 'light',
 
   // Poison zůstává zvláštní vlastností útoku,
   // nikoli samostatným elementem poškození.
@@ -27,15 +31,32 @@ const ELEMENT_ALIASES = Object.freeze({
   neutral: 'neutral'
 });
 
+// Kruh výhod: Fire > Verdant > Earth > Air > Water > Dark > Light > Fire.
 const STRONG_AGAINST = Object.freeze({
-  flame: 'verdant',
-  verdant: 'stone',
-  stone: 'air',
+  fire: 'verdant',
+  verdant: 'earth',
+  earth: 'air',
   air: 'water',
-  water: 'shadow',
-  shadow: 'astral',
-  astral: 'flame'
+  water: 'dark',
+  dark: 'light',
+  light: 'fire'
 });
+
+// Zobrazované názvy elementů (shodné se školami magie).
+export const ELEMENT_NAMES = Object.freeze({
+  fire: 'Fire',
+  water: 'Water',
+  earth: 'Earth',
+  air: 'Air',
+  light: 'Light',
+  dark: 'Dark',
+  verdant: 'Verdant',
+  neutral: 'Neutral'
+});
+
+export function elementName(element) {
+  return ELEMENT_NAMES[normalizeElement(element)];
+}
 
 export function normalizeElement(element) {
   const key = String(element ?? '').trim().toLowerCase();

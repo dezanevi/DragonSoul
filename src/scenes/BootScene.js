@@ -9,6 +9,11 @@ import { loadObjectSprites, prepareObjectSprites } from '../entities/objectSprit
 import { loadTerrainTiles, prepareTerrainTiles } from '../world/terrainTiles.js';
 import { CARD_TEXTURE, CARD_TEXTURE_PATH } from '../ui/heroCard/cardLayout.js';
 import { loadTabSprites, prepareTabSprites } from '../ui/heroCard/tabSprites.js';
+import { loadHeroButtonSprites, prepareHeroButtonSprites, HERO_CARD_FEMALE, HERO_CARD_FEMALE_PATH } from '../ui/heroCard/heroButtonSprites.js';
+import { loadTalentCardTextures } from '../ui/talentCardLayout.js';
+import { loadPartyCardTextures } from '../ui/partyCardLayout.js';
+import { loadInventorySprites, prepareInventorySprites } from '../ui/inventorySprites.js';
+import { loadMonsterAnimations, prepareMonsterAnimations } from '../battle/monsterAnimations.js';
 
 export default class BootScene extends Phaser.Scene {
   constructor() {
@@ -16,6 +21,8 @@ export default class BootScene extends Phaser.Scene {
   }
 
 preload() {
+  // Průběh načítání pro načítací obrazovku v index.html.
+  this.load.on('progress', (value) => window.dispatchEvent(new CustomEvent('ds-loading-progress', { detail: value })));
   this.load.image('title-background', 'title-background.webp');
   loadMenuButtons(this);
   loadObjectSprites(this);
@@ -24,6 +31,12 @@ preload() {
   loadBuildingTextures(this);
   this.load.image(CARD_TEXTURE, CARD_TEXTURE_PATH);
   loadTabSprites(this);
+  loadTalentCardTextures(this);
+  loadPartyCardTextures(this);
+  loadHeroButtonSprites(this);
+  loadInventorySprites(this);
+  loadMonsterAnimations(this);
+  this.load.image(HERO_CARD_FEMALE, HERO_CARD_FEMALE_PATH);
 }
 
 
@@ -44,6 +57,9 @@ preload() {
     prepareBuildingTextures(this);
     prepareObjectSprites(this);
     prepareTabSprites(this);
+    prepareHeroButtonSprites(this);
+    prepareInventorySprites(this);
+    prepareMonsterAnimations(this);
     this.registry.set('terrainTilesReady', prepareTerrainTiles(this));
     this.registry.set('menuButtonsReady', prepareMenuButtons(this));
 
@@ -89,6 +105,10 @@ preload() {
       g.fillStyle(0x75d58e).fillRect(6, 2, 8, 7);
       g.fillStyle(0x15251b).fillRect(7, 8, 2, 2).fillRect(12, 8, 2, 2);
     });
+
+    // Grafika je připravená – načítací obrazovka se může zatmít.
+
+    window.dispatchEvent(new CustomEvent('ds-loading-done'));
 
     this.scene.start('Menu');
   }

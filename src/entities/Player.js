@@ -7,7 +7,9 @@ import {
   HERO_FEET_PADDING,
   HERO_DISPLAY_HEIGHT,
   heroAnimationKey,
-  heroIdleFrame
+  heroIdleFrame,
+  heroTexture,
+  heroVariant
 } from './heroSprite.js';
 
 // Směr pohybu (znaménko x, y) → název směru ve spritesheetu.
@@ -27,8 +29,10 @@ const FEET_WIDTH = 72;
 const FEET_HEIGHT = 36;
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
-  constructor(scene, x, y, state) {
-    super(scene, x, y, HERO_TEXTURE, heroIdleFrame('south'));
+  // gender = podoba postavy (muž / žena); state je objekt, do kterého se zapisuje pozice.
+  constructor(scene, x, y, state, gender = state?.gender) {
+    super(scene, x, y, heroTexture(gender), heroIdleFrame('south'));
+    this.gender = gender ?? 'male';
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -40,7 +44,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // do hloubky i kolize se spodní hranou dlaždic.
     this.setOrigin(
       0.5,
-      (HERO_FRAME_HEIGHT - HERO_FEET_PADDING) / HERO_FRAME_HEIGHT
+      (HERO_FRAME_HEIGHT - heroVariant(this.gender).feetPadding) / HERO_FRAME_HEIGHT
     );
     this.setDisplayHeight(HERO_DISPLAY_HEIGHT);
     this.setCollideWorldBounds(true);
@@ -48,7 +52,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.body.setSize(FEET_WIDTH, FEET_HEIGHT);
     this.body.setOffset(
       (HERO_FRAME_WIDTH - FEET_WIDTH) / 2,
-      HERO_FRAME_HEIGHT - HERO_FEET_PADDING - FEET_HEIGHT
+      HERO_FRAME_HEIGHT - heroVariant(this.gender).feetPadding - FEET_HEIGHT
     );
 
     this.speed = 220;
@@ -77,7 +81,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (x !== 0 || y !== 0) {
       this.face(DIRECTION_BY_VECTOR[`${x},${y}`]);
-      this.anims.play(heroAnimationKey(this.facing), true);
+      this.anims.play(heroAnimationKey(this.facing, this.gender), true);
 
       const velocity = new Phaser.Math.Vector2(x, y)
         .normalize()

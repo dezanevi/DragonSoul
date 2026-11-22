@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import WorldHero from '../entities/WorldHero.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { TILE_SIZE, TILE_TYPES } from '../data/tiles.js';
+import { QUEST_STATUS, getQuestStatus } from '../systems/QuestSystem.js';
 import { loadWorldMap } from '../data/maps/index.js';
 import { BUILDING_SPRITES, buildingTextureKey } from '../entities/buildingSprites.js';
 import { createIsoProjection, ISO_TILE_WIDTH } from '../world/iso.js';
@@ -16,6 +17,8 @@ const TILESET_KEY = 'world-tileset';
 // Po kolika polích tmavé louky přijde náhodné setkání (náhodně v tomto rozmezí).
 const ENCOUNTER_STEPS = { min: 8, max: 18 };
 const DOOR_REACH = TILE_SIZE * 0.9;
+const CAVE_REACH = TILE_SIZE * 1.6;
+const CAVE_QUEST = 'greenvale_cave_slime';
 
 // Kolik místa nad horním rohem mapy nechat kameře (hlavy postav, střechy).
 const CAMERA_TOP_MARGIN = 360;
@@ -321,11 +324,14 @@ export default class WorldScene extends Phaser.Scene {
   // Jeskyně: obrázek vchodu na poli C, ústím k jihovýchodu (ke kameře).
   createCave() {
     const key = objectTextureKey('cave', 0);
-    if (!this.textures.exists(key)) return;
+    this.caveSpots = [];
 
     for (let y = 0; y < this.map.height; y++) {
       for (let x = 0; x < this.map.width; x++) {
         if (this.map.tiles[y][x].id !== 'cave') continue;
+        // Vchod do jeskyně (úkol Jeskynní sliz).
+        this.caveSpots.push({ x: (x + 0.5) * TILE_SIZE, y: (y + 0.5) * TILE_SIZE });
+        if (!this.textures.exists(key)) continue;
 
         const front = this.iso.toScreen((x + 0.85) * TILE_SIZE, (y + 0.85) * TILE_SIZE);
         this.add.image(front.x, front.y, key)
@@ -435,6 +441,52 @@ export default class WorldScene extends Phaser.Scene {
     return best;
   }
 
+  findNearbyCave() {
+    return (this.caveSpots ?? []).find(
+      (spot) => Phaser.Math.Distance.Between(this.player.x, this.player.y, spot.x, spot.y) < CAVE_REACH
+    ) ?? null;
+  }
+
+  cavePrompt() {
+    const status = getQuestStatus(this.state, CAVE_QUEST);
+    if (status === QUEST_STATUS.active) return 'E: vstoupit do jeskyně – Jeskynní sliz';
+    return 'E: prohlédnout jeskyni';
+  }
+
+  // Jeskyně: s přijatým úkolem souboj s jeskynním slizem, jinak jen hláška.
+  enterCave() {
+    const status = getQuestStatus(this.state, CAVE_QUEST);
+    if (status === QUEST_STATUS.active) {
+      const ready = (this.state.party ?? []).some((monster) => monster.currentHp > 0);
+      if (!ready) {
+        this.showWorldMessage('Tvoje monstra jsou vyčerpaná. Nech je vyléčit u Liory v hostinci.');
+        return;
+      }
+      this.startBattle({ type: 'greenvale_cave_boss', backdrop: 'greenvale_meadow' });
+      return;
+    }
+    this.showWorldMessage(
+      status === QUEST_STATUS.notStarted
+        ? 'Z jeskyně je cítit vlhko a slyšíš mlaskání. Starosta Edric na radnici o ní něco ví.'
+        : 'Jeskyně je tichá. Jeskynní sliz je mrtvý.'
+    );
+  }
+
+  showWorldMessage(text) {
+    this.worldMessage?.destroy();
+    this.worldMessage = this.add.text(this.scale.width / 2, this.scale.height - 120, text, {
+      fontSize: '24px',
+      color: '#fff4d6',
+      backgroundColor: '#2a1a10e6',
+      padding: { x: 16, y: 10 },
+      wordWrap: { width: 1100 }
+    })
+      .setOrigin(0.5, 1)
+      .setScrollFactor(0)
+      .setDepth(DEPTH.hud);
+    this.tweens.add({ targets: this.worldMessage, alpha: 0, delay: 3200, duration: 500 });
+  }
+
   enterBuilding(door) {
     this.player.stop();
     this.savePosition();
@@ -454,6 +506,18 @@ export default class WorldScene extends Phaser.Scene {
       x: (this.map.spawn.x + 0.5) * TILE_SIZE,
       y: (this.map.spawn.y + 0.5) * TILE_SIZE
     };
+
+    // Odchod z interiéru: hráč stojí na poli dveří budovy.
+    const exitDoor = this.state.exitDoor;
+    delete this.state.exitDoor;
+    const exitBuilding = exitDoor && this.map.buildings.find((building) => building.id === exitDoor);
+    if (exitBuilding) {
+      this.state.worldLayoutVersion = WORLD_LAYOUT_VERSION;
+      return {
+        x: (exitBuilding.door.x + 0.5) * TILE_SIZE,
+        y: (exitBuilding.door.y + 0.5) * TILE_SIZE
+      };
+    }
 
     if (this.state.worldLayoutVersion !== WORLD_LAYOUT_VERSION) {
       this.state.worldLayoutVersion = WORLD_LAYOUT_VERSION;
@@ -512,6 +576,9 @@ export default class WorldScene extends Phaser.Scene {
       debug: Keys.G,
       reference: Keys.R,
       heroCard: Keys.C,
+      talents: Keys.T,
+      party: Keys.P,
+      inventory: Keys.I,
       testBattle: Keys.B
     });
   }
@@ -556,11 +623,17 @@ export default class WorldScene extends Phaser.Scene {
 
   // Karta hrdiny (C): svět se pozastaví, hrdina se zastaví na místě.
   openHeroCard() {
+    this.openCard('Hero');
+  }
+
+  // Karta (Hero, Talents) přes svět: svět se pozastaví, hrdina se zastaví na místě.
+  openCard(sceneKey) {
     this.player.stop();
     this.prompt.setVisible(false);
     this.savePosition();
     this.scene.pause();
-    this.scene.launch('Hero', { state: this.state, returnScene: this.scene.key });
+    this.scene.launch(sceneKey, { state: this.state, returnScene: this.scene.key });
+    this.scene.bringToTop(sceneKey);
   }
 
   // Rozhraní má vlastní kameru, aby se nezoomovalo se světem.
@@ -576,7 +649,7 @@ export default class WorldScene extends Phaser.Scene {
     this.hudText = this.add.text(
       24,
       20,
-      'POHYB: WASD / šipky   E: vstoupit   C: karta hrdiny   B: testovací souboj   ZOOM: kolečko   G: mřížka   R: referenční mapa   ESC: menu',
+      'POHYB: WASD / šipky   E: vstoupit   C: karta hrdiny   T: talenty   P: parta   I: inventář   B: testovací souboj   ZOOM: kolečko   G: mřížka   R: referenční mapa   ESC: menu',
       {
         fontSize: '18px',
         color: '#fff1c6',
@@ -756,6 +829,18 @@ export default class WorldScene extends Phaser.Scene {
       return;
     }
 
+    const cave = door ? null : this.findNearbyCave();
+    if (cave) {
+      this.prompt
+        .setText(this.cavePrompt())
+        .setPosition(this.player.view.x, this.player.view.y - 125)
+        .setVisible(true);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.interact)) {
+        this.enterCave();
+        return;
+      }
+    }
+
     if (Phaser.Input.Keyboard.JustDown(this.keys.debug)) {
       this.setDebugVisible(!this.debugVisible);
     }
@@ -768,6 +853,21 @@ export default class WorldScene extends Phaser.Scene {
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.heroCard)) {
       this.openHeroCard();
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.talents)) {
+      this.openCard('Talents');
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.inventory)) {
+      this.openCard('Inventory');
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.party)) {
+      this.openCard('Party');
       return;
     }
 

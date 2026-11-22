@@ -1,4 +1,5 @@
 import skillRows from '../data/skills.json';
+import { normalizeElement as normalizeElementName } from './ElementSystem.js';
 import speciesSkillProfiles from '../data/monsterSkillProfiles.json';
 
 const SKILLS_BY_ID = new Map(
@@ -9,17 +10,17 @@ export const MAX_ACTIVE_SKILLS = 6;
 export const MAX_REGULAR_SKILLS = 5;
 
 const STARTER_SKILLS_BY_ELEMENT = {
-  flame: 'ember_breath',
+  fire: 'ember_breath',
   water: 'water_jet',
-  stone: 'stone_fist',
+  earth: 'stone_fist',
   air: 'spark',
   verdant: 'vine_whip',
-  shadow: 'quick_claw',
-  astral: 'spark'
+  dark: 'quick_claw',
+  light: 'spark'
 };
 
 const LEVEL_SKILLS_BY_ELEMENT = {
-  flame: {
+  fire: {
     10: 'howl',
     20: 'cinder_maw',
     40: 'ember_claw',
@@ -31,7 +32,7 @@ const LEVEL_SKILLS_BY_ELEMENT = {
     40: 'tentacle_crush',
     80: 'rime_lance'
   },
-  stone: {
+  earth: {
     10: 'stone_skin',
     20: 'faultbreaker',
     40: 'crushing_slam',
@@ -49,13 +50,13 @@ const LEVEL_SKILLS_BY_ELEMENT = {
     40: 'spore_burst',
     80: 'web_snare'
   },
-  shadow: {
+  dark: {
     10: 'howl',
     20: 'gloomfang',
     40: 'spirit_drain',
     80: 'venom_spit'
   },
-  astral: {
+  light: {
     10: 'healing_pulse',
     20: 'starwake_lance',
     40: 'crystal_shard',
@@ -64,17 +65,18 @@ const LEVEL_SKILLS_BY_ELEMENT = {
 };
 
 const BOND_SKILLS_BY_ELEMENT = {
-  flame: 'caldera_heart',
+  fire: 'caldera_heart',
   water: 'abyssal_current',
-  stone: 'mountain_verdict',
+  earth: 'mountain_verdict',
   air: 'tempest_crown',
   verdant: 'elderbloom_aegis',
-  shadow: 'abyssal_eclipse',
-  astral: 'celestial_convergence'
+  dark: 'abyssal_eclipse',
+  light: 'celestial_convergence'
 };
 
+// Element se převádí stejně jako v ElementSystem (Flame → fire, Stone → earth…).
 function normalizeElement(element) {
-  return String(element ?? '').trim().toLowerCase();
+  return normalizeElementName(element);
 }
 
 function normalizeSpeciesId(speciesId) {
