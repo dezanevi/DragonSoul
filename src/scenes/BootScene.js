@@ -7,12 +7,8 @@ import {
 import { loadMenuButtons, prepareMenuButtons } from '../ui/menuButtons.js';
 import { loadObjectSprites, prepareObjectSprites } from '../entities/objectSprites.js';
 import { loadTerrainTiles, prepareTerrainTiles } from '../world/terrainTiles.js';
-import { CARD_TEXTURE, CARD_TEXTURE_PATH } from '../ui/heroCard/cardLayout.js';
-import { loadTabSprites, prepareTabSprites } from '../ui/heroCard/tabSprites.js';
-import { loadHeroButtonSprites, prepareHeroButtonSprites, HERO_CARD_FEMALE, HERO_CARD_FEMALE_PATH } from '../ui/heroCard/heroButtonSprites.js';
-import { loadTalentCardTextures } from '../ui/talentCardLayout.js';
-import { loadPartyCardTextures } from '../ui/partyCardLayout.js';
 import { loadInventorySprites, prepareInventorySprites } from '../ui/inventorySprites.js';
+import { loadNewUi, buildNewUi } from '../ui/newUiKit.js';
 import { loadMonsterAnimations, prepareMonsterAnimations } from '../battle/monsterAnimations.js';
 
 export default class BootScene extends Phaser.Scene {
@@ -23,20 +19,16 @@ export default class BootScene extends Phaser.Scene {
 preload() {
   // Průběh načítání pro načítací obrazovku v index.html.
   this.load.on('progress', (value) => window.dispatchEvent(new CustomEvent('ds-loading-progress', { detail: value })));
-  this.load.image('title-background', 'title-background.webp');
+  this.load.image('title-background', 'assets/title-background.png');
   loadMenuButtons(this);
   loadObjectSprites(this);
   loadTerrainTiles(this);
   loadHeroSprite(this);
   loadBuildingTextures(this);
-  this.load.image(CARD_TEXTURE, CARD_TEXTURE_PATH);
-  loadTabSprites(this);
-  loadTalentCardTextures(this);
-  loadPartyCardTextures(this);
-  loadHeroButtonSprites(this);
+  // Karty: nová sada UI – podklady a stavy prvků se sestaví v create (ui/newUiKit.js).
+  loadNewUi(this);
   loadInventorySprites(this);
   loadMonsterAnimations(this);
-  this.load.image(HERO_CARD_FEMALE, HERO_CARD_FEMALE_PATH);
 }
 
 
@@ -56,9 +48,8 @@ preload() {
     createHeroAnimations(this);
     prepareBuildingTextures(this);
     prepareObjectSprites(this);
-    prepareTabSprites(this);
-    prepareHeroButtonSprites(this);
     prepareInventorySprites(this);
+    buildNewUi(this);
     prepareMonsterAnimations(this);
     this.registry.set('terrainTilesReady', prepareTerrainTiles(this));
     this.registry.set('menuButtonsReady', prepareMenuButtons(this));

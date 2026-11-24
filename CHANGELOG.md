@@ -1,4 +1,4 @@
-# Dragon Souls – historie verzí
+# AURION: LEGACY OF SOULS – historie verzí
 
 ## Jak archivujeme
 
@@ -26,6 +26,438 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
 ## Verze 0.1 – rozpracováno
 
 ### Přidáno
+- **Nové UI všech karet** z rozdělené sady `newui` (`src/ui/newUiKit.js`): při startu hry se z dílů
+  přes 9-slice sestaví podklady karet Hrdina (muž i žena), Talenty (barevná i šedá verze), Party
+  a Inventář – panely, štítky s nadpisy, popisky a ikony na stejných místech jako dřív, takže
+  logika karet zůstala. Ze stejných dílů jsou stavy prvků: záložky s ikonami (modrá / světle
+  modrá pod myší / zlatá aktivní), červené Zavřít, magické školy, dovednosti, sloty výbavy,
+  políčka a kategorie inventáře, tlačítka a políčka karty Party, rámečky talentů.
+  Rám karty, tlačítka a potvrzovací okna ostatních oken (mapa, výroba, obchody, rybolov, těžba,
+  kořist) používají nové díly přes `nineImage` v `ui/fantasyCard.js`.
+- Chybějící prvky ze starého UI vyříznuté do `public/assets/ui/legacy` (`tools/extract-legacy-ui.ps1`):
+  portréty a postavy hrdiny / hrdinky, obrázek oblasti, postava inventáře, šipky stránek,
+  30 ikon talentů; nabídka pravého tlačítka v inventáři zůstává ze starého UI.
+- Staré nepoužívané UI (podklady karet, listy stavů, zdrojové obrázky) je ve složce
+  `public/assets/ui/_stare`.
+- Úvodní pozadí se načítá z nového `title-background.png` (dřív `.webp`, které už ve složce není).
+
+- Nová sada UI z `public/assets/ui/newui` rozdělená na samostatné obrázky s průhledným pozadím
+  (`public/assets/ui/newui/split/…`): tlačítka (modré, modré pod myší, zlaté, šedé, červené),
+  rámečky ikon, rámečky karet (velká karta, panel, bublina nápovědy, slot) a 54 ikon karet.
+  Nástroj `tools/split-newui.ps1` (bez `-Force` nepřepíše ručně upravené soubory), seznam dílů
+  s rozměry a místem pro popis je v `src/data/newUi.json`. Ve hře se zatím nepoužívají.
+  Bublina nápovědy (`card_tooltip.png`) má poloprůhledné tmavě modré pozadí a odlesky rámu
+  přebarvené z bílé do zlata. Tlačítka, rámečky ikon a ikony jsou bez bílého lemu na hranách
+  (`tools/defringe-newui.ps1`), hrad je vyříznutý kruhovou maskou. Návrh karty hrdiny z nové sady: artefakt „Nové UI karty hrdiny“.
+- Kovářství podle schváleného návrhu „Kovářství – návrh systému“ (`src/data/smithing.js`,
+  `src/systems/SmithingSystem.js`, okno Kovářství se stejným ovládáním jako Vaření a Alchymie):
+  - 112 receptů v pěti kategoriích (zbraně 28, zbroje a štíty 28, nástroje 20, výztuhy 16,
+    vzácné a elementálně kalené 20) a 19 mezivýrobků (tavení rud na ingoty, ocel, černá ocel,
+    mithril, adamantit, orichalk, hvězdný kov, dračí železo; měděný drát, rybí šupinová destička,
+    korálová výztuha, hlubinná šupinová vrstva). Dovednost Kovářství 1–100 na kartě hrdiny.
+  - Výheň v kovárně Greenvale (dočasně umí všechny recepty, E vpravo vedle Hornického mistra).
+    Kvůli testování jsou známé všechny recepty.
+  - **Výbava hrdiny začala působit** jako velitelský bonus všem monstrům v partě: zbraň, štít,
+    přilba, zbroj, holenice a boty dávají % k útoku, magickému útoku, obraně, magické odolnosti,
+    rychlosti a max. HP, kalené kusy odolnost proti elementu nebo sílu elementálních útoků.
+    Výbava + výztuha nejvýš +50 % na hodnotu; Řemeslník ×1,2. Souhrn ukáže tooltip slotu výbavy.
+  - Výztuhy (brousek, nýty, šupinové záplaty, kalení, runy…) z inventáře na počet soubojů,
+    aktivní je jedna (nahrazení se potvrzuje).
+  - Krumpáče, těžební nástroje a kovové části rybářského náčiní jdou vykovat; nové Bylinkářský
+    a Stříbrný bylinkářský srp (účinek doplní Sběr bylin).
+- Rybolov: tři šupiny pro Kovářství – Odolná rybí šupina (řeky a jezera, Rybolov 10+),
+  Mořská pancéřová šupina (moře, 30+) a Hlubinná magická šupina (hlubiny a magické vody, 50+).
+- Okna Vaření, Alchymie a Kovářství listují dlouhé kategorie po 16 receptech (◀ ▶ nebo kolečko).
+- Těžba podle schváleného návrhu „Těžba – návrh systému“ (`src/data/mining.js`,
+  `src/systems/MiningSystem.js`, `src/scenes/MiningScene.js`, `src/scenes/MiningShopScene.js`):
+  - Dovednost Těžba 1–100 v šesti třídách (Začátečník až Legendární horník), stejná křivka
+    úrovní jako Rybolov. XP = (15 + 4 × úroveň naleziště) × vzácnost, první vytěžení ×2,
+    naleziště 20+ / 40+ úrovní pod hráčem ×0,5 / ×0,2.
+  - 40 surovin (rudy, drahokamy, elementální krystaly, krystalické minerály, pomocné materiály),
+    39 běžných nalezišť a 4 speciální (Krystalová geoda, Runové ložisko, Žhavé rudné ložisko,
+    Hvězdný meteorit jednou za 24 h). Měděná a Železná ruda, Astrální střep, Sůl,
+    Křišťálový střep a Hvězdný prach zůstávají stejným předmětem s novým zdrojem.
+  - Bez minihry: E u naleziště (hnědý kruh, speciální fialový) → okno naleziště se surovinami
+    a šancemi → Těžit (ukazatel 3–8 s) → okno kořisti. Vytěžené naleziště zešedne a obnoví se
+    za 5 min / 15 min / 45 min / 3 h podle vzácnosti (speciální 6–12 h), i mimo hru.
+  - Výtěžnost 2–4 / 1–3 / 1–2 / 1 ks, vedlejší nález 12–20 %, šance na +1 kus z lepšího
+    krumpáče, talentu a nástrojů; vzácné nálezy (Starodávná důlní mapa, Zapomenutá truhla
+    horníka, Prastarý runový úlomek, Neopracovaný drahokam, Zlomek meteoritu, Důlní relikvie).
+  - Šest krumpáčů a osm doplňkových nástrojů (kladivo, klín, kleště, majzlík, podpěra, vrták,
+    astrální kladivo, ochranné kleště). Mapa odhalí Skrytou žílu na 30 min, otevře ji podpěra.
+  - Hornický mistr v kovárně Greenvale: daruje Základní důlní krumpáč, prodává krumpáče I–III
+    a Důlní podpěru (dokud je nevyrábí Kovářství), vykupuje suroviny z Těžby a od Těžby 25
+    nastaví specializaci (Hlubinný horník, Hledač drahokamů, Průzkumník nalezišť; změna 250 zl).
+  - Dočasně jsou všechna naleziště ve „zkušebním lomu“ na trávě jižně od kovárny Greenvale.
+- Mapa světa: Průzkumník nalezišť vidí místo dopadu Hvězdného meteoritu.
+- Alchymie podle schváleného návrhu „Alchymie – návrh systému“ (`src/data/alchemy.js`,
+  `src/systems/AlchemySystem.js`, okno Alchymie se stejným ovládáním jako Vaření):
+  - 108 receptů v pěti kategoriích (léčení a mana 25, protijedy a ochrana 18, bojové elixíry 20,
+    katalyzátory a směsi 25, průzkum 20) a 12 mezivýrobků (rybí a hlubinný olej, vodní a hlubinné
+    extrakty, jedový, duchovní, astrální a měsíční koncentrát…). Toniky a protijed zůstaly.
+  - Alchymistický stůl u Liory v hostinci (dočasně umí všechny recepty). Dovednost Alchymie
+    1–100 na kartě hrdiny. Kvůli testování jsou známé všechny recepty.
+  - Souboj: nová akce **Předmět** (klávesa X) – léčivé lektvary a mana, regenerace za tah,
+    protijedy, oživení, elixíry, ochrany a vrhací směsi (jed, oheň, mráz, uspání). Zabere tah.
+  - Elixíry (jeden najednou) a ochrany (imunity, odolnost proti elementům) platí počet soubojů;
+    bonus jídla a elixíru na stejnou statistiku je nejvýš +25 %.
+  - Průzkumné přípravky: odpuzovač / lákadlo / neviditelnost (náhodná setkání), rychlost pohybu,
+    rybolov (čekání, hlubinné a vzácné úlovky), drop, ochočení, zkušenosti monster, důvěra,
+    jistý útěk, zkušenosti výrobních profesí. Svítící olej, sběračský extrakt, horníkův lektvar,
+    proutkařův olej a teleportační prach jdou vyrobit, účinek přibude s jejich systémy.
+- **Testovací hra** (tlačítko na obrazovce tvorby postavy): hrdina na úrovni 100 s plnými
+  talentovými body, všechny školy magie na úrovni 4 a všechna kouzla, všechny profese na 100,
+  suroviny a mezivýrobky na každý recept Vaření, Alchymie a Kovářství (po 99 ks), všechny pruty,
+  kovové části, krumpáče a nástroje, návnady, 100 000 zlata a Dire Wolf na úrovni 100
+  s 510 tréninkovými body. Inventář má tolik stránek, kolik je potřeba.
+- Načtení hry dovolí nejvýš 510 volných tréninkových bodů monstra (dřív 100); počet stránek
+  inventáře se řídí počtem slotů.
+- **Nové ikony předmětů** ze čtyř listů v `assets/items` (271 ikon, `icons07`–`icons10`):
+  alchymistické mezivýrobky a esence, 36 materiálů z dropů, 25 ryb, lastury, perly, korály,
+  návnady, pruty a kovové části, všech 53 předmětů Těžby a 76 kusů kované výbavy (stupeň podle
+  úrovně výroby, elementální kusy v barvě prvku). Lín a Korálovka sdílí ikonu podobné ryby.
+  Nástroje `tools/split-icons-blobs.ps1` (velké ikony bez mřížky) a `tools/split-icons-grid.ps1`
+  (list s mřížkou, i otvory v prstenech a řetízcích).
+- **Simulace souboje**: na začátku každého boje panel s nepřáteli, porovnáním sil (průměrné
+  poškození za kolo, HP, zbroj a vůle) a šancí na výhru. Volby Bojovat (Enter), Simulovat (S)
+  a Útěk (F). Simulace počítá techniky monster, přesnost, elementy, odolnosti, talenty, výbavu,
+  jídlo a elixíry, ne Arionova kouzla; hráčova monstra mají nevýhodu 20 %. Šance = 400 náhodných
+  průběhů, výsledek rozhodne další průběh. Výhra dá polovinu EXP a kořisti, monstra přijdou
+  o HP a použití technik podle průběhu; prohra = běžná porážka. Útěk před bojem má stejnou
+  šanci jako v boji; při neúspěchu boj nezačne, ale monstra v partě ztratí polovinu HP.
+  Systém: `src/systems/BattleSimulationSystem.js`.
+- **Vesnice Greenvale podle referenčního obrázku** (první návrh, skript
+  `tools/greenvale-village.mjs`, náhled `tools/greenvale-village-preview.bmp`): kompaktní
+  vesnice kolem dlážděného náměstí s kašnou, cesty ve vesnici dlážděné stejně jako náměstí.
+  Radnice s nástěnkou na severu, za ní dům a hvězdárna v lese, tržiště a stánky kolem
+  náměstí, kovárna, sklad, hostinec a alchymista na východě, domy, kostel a lovecká chata
+  na západě. Budovy mají mezi parcelami víc místa. Řeka od vodopádu pod skalami obtéká
+  vesnici jihem, u ní rybářská chata s molem a rybářskými místy, kamenný most na cestě
+  k jižní bráně. Za mostem statek: dům, větrný mlýn, studna, stáj a tři ohrazená pole
+  (pruhy obdělané půdy – později bylinky), polní cesty. Kolem les. Zkušební lom je za
+  mostem na jihozápadě.
+  Louka setkání, jeskyně a jih s bránou se nezměnily. Uložená pozice se kvůli nové mapě
+  jednou vrátí na start (WORLD_LAYOUT_VERSION 8).
+- Vesnice – rozmístění z editoru terénu: posuny budov (a měřítko radnice 0,44, nástěnky 0,52,
+  kostela 1,12) jsou přepočítané na pole mapy (`tools/greenvale-editor-export.json`). Terén
+  se budovám přizpůsobí – pod budovou na útesu nebo u moře vznikne pevnina s novým útesem,
+  parcely vyčistí louku i stromy; cesty, dlažba, ploty a les se přegenerují k novému
+  rozložení. Vrátka pole u řeky jsou na jižní straně.
+- **Sběr bylin** podle schváleného dokumentu „Sběr bylin – návrh systému“ (`src/data/herbalism.js`,
+  `src/systems/HerbalismSystem.js`): 16 rostlin v 6 vzácnostech, úroveň 1–100 v šesti třídách,
+  XP podle vzácnosti a úrovně rostliny (brzda proti farmení, herbář = bonus za první sběr).
+  Bez minihry: E u zeleného kruhu → okno naleziště (rostlina, výtěžnost, vedlejší rostlina,
+  vzácné nálezy, srp) → Sbírat (1,5–5 s) → okno kořisti. 19 nalezišť, 3 záhony statku
+  (obnova 10 min, poloviční XP, osetí Vzácnými semeny) a 4 speciální naleziště (hustý porost,
+  skryté lesní – odhalí Botanický zápis, magická zahrada, prastaré s Astrální orchidejí).
+  Dočasně jsou všechna v Greenvale: louka, břeh řeky, vodopád, les, záhony statku a bylinková
+  zahrada vedle zkušebního lomu. Srpy z Kovářství: Zahradnický (3), Mistrný (26), Sběrač bylin
+  s mosaznou čepelí (50), Mithrilový (68), Hvězdný (88). Šest vzácných nálezů s využitím
+  v Alchymii, Vaření a Kovářství. Bylinkářka (dům s bylinkovou zahrádkou): startovní srp
+  a byliny, omezená denní zásoba běžných bylin, výkup za polovinu ceny (hledaná bylina ×2)
+  a tři specializace od úrovně 25. Karta hrdiny: třída, herbář, specializace.
+- Alchymie a Vaření podle kapitoly 14 návrhu: Měsíční květ má v nízkých receptech náhradu
+  (Vodní květ, kde už recept Modré byliny má; jinde Modré byliny), Lektvar proti prokletí bere
+  Hořký kořen místo Stínové lilie (Čistící byliny už v receptu jsou), Stínový koncentrát je na
+  úrovni 55. Pylové zrno, Vonná esence a Lesní pryskyřice jsou náhradou v receptech. Sběračský
+  extrakt teď opravdu účinkuje (Sběr bylin 20 % na +1 kus, 15 min).
+- **Řemeslnictví** podle dokumentu „Řemeslnictví – návrh systému“ (`src/data/crafting.js`,
+  `src/systems/CraftingSystem.js`, okno `CraftingScene`): 108 receptů (A Šperky 22, B Brašny 22,
+  C Fokusy a talismany 20, D Kožená výbava 19, E Soul Crystaly 5, F Ostatní 20) a 10 mezivýrobků
+  (broušené drahokamy, vyčiněná kůže, pevná šňůra, jádro fokusu). Tři pracoviště: Koželužský
+  stůl a Šperkařský stůl v nové Řemeslné dílně (dům u radnice) a Soul Crystal Workbench
+  v Hvězdárně; recept jde vyrobit jen na svém pracovišti. Výbava dává velitelské bonusy partu
+  stejně jako Kovářství (Řemeslník ×1,2), plášť se nosí ve slotu zbroje a rukavice/fokusy
+  v druhé ruce. Brašny přidávají strany inventáře, cestovní předměty dávají dočasné účinky,
+  výcvikové závaží +3 body, zrcadlo duše obnoví techniky. Nástroje: koželužské nože (+1 kůže),
+  šperkařská lupa (25 % na +1 drahokam). Dračí recepty (Dragon Soul Crystal, plášť z dračí kůže)
+  vyžadují příběhovou Dračí pečeť. Karta hrdiny ukazuje třídu a počet vyrobených receptů.
+- Ochočení v souboji použije nejlepší Soul Crystal v inventáři (Ancient → Elemental → Greater →
+  Basic); prastaré draky ochočí jen Dragon Soul Crystal. Tlačítko ukazuje počet všech krystalů.
+- **Karta Řemesla** (`src/scenes/ProfessionsScene.js`): záložka Řemesla v horní liště, klik
+  na dovednost v kartě hrdiny ji otevře na dané profesi. Vlevo 8 profesí s úrovní a Databáze.
+  Přehled: úroveň, XP, třída, souhrn (recepty / lokality / herbář), kde se profese dělá,
+  volba specializace Těžby a Sběru bylin, Řemeslník, aktivní účinky. Recepty: kategorie,
+  filtry Vše / Lze vyrobit / Chybí suroviny / Zamčené, detail se surovinami (jen prohlížení,
+  vyrábí se u stolu). Naleziště: lokality Rybolovu, Těžby a Sběru bylin s obsahem a šancemi,
+  nenalezené druhy jsou „???“. Diplomacie zatím jen „připravuje se“.
+- Karta hrdiny: bez dráčka za jménem; řádky Jméno – Mana posunuté výš, takže ukazatel many má
+  odstup od spodního okraje rámečku. Najetí na statistiky ukáže tooltip jako na kartě Party:
+  Spell Power (+½ k poškození kouzel), Rychlost (rychlost chůze v %), Štěstí a Charisma
+  (připravené účinky, zatím se nepoužívají), Intelekt (zatím bez vlastního účinku) a velitelské
+  statistiky (hodnota ÷ 5 + talenty = bonus ke statistice každého monstra v boji).
+- Inventář: ikony předmětů v políčkách i ve slotech výbavy mají za sebou záři v barvě vzácnosti
+  (neobvyklé zelená, vzácné modrá, epické fialová, běžné jen slabě šedá). Legendární mají
+  výraznou sytě zlatou záři se zářícím zlatým prstencem.
+- Karta Party: po otevření je monstrum rovnou označené (zlaté políčko) – poprvé první v aktivní
+  partě, příště naposledy vybrané (pamatuje se podle monstra i po přesunech). Tooltip statistik
+  už neukazuje geny ani radu k bodům, ale co statistika dělá v boji s čísly: Vitalita = HP,
+  Síla / Magická síla +½ k poškození, Zbroj / Magická obrana −½ ze zásahu, Rychlost 12+ = pohyb
+  3 pole, Přesnost ±0,5 % zásahu za bod proti 80.
+- Talenty: strom už není omezený na 30 bodů – 30 bodů ho dokončí (závěrečný talent, otevřou se
+  ostatní stromy) a další body jdou přidávat dál. Hlavička každého stromu má pod myší modrý
+  rámeček a tooltip s bonusy stromu (pasivní bonus, talenty s body a hodností, závěrečný talent).
+- Pohyb pod kartami: otevřená karta (Hrdina, Talenty, Party, Inventář, Řemesla, Mapa) už svět
+  nepozastaví, hrdina jde ovládat šipkami / WASD i pod kartou. Ostatní akce světa (dveře, E,
+  setkání, klávesové zkratky karet, kolečko) s otevřenou kartou čekají; v Databázi se WASD
+  píše do hledání a hrdina stojí.
+- **Písmo Lora** (Google Fonts, licence OFL) místo Georgie a Verdany v celé hře – číslice
+  jsou stejně vysoké jako velká písmena, a proto lépe čitelné. Soubory jsou ve
+  `public/assets/fonts` (@font-face v index.html), hra se spustí až po načtení písma.
+- Šipky stránek (inventář, karta Řemesla) mají průhledné pozadí místo tmavého obdélníku.
+- Karta Řemesla: tlačítko Zpět (i klávesa Enter) vrací o krok zpět v historii karty až do
+  stavu při otevření (profese, záložky, recepty, předměty v Databázi). Stránkování má zlaté
+  šipky jako inventář.
+- Nabídka pravého tlačítka v inventáři má šestý řádek „Kde se používá“ ve stejném stylu jako
+  Použít … Zahodit (dokreslený do obrázku nabídky); dřívější samostatné tlačítko je pryč.
+- **Databáze předmětů** (`src/systems/ProfessionDatabase.js`): hledání psaním na klávesnici
+  (bez ohledu na diakritiku), filtry Suroviny / Výrobky / Výbava / Ostatní; u předmětu odkud
+  se získá (recept, rybolov, naleziště, drop z monstra, obchod) a ve kterých receptech se
+  používá. Klik na recept nebo surovinu skočí dál. V inventáři je pod nabídkou pravého
+  tlačítka nové tlačítko „Kde se používá“.
+- Kožený řemínek jde vyrobit v Řemeslnictví 1 na Koželužském stole (1× Kůže → 2 řemínky).
+- Kůže (surovina pro výrobu) jde vyrobit v Řemeslnictví 1 na Koželužském stole z kterékoli
+  kůže nebo kožešiny z monster (18 druhů, běžné se spotřebují dřív).
+- Obchody: Trhovkyně (Tržiště – potraviny) prodává sůl, mouku, zeleninu, čistou vodu, lesní
+  houby, ryby a dřevo; Obchodník s látkami (Tržiště – zboží) vlákno, kožený řemínek, vosk
+  a Lovecký tesák (`src/data/merchants.js`, okno `MerchantShopScene`, otevře se po rozhovoru).
+  Rybář navíc prodává 8 návnad z Řemeslnictví, Pružný a Mistrovský prut; jeho nabídka se
+  listuje po 8 řádcích. Bez zdroje zůstávají jen klíče a příběhové předměty.
+- Opraveno: obrázek pozadí titulní obrazovky se načítá z `public/assets/title-background.png`.
+- Odstraněno: referenční obrázek mapy Greenvale (`reference-greenvale`, smazaný soubor
+  `greenvale-map.png`) – hra se ho už nepokouší načíst.
+- Řemeslnictví F01–F05 vyrábí původní předměty z dokumentu Itemy (Kožená čelenka lovce,
+  Zesílená lovecká vesta, Plášť horské mlhy, Boty rychlého posla, Rukavice přesného
+  sesilatele) místo duplikátů se stejným názvem.
+- Rybolov – záběr: po čekání se splávek potopí (ZÁBĚR!) a hráč má 1,2 s (úr. 1) až 1,8 s
+  (úr. 100) na zaseknutí mezerníkem / E / tlačítkem. Zaseknutí moc brzy nebo pozdě = nic se
+  nechytí a návnada je pryč.
+- **Interiér hostince** z nového obrázku „Pohádková krčma u plápolajícího krbu“: Liora
+  u výčepu (léčení), krb = hostinská kuchyně, sud = sklep s úschovnou monster, bard
+  a lovec u stolu (rozhovory). Dřívější obrázek hostince (zrzavá hostitelka) má teď třetí dům.
+- Vesnice – úpravy grafiky: z červeného domu (mezi kostelem a radnicí, i jeho zrcadlová
+  varianta) zmizel zlatý křížek pod budovou (původní obrázek v `_stare/house-red-s-krizem.png`).
+  Stánky mají průhlednou mezeru mezi zbožím a stříškou (velké uzavřené bílé plochy se
+  při načtení smažou, bílé pruhy markýzy zůstanou) – ve vesnici i v editoru.
+- Optimalizace regionu Greenvale: asi o třetinu méně stromů, smrků a skal (493 → 318)
+  a o 60 % méně keřů, rostlin a pařezů (215 → 103); zbylé jsou větší (stromy × 1,3,
+  doplňky × 1,5). Ploty a rozcestníky zůstaly.
+- **Vesnice – finální rozložení a uliční síť** (`tools/greenvale-editor-export-2.json`):
+  tržiště jsou stánky z editoru (dveře na jihozápad), rybářská chata na východním pobřeží
+  s molem do moře a rybářskými místy (staré molo u ústí řeky zrušeno), alchymista u řeky,
+  nový zelený dům u tržiště a kostel jihozápadně od náměstí (původní kostel na kraji louky
+  smazán, louka je zase celá); menší stánky, studna
+  a kašna. Rovné dlážděné ulice: hlavní třída od radnice přes náměstí k mostu, okruh kolem
+  hostince a tržiště, ulice na východ k rybářské chatě, na západ k louce, na severozápad
+  k domům a kostelu, na sever ke hvězdárně a na jih k alchymistovi; od dveří dlážděné
+  uličky. Uvnitř města zahrady s keři a jednotlivé stromy, les až kolem města. Úpravy
+  z editoru jsou zapsané v mapě, v prohlížeči se smazaly (jinak by se uplatnily dvakrát).
+- **Editor terénu – budovy** (Alt+F8, nabídka „Budovy“): všech 22 budov sady v2, každá ve dvou
+  variantách – dveře na jihovýchod a dveře na jihozápad (zrcadlově). Vkládají se ve stejném
+  měřítku jako ve vesnici; u vložené budovy tlačítko „Dveře na JV / JZ“ přepne variantu.
+  Export obsahuje u budov soubor obrázku a stranu dveří (`b`, `door`).
+- **Nové interiéry** (`public/assets/interiors`): interiér je karta stejné velikosti jako
+  ostatní karty s obrázkem místnosti (načte se až při prvním vstupu). Postavy a předměty jsou
+  klikací místa – pod myší se zvýrazní zlatým rámečkem se štítkem „Jméno – akce“, klik otevře
+  menu: Radnice (starosta + „!“/„?“ u úkolu, nástěnka, mapa světa, úřednice, strážný),
+  Hostinec (Liora léčí, krb = hostinská kuchyně, truhla = úschovna monster), Kovárna (hornický
+  mistr, výheň a kovadlina = Kovářství, učednice), Rybářská chata (rybář, náčiní = obchod),
+  tržiště (potraviny, zboží – zatím jen rozhovor), Lovecká chata a domy (obyvatel, krb = sporák).
+  Nově se dá vejít do Alchymistického obchodu (alchymistický stůl se přesunul sem z hostince)
+  a do Hvězdárny (mág – magické školy se připravují). Odchod: Zavřít, Esc nebo E; dialog
+  pokračuje klikem, E nebo mezerníkem. Hrdina se v interiéru už nepohybuje.
+- **Nová hra začíná před radnicí** (ne v lovecké chatě).
+- **Přehled po souboji** (výhra, prohra, simulace i nepovedený útěk): karty monster party
+  s náhledem jako v kartě Party, jménem, úrovní a HP barem. Ubrané HP se zbarví červeně
+  a postupně odteče, pod barem je „−X HP“ a nové HP. Po výhře tabulka: Získané EXP, Úroveň
+  (při postupu zeleně „5 → 6“), EXP do další úrovně, Trénink a Důvěra pro hrdinu i každé
+  monstrum. Pod ní kořist, nové schopnosti a poznámka o simulaci. Okno se už nezavírá samo,
+  jen tlačítkem Pokračovat nebo Enterem (platí pro všechny výsledky boje).
+  Panel před bojem má větší písmo (20–28) a větší tlačítka; dvouřádkové popisky tlačítek
+  jsou všude zarovnané na střed.
+- **Vesnice Greenvale z nové sady budov** (`assets/greenvale`, rozřezáno do
+  `assets/buildings/greenvale/v2`): všechny budovy ve stejném stylu a v pevném měřítku 2×.
+  Původní budovy (radnice, hostinec, kovárna, lovecká a rybářská chata, 3 domy, 2 stánky)
+  zůstaly na místě se svými dveřmi a interiéry. Přibyly budovy a doplňky bez interiéru:
+  kostel a alchymistický obchod u radnice, kašna, nástěnka a stánky s rybami a květinami na
+  náměstí, studna, hvězdárna a domy na severovýchodě, větrný mlýn a stáj u kovárny, sklad
+  u přístavu a dva domy na východě. Budovy bez dveří se nedají projít ani do nich vstoupit.
+  Lovecká chata má půdorys 4 × 4, dům 3 stojí na parcele místo na útesu. Staré obrázky budov
+  jsou v `assets/buildings/greenvale/_stare`.
+- **Jednotné UI i mimo karty**: okna Rybolovu, Těžby, Vaření, Alchymie a Kovářství, obchody
+  Rybáře a Hornického mistra, okno kořisti, panel před bojem a výsledek souboje, dialogy
+  v interiérech, výzvy „E: …“ a hlášky ve světě jsou z nové sady UI (panel, sekce, nadpis
+  s ikonou, tlačítka). Vybraná kategorie je zlaté „aktivní“ tlačítko, vybraný řádek ztmaveně
+  zlatý, ukazatel čekání má zlatou drážku. Společné prvky: `uiWindow`, `uiTitle`, `uiSection`,
+  `uiSelectedRow`, `uiProgressBar`, `uiPrompt`, `uiToast` v `src/ui/fantasyCard.js`.
+- Dialog v interiéru se kreslí nad hrdinou (dřív ho hrdina u spodního okraje překrýval).
+- **Animace vysunutí karty**: karta otevřená ze světa nebo z interiéru (klávesa nebo záložka
+  lišty) sjede shora zpod horní lišty (0,38 s). Přepínání mezi kartami se neanimuje.
+  Horní lišta má všude stejný podklad (panel nové sady) – ve světě, v interiéru i na kartách
+  Hrdina, Talenty, Party, Inventář a Mapa –, takže během animace zůstává na místě.
+  `slideCardIn` a `TAB_STRIP` v `src/ui/cardTabBar.js`.
+- **Karty podle vzoru karty Mapa**: Hrdina, Talenty, Party a Inventář mají stejnou velikost
+  a rám jako Mapa (panel 1760 × 926 pod horní lištou); obsah karty se do něj zmenší
+  (`CARD_FIT` v `src/ui/fantasyCard.js`), podklady karet už nemají vlastní rám. Okolí karet
+  (i Mapy) se neztmavuje. Karta Hrdina má stejnou horní lištu jako ostatní karty.
+  Kliknutí na aktivní záložku lišty kartu zavře.
+- Karta Hrdina (muž i žena): u Vybavení celá postava (`inventory_figure`) místo výřezu useknutého
+  u kolen.
+- Inventář: náhled a popis předmětu se ukáže už při najetí myší, po odjetí zase vybraný předmět.
+- Ohniště: Dřevo se spotřebuje až s prvním uvařeným receptem (dřív hned při rozdělání ohně,
+  i když se nic neuvařilo).
+- Okna výroby: recepty jako vyšší tlačítka (60 px, písmo 21, dlouhé názvy se zmenší), větší
+  kategorie; výchozí písmo tlačítek nové sady 21 (čitelnost).
+- Setkání v Greenvale: 1 / 2 / 3 monstra se šancí 60 : 25 : 10 (přepočteno na 100 %, tj. asi
+  63 / 26 / 11 %). EXP za vítězství 18 × počet monster, za každé další monstrum +30 %
+  (1 = 18, 2 = 47, 3 = 86, 4 = 137 EXP).
+- Ochočení: po úspěchu okno pro pojmenování zvířete (psaní na klávesnici, Enter potvrdí,
+  prázdné jméno = jméno druhu). Ochočené monstrum přijde do party s HP, které mělo v okamžiku
+  ochočení (dřív přišlo s 0 HP). Stejná monstra v boji už nemají písmena (Goblin A, B).
+- Rybolov: doba čekání náhodně v rozmezí podle úrovně – úroveň 1: 3–10 s, úroveň 100: 1–3 s
+  (plynule mezi nimi), prut, návnada a olej ji dál zkracují.
+- Karta Party: volné tréninkové body výrazně v rámečku statistik (až 510), bez barevných
+  kruhů u monster a schopností; schopnost ukazuje jen název a použití, pod myší tooltip
+  s informacemi o útoku (druh, element, síla, přesnost, dosah, efekt, popis).
+- Karta Party, druhé kolo: „Volné body k rozdělení“ mají vlastní řádek pod čarou dole
+  v tabulce statistik (dřív zasahovaly do tlačítek +), řádky statistik jsou o kousek výš.
+  Šedý text pod tabulkou zmizel; geny, trénink a pravidlo „5 bodů = +1“ ukáže tooltip pod
+  myší na řádku nebo na +. Schopnosti jsou jen v rámečku, bez políčka pro ikonu.
+- Animace zavření karty: karta zajede nahoru pod horní lištu (0,3 s), pak se vrátí svět
+  (`slideCardOut` v `src/ui/cardTabBar.js`).
+- Testovací hra se spouští jménem **admin91** na obrazovce tvorby postavy (tlačítko zmizelo).
+- **5 slotů pro uložení a nahrání**: Uložit hru / Nahrát hru v menu otevře okno s pěti sloty
+  (jméno, úroveň, oblast, zlato, čas uložení a náhled). Náhled je poslední snímek hry při
+  odchodu do menu (Esc ve světě nebo v interiéru). Obsazený slot se před přepsáním potvrzuje,
+  nahraná hra se stane rozehranou (Pokračovat). Z menu zmizel spodní text o poslední hře.
+- Opraveno: po animaci zavření karta na jeden snímek problikla celá (kamera se vracela dřív,
+  než se scéna zastavila).
+
+### Změněno
+- Hra se jmenuje **AURION: LEGACY OF SOULS** (titulek stránky, CHANGELOG; logo je v obrázku
+  úvodního pozadí). Klíče uložených her v prohlížeči (`dragon-souls-…`) zůstaly, aby se
+  rozehrané hry neztratily.
+- Lovecký tesák, Kožená čelenka lovce, Zesílená lovecká vesta a Boty rychlého posla mají účinek
+  ve formátu velitelského bonusu (útok +2 %, magický útok +1 %, obrana +2 %, rychlost +1 %).
+- V souboji se kladný bonus statistiky zaokrouhluje nahoru, aby u malých hodnot nezmizel.
+- Adamantitový a Dračí krumpáč se kovají na Kovářství 72 a 92 (dřív plánováno 70 a 90),
+  protože jejich ingoty jdou tavit až od těchto úrovní.
+- Oprava okna Alchymie: kategorie s 25 recepty přetékala přes okraj okna (teď stránky).
+- Krystalické jádro (drop Crystal Golem) je teď **Křišťálové jádro** – stejný předmět jako
+  z Těžby; staré kusy v inventáři se při načtení převedou.
+- Alchymie: Plamenný, Vodní, Kamenný, Vzdušný, Stínový a Astrální koncentrát jdou vyrobit
+  i z elementálního krystalu místo esence; Ohnivá směs potřebuje navíc Síru. Horníkův lektvar
+  (těžba o 15 % rychlejší) a Proutkařův olej (zvýrazní připravená naleziště) už účinkují.
+- Talent Zkušený prospektor už účinkuje (+5 % na +1 kus při těžbě za hodnost).
+- Názvy esencí a materiálů sjednocené se schváleným systémem esencí: Plamenná esence (dřív
+  Ohnivá), Vodní esence (Přílivová a Nymfina čistá), Kamenná esence (Živý kamenný střep),
+  Verdantská esence (Lesní duchovní), Duchovní esence (Temná duchovní), Baziliščí žláza
+  (Basilisk), Krystalický střep pavouka (Broušený krystal), Snový prach (Incubus). Staré kusy
+  v inventáři se při načtení hry převedou.
+- Editor terénu ve světě (Alt+F8, záměrně není v nápovědě; `src/world/TerrainEditor.js`):
+  - Všech 9 grafických listů z `public/assets/objects` (travnaté, pobřežní a ostrovní dlaždice,
+    tři sady mostů, objekty Greenvale) se automaticky rozřeže na jednotlivé prvky (161 prvků).
+  - Panel vlevo: výběr listu, náhledy prvků, ovládání vybraného prvku (velikost, hloubka
+    před / za, duplikovat, smazat), Export rozmístění do schránky (JSON), vymazání regionu.
+  - Klik do mapy vloží vybraný prvek, klik na prvek ho vybere, tažení posouvá, [ ] mění
+    velikost, Delete maže. Hráč stojí, kamera se po regionu posouvá WASD / šipkami, kolečko zoom.
+  - Rozmístění se ukládá v prohlížeči zvlášť pro každý region a zobrazuje se i při hraní.
+    Zápis do map hry doplníme, až bude editor hotový.
+  - Úpravy objektů, které už v mapě jsou (stromy, smrky, kameny, keře, ploty, rozcestník,
+    jeskyně, budovy – ne dlaždice): výběr klikem, posun, velikost, hloubka, smazání. Ukládají se
+    jako rozdíl oproti mapě a platí i při hraní; kolize a dveře zatím zůstávají podle mapy.
+  - Zpět (tlačítko nebo Ctrl+Z) vrací poslední úpravy (až 100 kroků) – vložení, posun,
+    velikost, hloubku, smazání i vymazání vložených prvků.
+- Vaření podle schváleného návrhu „Vaření – návrh systému“ (`src/data/cooking.js`,
+  `src/systems/CookingSystem.js`, okno `CookingScene`):
+  - 104 receptů v 10 kategoriích a 9 mezivýrobků (vývarové základy, koření, konzervovaná ryba,
+    ohnivý extrakt, korálová sůl, aromatický prášek, démonické a hvězdné koření).
+  - Pracoviště: ohniště kdekoli ve světě mimo města (klávesa V, stojí 1× Dřevo), kuchyňský
+    sporák v Lovecké chatě a domech Greenvale, hostinská kuchyně v hostinci (umí všechny recepty).
+  - Dovednost Vaření 1–100 se zkušenostmi (první uvaření receptu ×2) na kartě hrdiny.
+    Kvůli testování jsou známé všechny recepty (`ALL_RECIPES_KNOWN_FOR_TESTING`).
+  - Jídlo se jí z inventáře mimo souboj: obnova HP monstrům a many hrdinovi, stav „Najedený“
+    (jen jeden pokrm, nový nahradí starý po potvrzení) – regenerace a mana po každém souboji,
+    bonusy statistik v souboji, cestovní bonusy (rychlost pohybu, +HP každých 50 kroků).
+  - Nové suroviny: 11 bylin (zbytek ze 16 schválených; Vodní květ a Svítící list jsou stejné
+    předměty jako drop z Water Nymph a Forest Sprite – opravena dřívější zdvojená verze), Sůl,
+    Mouka, Zelenina, 13 druhů masa.
+  - Maso padá z vhodných monster (50 %), Dřevo z Treanta, Dryády a Barkplate Pangolina (60 %).
+    Dřevo a kuchyňské suroviny zatím prodává Rybář (obchodník s potravinami přijde na tržiště).
+- Inventář – ovládání myší:
+  - Tažení předmětu na jiné políčko ho přesune (prohodí / sloučí). Tažení se Shiftem
+    otevře okno Rozdělit s volbou počtu kusů (−10 / −1 / +1 / +10), které se dají do cílového
+    políčka (prázdného nebo se stejným předmětem – nejvýš kolik se do hromádky vejde).
+  - Tažení na slot výbavy předmět vybaví (do špatného slotu ho nepustí), tažení ze slotu
+    výbavy do inventáře ho sundá.
+  - Dvojklik levým tlačítkem: výbavu vybaví, spotřební předmět použije, na slotu výbavy sundá.
+  - Sloty výbavy na kartě Inventář ukazují ikonu vybaveného předmětu (překryje namalovanou
+    ikonu) a hover se tomu přizpůsobí: u vybaveného slotu modré prázdné políčko s ikonou
+    předmětu, u prázdného slotu modrá verze namalované ikony.
+- Rybolov podle schváleného návrhu „Rybolov – návrh systému“ (bez minihry):
+  - U rybářského místa (modrý kruh u vody) se klávesou E otevře panel rybolovu: prut, kovová
+    část, výběr návnady (← →), možné úlovky s procenty (nechycené jako ???) a Nahodit (mezerník).
+  - Po nahození se do 1–10 s objeví úlovek: 10 s na minimu lokality, −0,25 s za každou úroveň
+    navíc, nejméně 1 s; zkracuje prut a návnada. Každé nahození končí úlovkem.
+  - 27 ryb, 11 vodních surovin (lastury, perly, korály; naplavené dřevo = Dřevo), 13 lokalit
+    s tabulkami pravděpodobností, 10 návnad, 3 pruty a 4 kovové části (`src/data/fishing.js`).
+    Legendární úlovek nejvýš 1 % a po chycení se na 30 minut vyřadí.
+  - Dovednost Rybolov má úroveň 1–100 a zkušenosti (první úlovek druhu ×2, snadné úlovky méně).
+    Úroveň a deník ukazuje karta hrdiny. Talent Rybářská trpělivost dává šanci na bonusový kus.
+  - Kvůli testování je všech 13 lokalit dočasně v Greenvale na molu a podél břehu.
+  - Rybář v Rybářské chatě: poprvé daruje Jednoduchý prut, Rybářský hák a 5 chlebových návnad;
+    obchod prodává prut, hák a základní návnady a vykupuje ryby a vodní suroviny, denní poptávka
+    na jeden druh za 150 % (nejvýš 10 ks).
+- Okno kořisti: všechny získané předměty musí hráč potvrdit – Vzít vybrané (odškrtávání),
+  Vzít vše, Nevzít nic. Co se do plného inventáře nevejde, je označené. Platí pro rybolov
+  i pro drop z boje (dřív šel rovnou do inventáře); připravené i pro těžbu.
+- Svět Aurie (`src/data/maps/auria.js`): všech 9 regionů kromě Greenvale jako samostatné mapy
+  (načítají se po jednom) ze základních dlaždic. Každý region má vlastní recept terénu podle
+  popisu oblastí (les s řekou, hory s jeskyní, mrazivé pláně, citadela s hradbami, temná říše,
+  sopečné hnízdo s lávou, poušť, pobřeží s pláží, ostrovy). Generování je deterministické,
+  velikosti regionů se ladí v `REGION_RECIPES`.
+- Nové dlaždice: písek, sníh, štěrk, popel, láva (neprůchozí), temná zem, krystal, brána.
+- Brány mezi regiony na okraji map ve směru souseda, s cestou ze středu (přes vodu a lávu most).
+  Klávesou E se cestuje a hráč se objeví u protější brány. Greenvale má bránu do Verdant Forest.
+  Zatím jsou kvůli testování průchozí všechny regiony (`ALL_REGIONS_OPEN_FOR_TESTING`
+  v `RegionSystem.js`).
+- Připravená města: uprostřed každého regionu je náměstí, čtyři stavební parcely a čtyři místa
+  pro NPC (obchodník, léčitel, představený, trenér). Ve hře jsou označená zlatou značkou.
+- Karta Mapa (klávesa M, záložka Mapa v liště karet): všechny regiony vykreslené ze skutečného
+  terénu, rozmístěné podle polohy na mapě světa, se spojnicemi bran, městy, místy NPC a
+  pulzující polohou hráče.
+
+### Změněno
+- Ve světě a v interiérech je místo řádku s nápovědou horní lišta karet (Hrdina, Talenty,
+  Party, Inventář, Řemesla, Bestiář, Mapa, Úkoly) se stejnými stavy jako na kartách: klid,
+  zlatá pod myší, modrá u zobrazené karty. Kliknutí kartu otevře (Řemesla, Bestiář a Úkoly
+  na kartě hrdiny). Klávesové zkratky platí dál.
+- Souboj: pohled zůstává z boku, kamera je ale výš – deska sahá skoro přes celou výšku
+  obrazovky, vzdálené řady se téměř nezkracují a postavy jsou o něco menší. Mřížka se
+  nekreslí (jen jemná šachovnice polí). Nastavení je naladěné společně a zapsané v `BATTLE_VIEW`
+  (`BattleScene.js`). Ladicí panel s posuvníky (`src/battle/BattleViewTuner.js`) se v souboji
+  otevírá klávesami Alt+F9 (záměrně není v nápovědě).
+- Náhodná setkání zatím jen v Greenvale (v nových regionech vypnutá).
+- Polohy regionů na mapě světa (`mapX`/`mapY`) přerovnané, aby se regiony nepřekrývaly.
+- Nové podklady karet (hrdina muž/žena, talenty, party, inventář) bez namalované lišty,
+  tlačítka Zavřít, škol magie, dovedností a ikon výbavy: lišta, Zavřít, školy a dovednosti
+  kreslí hra z obrázků stavů; sloty výbavy na kartě hrdiny dostaly obrázky z hoover-icon.png
+  (tmavý / modrý pod myší) a ikonu vybaveného předmětu. Karta talentů přeměřená (řádky
+  talentů, závěrečné talenty, panely, hlavička), kosočtverečky hodností kreslí hra celé
+  (podklad je nemá). Šedá verze talentů se teď načítá z `talent-card-grey.png`.
+- Předměty podle dokumentu „Crafting a řemesla – návrh“ (`src/data/items.js`, 240 předmětů):
+  léčivé toniky, toniky many (dosavadní lektvar many = „Tonik many“), protijed, cestovní jídlo,
+  Soul Crystaly (Basic … Dragon), vybavení (zbraň, čelenka, vesta, plášť, boty, rukavice),
+  amulety a prsteny, klíčové předměty (Lovecké povolení Greenvale dostane hráč po úkolu
+  Jeskynní sliz), suroviny a 193 materiálů z dropů monster podle elementů. Ikony z listů
+  icons01–06: základní předměty ručně, materiály automaticky podle elementu a druhu z názvu
+  (pírko, kůže, tesák, šupina, esence…). Materiály bez přesné ikony vypisuje dokument
+  „Dragon Souls – Chybějící ikony předmětů“.
+- Po vítězství hrdina nezíská peníze, ale materiály poražených monster (1. materiál 70 %,
+  2. materiál 35 %); plný inventář hlásí, že část zůstala na bojišti. Vlčí drop „Lovecký tesák“
+  je kvůli shodě se zbraní pojmenovaný „Vlčí tesák“, Jeskynní sliz dává Podzemní sliz a Kamenné jádro.
+- Použití v inventáři: léčivé toniky léčí nejvíc zraněné monstrum v partě, cestovní jídlo
+  přidá manu a HP; vybavení se vybaví do odpovídajícího slotu (plášť a rukavice zatím slot nemají).
 - Start nové hry: první společník je Dire Wolf 5. úrovně s důvěrou (bond) 0 (dřív testovací
   vlk 100. úrovně). Po odchodu z interiéru, do kterého hra nastartovala (lovecká chata), stojí
   hráč ve světě na poli dveří dané budovy (`state.exitDoor`), ne na mostě.
@@ -176,6 +608,10 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
   vždy přesune navrch.
 - ESC, které zavřelo kartu v interiéru, hned poslalo hru i do menu – interiér teď chvíli
   po návratu z karty klávesy ignoruje.
+- Karta Talenty: tenčí písmo – názvy talentů netučně se slabým obrysem, menší texty karty
+  (stav stromu, Utraceno…, popisy) s obrysem 2 px místo 3 px, nadpisy stupňů se slabším obrysem.
+  Kosočtverečky hodností jsou menší, vycentrované pod názvem talentu a celé uvnitř políčka
+  (dřív zasahovaly do spodního okraje).
 
 ### Opraveno (tvorba postavy)
 - V interiérech byla postava vždy mužská – interiér nepředával postavě zvolené pohlaví.

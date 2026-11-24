@@ -8,6 +8,8 @@ import {
   normalizeInventory,
   moveSlot,
   splitSlot,
+  splitToSlot,
+  unequipToSlot,
   dropSlot,
   useSlot,
   equipSlot,
@@ -16,8 +18,11 @@ import {
   INVENTORY_CHANGED
 } from '../systems/InventorySystem.js';
 import { EQUIPMENT_SLOT_IDS, RARITIES, normalizeEquipment } from '../systems/EquipmentSystem.js';
-import { cardText, cardButton, openCardModal } from '../ui/fantasyCard.js';
-import { createCardTabBar } from '../ui/cardTabBar.js';
+import { cardText, cardButton, openCardModal, drawCardFrame, CARD_FIT } from '../ui/fantasyCard.js';
+import { COOKING_BY_ID, hasLastingEffect } from '../data/cooking.js';
+import { activeMeal } from '../systems/CookingSystem.js';
+import { activeReinforcement } from '../systems/SmithingSystem.js';
+import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 import { closeStateKey } from '../ui/heroCard/tabSprites.js';
 import {
   INVENTORY_CARD,
@@ -35,14 +40,14 @@ import {
 } from '../ui/inventorySprites.js';
 
 // Karta Inventář (klávesa I nebo záložka Inventář). Podklad inventory.png, stavy z hoover-icon.png
-// (tmavá = výchozí, modrá = pod myší). Levé tlačítko vybere předmět (detail vlevo dole),
-// pravé otevře nabídku Použít / Vybavit / Přesunout / Rozdělit / Zahodit.
+// (tmavá = výchozí, modrá = pod myší). Levé tlačítko vybere předmět (detail vlevo dole), tažením
+// se předmět přesune (se Shiftem rozdělí – okno pro počet kusů, na slot výbavy vybaví, ze slotu sundá),
+// dvojklik vybaví / použije / sundá, pravé tlačítko otevře nabídku Použít / Vybavit / Přesunout / Rozdělit / Zahodit.
 
 const CARD_W = 1536;
 const CARD_H = 1024;
-const SCALE = Math.min(GAME_WIDTH / CARD_W, GAME_HEIGHT / CARD_H);
-const OFFSET_X = (GAME_WIDTH - CARD_W * SCALE) / 2;
-const OFFSET_Y = (GAME_HEIGHT - CARD_H * SCALE) / 2;
+// Obsah karty zmenšený do panelu karty Mapa (ui/fantasyCard.js CARD_FIT).
+const { SCALE, OFFSET_X, OFFSET_Y } = CARD_FIT;
 const CLOSE_AREA = { x: 628, y: 914, w: 275, h: 78 };
 const CLOSE_IMAGE_WIDTH = 310;
 
@@ -67,6 +72,42 @@ const MENU_SCALE = 0.32;
 
 const toScreen = (x, y) => ({ x: OFFSET_X + x * SCALE, y: OFFSET_Y + y * SCALE });
 const toCard = (sx, sy) => ({ x: (sx - OFFSET_X) / SCALE, y: (sy - OFFSET_Y) / SCALE });
+
+// Záře za ikonou podle vzácnosti (barvy z RARITIES): kruhový přechod, textura jednou za hru.
+// Běžné předměty mají jen slabou šedou záři, ať vynikne vzácnost ostatních.
+const GLOW_ALPHA = { common: 0.28, uncommon: 0.6, rare: 0.7, epic: 0.78, legendary: 0.9 };
+function rarityGlowKey(scene, rarityId) {
+  const id = RARITIES[rarityId] ? rarityId : 'common';
+  const key = `inv-glow-${id}`;
+  if (scene.textures.exists(key)) return key;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const legendary = id === 'legendary';
+  // Legendární: syté zlato, silnější střed a zlatý prstenec, aby byly vidět na první pohled.
+  const c = legendary ? 0xffc21a : RARITIES[id].color;
+  const rgb = `${(c >> 16) & 255}, ${(c >> 8) & 255}, ${c & 255}`;
+  const a = GLOW_ALPHA[id];
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, legendary ? 'rgba(255, 236, 150, 1)' : `rgba(${rgb}, ${a})`);
+  gradient.addColorStop(legendary ? 0.55 : 0.45, `rgba(${rgb}, ${legendary ? 0.85 : a * 0.6})`);
+  gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  if (legendary) {
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255, 214, 90, 0.95)';
+    ctx.shadowColor = 'rgba(255, 190, 40, 1)';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 10, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  scene.textures.addCanvas(key, canvas);
+  return key;
+}
 
 export default class InventoryScene extends Phaser.Scene {
   constructor() {
@@ -93,8 +134,10 @@ export default class InventoryScene extends Phaser.Scene {
     normalizeEquipment(this.state);
     this.input.mouse?.disableContextMenu();
 
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02060c, 0.78).setOrigin(0).setInteractive()
+    // Bez ztmavení okolí; průhledná plocha chytá kliknutí mimo kartu (zavře nabídku).
+    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0).setOrigin(0).setInteractive()
       .on('pointerdown', () => this.closeMenu());
+    drawCardFrame(this, undefined, { blocker: false });
     this.card = this.add.container(OFFSET_X, OFFSET_Y).setScale(SCALE);
     this.card.add(this.add.image(0, 0, INVENTORY_CARD).setOrigin(0));
     // Klik na podklad karty zavře nabídku.
@@ -106,18 +149,38 @@ export default class InventoryScene extends Phaser.Scene {
     plate.fillStyle(0x0a1628, 1).fillRect(p.x, p.y, p.w, p.h);
     this.card.add(plate);
 
+    this.equipLayer = this.add.container(0, 0);
+    this.card.add(this.equipLayer);
     this.layer = this.add.container(0, 0);
     this.card.add(this.layer);
 
+    // Tažení myší: přesun (se Shiftem rozdělení), dvojklik = použít / vybavit / sundat.
+    this.press = null;
+    this.drag = null;
+    this.lastClick = null;
+    this.shiftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT, false);
+    const onMove = (pointer) => this.onPointerMove(pointer);
+    const onUp = (pointer) => this.onPointerUp(pointer);
+    this.input.on('pointermove', onMove);
+    this.input.on('pointerup', onUp);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointermove', onMove);
+      this.input.off('pointerup', onUp);
+      this.endDrag();
+    });
+
     this.createStatic();
     this.createCloseButton();
-    createCardTabBar(this, 'inventory', {
+    const tabBar = createCardTabBar(this, 'inventory', {
+      onClose: () => this.closeCard(),
       state: this.state,
       returnScene: this.returnScene,
       storageAccess: this.storageAccess,
-      drawStrip: false,
       beforeLeave: () => SaveSystem.save(this.state)
     });
+    this.tabBar = tabBar;
+    // Otevřeno ze světa / interiéru: karta vyjede zpod lišty.
+    if (data?.animateIn) slideCardIn(this, { hide: tabBar.objects });
     this.render();
 
     if (this.onKey) this.input.keyboard.off('keydown', this.onKey);
@@ -139,19 +202,6 @@ export default class InventoryScene extends Phaser.Scene {
   // ---------------------------------------------------------- pevné prvky
 
   createStatic() {
-    // Výbava: modrý obrázek pod myší, detail vlevo dole.
-    EQUIPMENT_SLOT_IDS.forEach((slot) => {
-      const r = EQUIP_SLOTS[slot];
-      const image = this.textures.exists(equipKey(slot, 'hover'))
-        ? this.add.image(r.x + r.w / 2, r.y + r.h / 2, equipKey(slot, 'hover')).setDisplaySize(r.w + 6, r.h + 6).setVisible(false)
-        : null;
-      if (image) this.card.add(image);
-      const zone = this.add.zone(r.x, r.y, r.w, r.h).setOrigin(0).setInteractive({ useHandCursor: true });
-      zone.on('pointerover', () => { image?.setVisible(true); this.showEquipInfo(slot); });
-      zone.on('pointerout', () => { image?.setVisible(false); this.renderInfo(); });
-      this.card.add(zone);
-    });
-
     // Filtry kategorií: modrá pod myší, zapnutý filtr zůstane modrý.
     this.categoryImages = ITEM_CATEGORIES.map((category, i) => {
       const r = CATEGORY_RECTS[i];
@@ -208,7 +258,8 @@ export default class InventoryScene extends Phaser.Scene {
   }
 
   pageCount() {
-    if (!this.filter) return INVENTORY_PAGES;
+    // Bez filtru podle počtu políček (testovací hra má větší inventář).
+    if (!this.filter) return Math.max(INVENTORY_PAGES, Math.ceil(this.state.inventory.slots.length / INVENTORY_PAGE_SIZE));
     const count = this.state.inventory.slots.filter((s) => getItem(s?.id)?.category === this.filter).length;
     return Math.max(1, Math.ceil(count / INVENTORY_PAGE_SIZE));
   }
@@ -225,7 +276,46 @@ export default class InventoryScene extends Phaser.Scene {
     this.render();
   }
 
+  // Sloty výbavy. Prázdný slot: namalovaná ikona, pod myší modrá verze z hoover-icon.png.
+  // Vybavený slot: namalovanou ikonu překryje prázdné políčko s ikonou předmětu a pod myší
+  // se ukáže modré prázdné políčko (ne namalovaná ikona) – ikona předmětu zůstane nahoře.
+  renderEquipment() {
+    this.equipLayer.removeAll(true);
+    EQUIPMENT_SLOT_IDS.forEach((slot) => {
+      const r = EQUIP_SLOTS[slot];
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      const item = getItem(this.state.equipment?.[slot]?.id);
+      const frame = (key) => (this.textures.exists(key) ? this.add.image(cx, cy, key).setDisplaySize(r.w + 6, r.h + 6) : null);
+      let hover;
+      if (item) {
+        const base = frame(slotKey('normal'));
+        if (base) this.equipLayer.add(base);
+        hover = frame(slotKey('hover'));
+      } else {
+        hover = frame(equipKey(slot, 'hover'));
+      }
+      if (hover) this.equipLayer.add(hover.setVisible(false));
+      if (item) this.equipLayer.add(this.add.image(cx, cy, rarityGlowKey(this, item.rarity)).setDisplaySize(r.w - 6, r.h - 6));
+      if (item?.icon && this.textures.exists(itemIconKey(item.icon))) {
+        const icon = this.add.image(cx, cy, itemIconKey(item.icon));
+        icon.setScale(64 / Math.max(icon.width, icon.height));
+        this.equipLayer.add(icon);
+      }
+      const zone = this.add.zone(r.x, r.y, r.w, r.h).setOrigin(0).setInteractive({ useHandCursor: true });
+      zone.on('pointerover', () => { hover?.setVisible(true); this.showEquipInfo(slot); });
+      zone.on('pointerout', () => { hover?.setVisible(false); this.renderInfo(); });
+      zone.on('pointerdown', (pointer) => {
+        if (this.modal || pointer.rightButtonDown()) return;
+        this.closeMenu();
+        this.press = { type: 'equip', slot, x: pointer.x, y: pointer.y };
+      });
+      this.equipLayer.add(zone);
+    });
+  }
+
   render() {
+    this.renderEquipment();
     this.layer.removeAll(true);
     const slots = this.state.inventory.slots;
     const visible = this.visibleIndices();
@@ -264,6 +354,7 @@ export default class InventoryScene extends Phaser.Scene {
 
     const item = getItem(slot?.id);
     if (item) {
+      this.layer.add(this.add.image(cx, cy - 2, rarityGlowKey(this, item.rarity)).setDisplaySize(rect.w - 6, rect.h - 6));
       if (item.icon && this.textures.exists(itemIconKey(item.icon))) {
         const icon = this.add.image(cx, cy - 2, itemIconKey(item.icon));
         const fit = 70 / Math.max(icon.width, icon.height);
@@ -281,8 +372,18 @@ export default class InventoryScene extends Phaser.Scene {
 
     if (index === undefined) return;
     const zone = this.add.zone(rect.x, rect.y, rect.w, rect.h).setOrigin(0).setInteractive({ useHandCursor: Boolean(item) || this.moving !== null });
-    zone.on('pointerover', () => hover?.setVisible(true));
-    zone.on('pointerout', () => hover?.setVisible(false));
+    // Náhled a popis předmětu už při najetí myší (vlevo dole); po odjetí zase vybraný předmět.
+    zone.on('pointerover', () => {
+      hover?.setVisible(true);
+      if (item && !this.menu && !this.modal) {
+        this.clearInfo();
+        this.describe(item, slot.qty, `Mana ${this.state.mp ?? 0} / ${this.state.maxMp ?? 0}`);
+      }
+    });
+    zone.on('pointerout', () => {
+      hover?.setVisible(false);
+      if (item && !this.menu && !this.modal) this.renderInfo();
+    });
     zone.on('pointerdown', (pointer) => {
       if (this.modal) return;
       if (pointer.rightButtonDown()) {
@@ -290,18 +391,133 @@ export default class InventoryScene extends Phaser.Scene {
         return;
       }
       this.closeMenu();
-      if (this.moving !== null) {
-        const result = moveSlot(this.state, this.moving, index);
-        this.moving = null;
-        this.selected = index;
-        if (result.ok) { this.changed(); this.flash('Předmět přesunut.', '#8fd3ff'); } else this.flash(result.reason);
-        this.render();
-        return;
-      }
-      this.selected = item ? index : null;
-      this.render();
+      // Klik / tažení / dvojklik se vyhodnotí při puštění tlačítka (onPointerUp).
+      this.press = { type: 'grid', index, x: pointer.x, y: pointer.y };
     });
     this.layer.add(zone);
+  }
+
+  clickGrid(index) {
+    const slot = this.state.inventory.slots[index];
+    const item = getItem(slot?.id);
+    if (this.moving !== null) {
+      const result = moveSlot(this.state, this.moving, index);
+      this.moving = null;
+      this.selected = index;
+      if (result.ok) { this.changed(); this.flash('Předmět přesunut.', '#8fd3ff'); } else this.flash(result.reason);
+      this.render();
+      return;
+    }
+    // Dvojklik levým tlačítkem: vybavit (výbava) nebo použít (spotřební předmět).
+    const now = this.time.now;
+    const double = item && this.lastClick?.index === index && now - this.lastClick.time < 350;
+    this.lastClick = double ? null : { index, time: now };
+    if (double) {
+      if (canEquip(item)) this.runAction('equip', index);
+      else if (canUse(item)) this.runAction('use', index);
+      else this.flash('Tento předmět nejde použít ani vybavit.');
+      return;
+    }
+    this.selected = item ? index : null;
+    this.render();
+  }
+
+  clickEquip(slot) {
+    const now = this.time.now;
+    const double = this.lastClick?.slot === slot && now - this.lastClick.time < 350;
+    this.lastClick = double ? null : { slot, time: now };
+    if (double && this.state.equipment?.[slot]) this.unequip(slot, null);
+  }
+
+  unequip(slot, toIndex) {
+    const result = unequipToSlot(this.state, slot, toIndex, this.game.events);
+    if (result.ok) { this.selected = result.index; this.changed(); }
+    this.render();
+    this.flash(result.message, result.ok ? '#ffd76a' : '#ffb3a0');
+  }
+
+  // Co je pod kurzorem: políčko inventáře nebo slot výbavy (souřadnice podkladu karty).
+  hitTest(pointer) {
+    const p = toCard(pointer.x, pointer.y);
+    const inside = (r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+    for (const slot of EQUIPMENT_SLOT_IDS) if (inside(EQUIP_SLOTS[slot])) return { type: 'equip', slot };
+    const visible = this.visibleIndices();
+    for (let k = 0; k < INVENTORY_PAGE_SIZE; k++) {
+      const r = { x: GRID.cols[k % GRID.cols.length], y: GRID.rows[Math.floor(k / GRID.cols.length)], w: GRID.w, h: GRID.h };
+      if (inside(r)) return visible[k] === undefined ? null : { type: 'grid', index: visible[k] };
+    }
+    return null;
+  }
+
+  pressedItem(press) {
+    if (press.type === 'grid') return getItem(this.state.inventory.slots[press.index]?.id);
+    return getItem(this.state.equipment?.[press.slot]?.id);
+  }
+
+  onPointerMove(pointer) {
+    if (!this.press || this.modal) return;
+    if (!this.drag) {
+      if (Phaser.Math.Distance.Between(pointer.x, pointer.y, this.press.x, this.press.y) < 10) return;
+      const item = this.pressedItem(this.press);
+      if (!item) { this.press = null; return; }
+      const ghost = item.icon && this.textures.exists(itemIconKey(item.icon))
+        ? this.add.image(pointer.x, pointer.y, itemIconKey(item.icon)).setAlpha(0.85).setDepth(300)
+        : cardText(this, pointer.x, pointer.y, item.name, { size: 18, bold: true, originX: 0.5, originY: 0.5 }).setDepth(300);
+      if (ghost.type === 'Image') ghost.setScale((76 * SCALE) / Math.max(ghost.width, ghost.height));
+      this.drag = { ghost };
+      this.moving = null;
+    }
+    this.drag.ghost.setPosition(pointer.x, pointer.y);
+  }
+
+  endDrag() {
+    this.drag?.ghost.destroy();
+    this.drag = null;
+  }
+
+  onPointerUp(pointer) {
+    const press = this.press;
+    this.press = null;
+    if (!press || this.modal) { this.endDrag(); return; }
+    if (!this.drag) {
+      if (press.type === 'grid') this.clickGrid(press.index);
+      else this.clickEquip(press.slot);
+      return;
+    }
+    this.endDrag();
+    this.dropOn(press, this.hitTest(pointer), this.shiftKey.isDown || Boolean(pointer.event?.shiftKey));
+  }
+
+  // Puštění taženého předmětu.
+  dropOn(press, target, shift) {
+    if (!target || (target.type === press.type && (target.index ?? target.slot) === (press.index ?? press.slot))) {
+      this.render();
+      return;
+    }
+    if (press.type === 'grid' && target.type === 'grid') {
+      if (shift) {
+        // Se Shiftem: okno pro výběr počtu kusů, které se dají do cílového políčka.
+        this.render();
+        this.openSplit(press.index, target.index);
+        return;
+      } else {
+        const result = moveSlot(this.state, press.index, target.index);
+        if (result.ok) { this.selected = target.index; this.changed(); this.flash('Předmět přesunut.', '#8fd3ff'); } else this.flash(result.reason);
+      }
+      this.render();
+      return;
+    }
+    if (press.type === 'grid' && target.type === 'equip') {
+      const item = getItem(this.state.inventory.slots[press.index]?.id);
+      if (item?.slot !== target.slot) { this.flash(canEquip(item) ? 'Tento předmět patří do jiného slotu.' : 'Tento předmět nejde vybavit.'); this.render(); return; }
+      this.runAction('equip', press.index);
+      return;
+    }
+    if (press.type === 'equip' && target.type === 'grid') {
+      this.unequip(press.slot, target.index);
+      return;
+    }
+    this.render();
   }
 
   // ------------------------------------------------------------ detail
@@ -318,7 +534,7 @@ export default class InventoryScene extends Phaser.Scene {
     if (!item) {
       this.info.add(cardText(this, INFO.x + 30, INFO.y + 28, 'Vyber předmět', { size: 26, bold: true, color: '#ffe7ae' }));
       this.info.add(cardText(this, INFO.x + 30, INFO.y + 72,
-        this.moving !== null ? 'Klikni na políčko, kam se má předmět přesunout (Esc zruší).' : 'Levé tlačítko = detail předmětu, pravé tlačítko = nabídka (Použít, Vybavit, Přesunout, Rozdělit, Zahodit).',
+        this.moving !== null ? 'Klikni na políčko, kam se má předmět přesunout (Esc zruší).' : 'Klik = detail, tažení = přesun (se Shiftem rozdělení – zvolíš počet), dvojklik = vybavit / použít, pravé tlačítko = nabídka.',
         { size: 17, color: '#c9d3dd', wrap: INFO.w - 60 }));
       this.info.add(cardText(this, INFO.x + 30, INFO.y + INFO.h - 30, mana, { size: 18, color: '#8fd3ff', originY: 1 }));
       return;
@@ -346,10 +562,10 @@ export default class InventoryScene extends Phaser.Scene {
     const labels = { weapon: 'Zbraň', shield: 'Štít', ring: 'Prsten', amulet: 'Amulet', helmet: 'Helma', armor: 'Zbroj', legs: 'Nohy', boots: 'Boty' };
     const equipped = this.state.equipment?.[slot];
     if (equipped) {
-      this.describe({ ...getItem(equipped.id), ...equipped }, 0, `Vybaveno: ${labels[slot]}`);
+      this.describe({ ...getItem(equipped.id), ...equipped }, 0, `Vybaveno: ${labels[slot]} · dvojklik nebo tažení do inventáře = sundat`);
     } else {
       this.info.add(cardText(this, INFO.x + 30, INFO.y + 28, labels[slot], { size: 26, bold: true, color: '#ffe7ae' }));
-      this.info.add(cardText(this, INFO.x + 30, INFO.y + 72, 'Prázdný slot. Předmět vybavíš pravým tlačítkem v inventáři (Vybavit).', { size: 17, color: '#c9d3dd', wrap: INFO.w - 60 }));
+      this.info.add(cardText(this, INFO.x + 30, INFO.y + 72, 'Prázdný slot. Přetáhni sem předmět, dej na něm dvojklik, nebo použij pravé tlačítko → Vybavit.', { size: 17, color: '#c9d3dd', wrap: INFO.w - 60 }));
     }
   }
 
@@ -366,7 +582,8 @@ export default class InventoryScene extends Phaser.Scene {
       equip: canEquip(item),
       move: !this.filter,
       split: slot.qty > 1,
-      drop: true
+      drop: true,
+      uses: true
     };
 
     const w = MENU_BOX.w * MENU_SCALE;
@@ -409,6 +626,14 @@ export default class InventoryScene extends Phaser.Scene {
     this.menu = menu;
   }
 
+  openDatabase(itemId) {
+    SaveSystem.save(this.state);
+    this.closing = true;
+    this.scene.stop();
+    this.scene.launch('Professions', { state: this.state, returnScene: this.returnScene, storageAccess: this.storageAccess, item: itemId });
+    this.scene.bringToTop('Professions');
+  }
+
   closeMenu() {
     this.menu?.destroy();
     this.menu = null;
@@ -420,6 +645,25 @@ export default class InventoryScene extends Phaser.Scene {
     if (!item) return;
 
     if (action === 'use') {
+      // Jen jeden pokrm s trvajícím účinkem: nový nahradí starý – zeptat se.
+      const recipe = item.use?.type === 'meal' ? COOKING_BY_ID[item.use.recipe] : null;
+      const current = recipe && hasLastingEffect(recipe.effect) ? activeMeal(this.state) : null;
+      if (current && !this.confirmedMeal) {
+        this.modal = openCardModal(this, 'Nahradit pokrm?', [`Pořád působí: ${current.name}.`, `${item.name} jeho účinek nahradí.`], [
+          { label: 'Sníst', onClick: () => { this.closeModal(); this.confirmedMeal = true; this.runAction('use', index); this.confirmedMeal = false; } },
+          { label: 'Zpět', onClick: () => this.closeModal() }
+        ]);
+        return;
+      }
+      // Výztuha (Kovářství): aktivní je jedna – nová nahradí starou, zeptat se.
+      const reinforcement = item.use?.type === 'reinforce' ? activeReinforcement(this.state) : null;
+      if (reinforcement && !this.confirmedReinforce) {
+        this.modal = openCardModal(this, 'Nahradit výztuhu?', [`Pořád působí: ${reinforcement.name} (${reinforcement.battlesLeft} soubojů).`, `${item.name} ji nahradí.`], [
+          { label: 'Použít', onClick: () => { this.closeModal(); this.confirmedReinforce = true; this.runAction('use', index); this.confirmedReinforce = false; } },
+          { label: 'Zpět', onClick: () => this.closeModal() }
+        ]);
+        return;
+      }
       const result = useSlot(this.state, index);
       if (result.ok) this.changed();
       if (!this.state.inventory.slots[index]) this.selected = null;
@@ -434,6 +678,9 @@ export default class InventoryScene extends Phaser.Scene {
       this.moving = index;
       this.render();
       this.flash('Klikni na políčko, kam se má předmět přesunout.', '#8fd3ff');
+    } else if (action === 'uses') {
+      // Databáze v kartě Řemesla: odkud se předmět získá a kde se používá.
+      this.openDatabase(slot.id);
     } else if (action === 'split') {
       this.openSplit(index);
     } else if (action === 'drop') {
@@ -451,11 +698,18 @@ export default class InventoryScene extends Phaser.Scene {
     }
   }
 
-  // Rozdělení: výběr počtu kusů do nové hromádky.
-  openSplit(index) {
+  // Rozdělení: výběr počtu kusů do nové hromádky (z nabídky do prvního volného políčka,
+  // při tažení se Shiftem do cílového políčka targetIndex).
+  openSplit(index, targetIndex = null) {
     const slot = this.state.inventory.slots[index];
-    const item = getItem(slot.id);
-    let amount = Math.floor(slot.qty / 2);
+    const item = getItem(slot?.id);
+    if (!item) return;
+    const target = targetIndex === null ? null : this.state.inventory.slots[targetIndex];
+    if (slot.qty < 2) { this.flash('Hromádku s jedním kusem nejde rozdělit.'); return; }
+    if (target && target.id !== slot.id) { this.flash('Rozdělit jde jen do prázdného políčka nebo na stejný předmět.'); return; }
+    const max = target ? Math.min(slot.qty - 1, item.stack - target.qty) : slot.qty - 1;
+    if (max < 1) { this.flash('Cílová hromádka je plná.'); return; }
+    let amount = Math.min(max, Math.max(1, Math.floor(slot.qty / 2)));
     const w = 640;
     const h = 330;
     const x = (GAME_WIDTH - w) / 2;
@@ -467,23 +721,23 @@ export default class InventoryScene extends Phaser.Scene {
     g.lineStyle(4, 0xd6a23a, 1).strokeRoundedRect(x, y, w, h, 18);
     c.add([shade, g]);
     c.add(cardText(this, x + w / 2, y + 26, `Rozdělit: ${item.name}`, { size: 28, bold: true, color: '#ffe7ae', originX: 0.5 }));
-    c.add(cardText(this, x + w / 2, y + 72, `Kolik kusů oddělit do nového políčka? (celkem ${slot.qty})`, { size: 17, color: '#dbe6f3', originX: 0.5 }));
+    c.add(cardText(this, x + w / 2, y + 72, `Kolik kusů oddělit ${target ? 'do cílové hromádky' : targetIndex !== null ? 'do zvoleného políčka' : 'do nového políčka'}? (celkem ${slot.qty})`, { size: 17, color: '#dbe6f3', originX: 0.5 }));
     const value = cardText(this, x + w / 2, y + 140, '', { size: 44, bold: true, color: '#ffd76a', originX: 0.5, originY: 0.5, strokeThickness: 5 });
     c.add(value);
     const refresh = () => value.setText(`${amount}  |  ${slot.qty - amount}`);
     refresh();
-    const change = (d) => { amount = Phaser.Math.Clamp(amount + d, 1, slot.qty - 1); refresh(); };
+    const change = (d) => { amount = Phaser.Math.Clamp(amount + d, 1, max); refresh(); };
     [[-10, '−10'], [-1, '−1'], [1, '+1'], [10, '+10']].forEach(([d, label], i) => {
       cardButton(this, c, x + 70 + i * 128, y + 190, 112, 46, label, () => change(d), { size: 20 });
     });
     cardButton(this, c, x + w / 2 - 236, y + h - 70, 220, 50, 'Rozdělit', () => {
-      const result = splitSlot(this.state, index, amount);
+      const result = targetIndex === null ? splitSlot(this.state, index, amount) : splitToSlot(this.state, index, targetIndex, amount);
       this.closeModal();
       if (!result.ok) { this.flash(result.reason); return; }
-      this.selected = result.index;
+      this.selected = targetIndex ?? result.index;
       this.changed();
       this.render();
-      this.flash(`Rozděleno: ${amount} ks do nového políčka.`, '#8fd3ff');
+      this.flash(`Rozděleno: ${result.count ?? amount} ks.`, '#8fd3ff');
     });
     cardButton(this, c, x + w / 2 + 16, y + h - 70, 220, 50, 'Zpět', () => this.closeModal());
     this.modal = c;
@@ -529,7 +783,10 @@ export default class InventoryScene extends Phaser.Scene {
     if (this.closing) return;
     this.closing = true;
     SaveSystem.save(this.state);
-    this.scene.stop();
-    this.scene.resume(this.returnScene);
+    // Karta zajede pod lištu, pak se vrátí scéna pod ní.
+    slideCardOut(this, () => {
+      this.scene.stop();
+      this.scene.resume(this.returnScene);
+    }, { hide: this.tabBar?.objects });
   }
 }

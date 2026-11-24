@@ -3,8 +3,15 @@
 // Starší uložené hry měly jen počty (state.inventory.basic_crystal) – převedou se do slotů.
 // ======================================================================
 
-import { ITEMS, getItem, SPECIES_DROPS } from '../data/items.js';
-import { equipItem, normalizeEquipment } from './EquipmentSystem.js';
+import { ITEMS, getItem, SPECIES_DROPS, RENAMED_ITEMS } from '../data/items.js';
+import { equipItem, unequipItem, normalizeEquipment } from './EquipmentSystem.js';
+import { MEATS, MEAT_DROP_CHANCE, WOOD_DROP } from '../data/cooking.js';
+import { eatMeal } from './CookingSystem.js';
+import { useAlchemyOutside } from './AlchemySystem.js';
+import { useMiningMap, openMinerChest } from './MiningSystem.js';
+import { useBotanicalNote } from './HerbalismSystem.js';
+import { useCraftedItem } from './CraftingSystem.js';
+import { useReinforcement } from './SmithingSystem.js';
 
 export const INVENTORY_PAGE_SIZE = 40; // 8 × 5 políček na kartě
 export const INVENTORY_PAGES = 1;
@@ -26,6 +33,8 @@ export function normalizeInventory(state) {
   }
   const slots = state.inventory.slots;
   while (slots.length < INVENTORY_SIZE) slots.push(null);
+  // Přejmenované materiály: starý kus → nový předmět.
+  for (const slot of slots) if (slot && RENAMED_ITEMS[slot.id]) slot.id = RENAMED_ITEMS[slot.id];
   for (let i = 0; i < slots.length; i++) {
     const slot = slots[i];
     if (slot && (!ITEMS[slot.id] || !(Number(slot.qty) > 0))) slots[i] = null;
@@ -122,6 +131,42 @@ export function splitSlot(state, index, amount) {
   return { ok: true, index: empty };
 }
 
+// Rozdělí hromádku do konkrétního políčka (tažení se Shiftem): do prázdného políčka,
+// nebo do hromádky stejného předmětu (jen kolik se vejde).
+export function splitToSlot(state, from, to, amount) {
+  const slots = slotsOf(state);
+  const source = slots[from];
+  if (!source || from === to) return { ok: false, reason: 'Není co rozdělit.' };
+  if (source.qty < 2) return { ok: false, reason: 'Hromádku s jedním kusem nejde rozdělit.' };
+  const item = getItem(source.id);
+  const target = slots[to];
+  let count = Math.max(1, Math.min(Math.floor(amount), source.qty - 1));
+  if (!target) {
+    slots[to] = { id: source.id, qty: count };
+  } else if (target.id === source.id) {
+    count = Math.min(count, item.stack - target.qty);
+    if (count <= 0) return { ok: false, reason: 'Cílová hromádka je plná.' };
+    target.qty += count;
+  } else {
+    return { ok: false, reason: 'Rozdělit jde jen do prázdného políčka nebo na stejný předmět.' };
+  }
+  source.qty -= count;
+  return { ok: true, count };
+}
+
+// Sundá výbavu do inventáře: do zvoleného prázdného políčka, jinak do prvního volného.
+export function unequipToSlot(state, slotId, toIndex = null, events = null) {
+  normalizeEquipment(state);
+  const equipped = state.equipment?.[slotId];
+  if (!equipped?.id || !ITEMS[equipped.id]) return { ok: false, message: 'Slot je prázdný.' };
+  const slots = slotsOf(state);
+  const target = Number.isInteger(toIndex) && !slots[toIndex] ? toIndex : slots.findIndex((s) => !s);
+  if (target < 0) return { ok: false, message: 'V inventáři není volné políčko.' };
+  unequipItem(state, slotId, events);
+  slots[target] = { id: equipped.id, qty: 1 };
+  return { ok: true, index: target, message: `Sundáno: ${getItem(equipped.id).name}.` };
+}
+
 export function dropSlot(state, index) {
   const slots = slotsOf(state);
   if (!slots[index]) return { ok: false, reason: 'Políčko je prázdné.' };
@@ -133,7 +178,12 @@ export function dropSlot(state, index) {
 export const DROP_CHANCES = [0.7, 0.35];
 export function rollDrops(speciesId, random = Math.random) {
   const list = SPECIES_DROPS[speciesId] ?? [];
-  return list.filter((_, i) => random() < (DROP_CHANCES[i] ?? 0.2)).map((id) => ({ id, qty: 1 }));
+  const drops = list.filter((_, i) => random() < (DROP_CHANCES[i] ?? 0.2)).map((id) => ({ id, qty: 1 }));
+  // Vaření: maso z vhodných tvorů (50 %) a dřevo z dřevěných monster (60 %).
+  const meat = MEATS.find((m) => m.from.includes(speciesId));
+  if (meat && random() < MEAT_DROP_CHANCE) drops.push({ id: meat.id, qty: 1 });
+  if (WOOD_DROP.from.includes(speciesId) && random() < WOOD_DROP.chance) drops.push({ id: WOOD_DROP.id, qty: 1 });
+  return drops;
 }
 
 export function canUse(item) {
@@ -175,6 +225,58 @@ export function useSlot(state, index) {
     slot.qty -= 1;
     if (slot.qty <= 0) slots[index] = null;
     return { ok: true, message: `${item.name}: ${parts.join(', ')}.` };
+  }
+
+  if (item.use.type === 'alchemy') {
+    const result = useAlchemyOutside(state, item.use.recipe);
+    if (!result.ok) return result;
+    slot.qty -= 1;
+    if (slot.qty <= 0) slots[index] = null;
+    return result;
+  }
+
+  if (item.use.type === 'meal') {
+    const result = eatMeal(state, item.use.recipe);
+    if (!result.ok) return result;
+    slot.qty -= 1;
+    if (slot.qty <= 0) slots[index] = null;
+    return { ok: true, message: result.replaced ? `${result.message} (nahrazuje: ${result.replaced})` : result.message };
+  }
+
+  // Kovářství: výztuha výbavy na počet soubojů (jedna aktivní).
+  if (item.use.type === 'reinforce') {
+    const result = useReinforcement(state, item.use.recipe);
+    if (!result.ok) return result;
+    slot.qty -= 1;
+    if (slot.qty <= 0) slots[index] = null;
+    return result;
+  }
+
+  // Těžba: Starodávná důlní mapa a Zapomenutá truhla horníka.
+  // Řemeslnictví: brašny, cestovní vybavení, výcvikové závaží, zrcadlo duše.
+  if (item.use.type === 'craft') {
+    const result = useCraftedItem(state, item.use.recipe);
+    if (!result.ok) return result;
+    slot.qty -= 1;
+    if (slot.qty <= 0) slots[index] = null;
+    return result;
+  }
+
+  if (item.use.type === 'botanicalNote') {
+    // Sběr bylin: Botanický zápis odhalí Skryté lesní naleziště.
+    const result = useBotanicalNote(state);
+    if (!result.ok) return result;
+    slot.qty -= 1;
+    if (slot.qty <= 0) slots[index] = null;
+    return result;
+  }
+
+  if (item.use.type === 'miningMap' || item.use.type === 'minerChest') {
+    const result = item.use.type === 'miningMap' ? useMiningMap(state) : openMinerChest(state);
+    if (!result.ok) return result;
+    slot.qty -= 1;
+    if (slot.qty <= 0) slots[index] = null;
+    return result;
   }
 
   if (item.use.type === 'restoreMana') {

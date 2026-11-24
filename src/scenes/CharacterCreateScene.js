@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
+import { createTestGame } from '../systems/TestGameSystem.js';
 
 // Vytvoření postavy po kliknutí na „Nová hra“: jméno a volba muž / žena.
 // Podklad je tabulka name-panel.png (rám s drakem, nápis Jméno a pole pro jméno),
@@ -22,7 +23,8 @@ const PANEL_KEY = 'charsel-name-panel';
 const PANEL = { x: 192, y: 8, scale: 1 };
 const NAME_BOX = { x: 460, y: 378, w: 615, h: 94 };
 const MAX_NAME_LENGTH = 20;
-const FONT = 'Georgia, "Times New Roman", serif';
+const TEST_GAME_NAME = 'admin91';
+const FONT = 'Lora, Georgia, "Times New Roman", serif';
 
 export default class CharacterCreateScene extends Phaser.Scene {
   constructor() {
@@ -88,6 +90,8 @@ export default class CharacterCreateScene extends Phaser.Scene {
     back.on('pointerover', () => back.setColor('#fff1c6'));
     back.on('pointerout', () => back.setColor('#f2d28a'));
     back.on('pointerdown', () => this.scene.start('Menu'));
+
+    // Testovací hra se spouští jménem „admin91“ (bez tlačítka) – viz confirm().
 
     // Pojistka: posluchač z předchozího otevření scény nesmí zůstat zapnutý
     // (jinak se znaky zapisují dvakrát).
@@ -235,6 +239,8 @@ export default class CharacterCreateScene extends Phaser.Scene {
     if (this.confirmed) return;
 
     const name = Array.from(this.nameBuffer.normalize('NFC').trim()).slice(0, MAX_NAME_LENGTH).join('');
+    // Jméno admin91 = testovací hra (hrdina 100, všechna kouzla, suroviny, vlk 100 s 510 body).
+    const testGame = name.toLowerCase() === TEST_GAME_NAME;
     if (!name) {
       this.status.setText('Nejdříve zadej jméno.').setColor('#ffb3a0');
       this.tweens.add({ targets: this.nameText, x: this.nameText.x + 8, duration: 50, yoyo: true, repeat: 3 });
@@ -242,16 +248,17 @@ export default class CharacterCreateScene extends Phaser.Scene {
     }
 
     this.confirmed = true;
-    const state = SaveSystem.createNew(name);
+    const state = testGame ? createTestGame(name, this.gender) : SaveSystem.createNew(name);
     state.gender = this.gender;
     SaveSystem.save(state);
 
-    this.status.setText(`Postava ${name} (${this.gender === 'male' ? 'muž' : 'žena'}) je připravena.`).setColor('#dceaff');
+    this.status.setText(`${testGame ? 'Testovací hra: ' : ''}Postava ${name} (${this.gender === 'male' ? 'muž' : 'žena'}) je připravena.`).setColor('#dceaff');
     this.game.events.emit('dragonSouls:newGame', { name, gender: this.gender });
 
     this.cameras.main.fadeOut(450, 5, 11, 20);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('Interior', { state, interiorId: state.interiorId, fromWorld: false });
+      if (state.interiorId) this.scene.start('Interior', { state, interiorId: state.interiorId, fromWorld: false });
+      else this.scene.start('World', { state });
     });
   }
 }

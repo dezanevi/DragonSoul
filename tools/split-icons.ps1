@@ -7,6 +7,9 @@
 #   4. Každá ikona se vyřízne, bílá dotýkající se okraje výřezu zprůhlední a uloží se jako PNG.
 #   5. Seznam ikon se zapíše do src/data/itemIcons.json (klíč, soubor, list, pořadí).
 #
+# Pozor: seznam se přepíše celý. Listy icons07–icons10 (velké ikony, rozřezané nástroji
+# split-icons-blobs.ps1 a split-icons-grid.ps1) v něm pak chybí – je třeba je doplnit.
+#
 # Použití:
 #   powershell -File tools/split-icons.ps1
 #   powershell -File tools/split-icons.ps1 -Sheets icons01,icons02 -Merge 6

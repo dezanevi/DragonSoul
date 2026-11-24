@@ -2,6 +2,9 @@ import FantasyButton from './FantasyButton.js';
 import { SKILLS, SKILL_BAR } from './cardLayout.js';
 import { cardText, drawBarFill } from './cardText.js';
 import { skillStateKey, spriteState } from './heroButtonSprites.js';
+import { miningClass, MINING_SPECIALIZATIONS } from '../../data/mining.js';
+import { herbClass, HERB_SPECIALIZATIONS, HERB_CATALOG } from '../../data/herbalism.js';
+import { craftingClass } from '../../data/crafting.js';
 
 // Osm tlačítek dovedností. Kliknutí jen vyšle událost – samotné řemeslo
 // obslouží jeho systém (crafting zatím není naprogramovaný).
@@ -95,7 +98,21 @@ export default class SkillsPanel {
     const { level, exp, next } = this.skillData(skill.id);
     this.tooltip.show(skill.area, skill.label, [
       this.isLocked(skill.id) ? 'Zamčeno – dovednost se odemkne později.' : `Úroveň ${level} • zkušenosti ${exp} / ${next}`,
-      'Systém řemesel se připravuje.'
+      skill.id === 'fishing'
+        ? `Deník: ${Object.keys(this.state?.fishing?.log ?? {}).length} chycených druhů. Rybaří se u vody (modrý kruh, E).`
+        : skill.id === 'mining'
+          ? `Třída ${miningClass(level).id} – ${miningClass(level).name}. Vytěžených nalezišť: ${Object.keys(this.state?.mining?.log ?? {}).length}. Naleziště: hnědý kruh, E. Hornický mistr je v kovárně.${this.state?.mining?.specialization ? ` Specializace: ${MINING_SPECIALIZATIONS.find((s) => s.id === this.state.mining.specialization)?.name}.` : ''}`
+        : skill.id === 'herbalism'
+          ? `Třída ${herbClass(level).id} – ${herbClass(level).name}. Herbář: ${Object.keys(this.state?.herbalism?.log ?? {}).length} / ${HERB_CATALOG.length} rostlin. Naleziště: zelený kruh, E. Bylinkářka bydlí v Greenvale.${this.state?.herbalism?.specialization ? ` Specializace: ${HERB_SPECIALIZATIONS.find((s) => s.id === this.state.herbalism.specialization)?.name}.` : ''}`
+        : skill.id === 'crafting'
+          ? `Třída ${craftingClass(level).id} – ${craftingClass(level).name}. Vyrobeno receptů: ${Object.keys(this.state?.crafting?.made ?? {}).length} / 108. Řemeslná dílna je u radnice, Soul Crystaly v Hvězdárně.`
+        : skill.id === 'smithing'
+          ? `Vykováno receptů: ${Object.keys(this.state?.smithing?.made ?? {}).length}. Výheň je v kovárně Greenvale.${this.state?.reinforcement ? ` Výztuha: ${this.state.reinforcement.name} (${this.state.reinforcement.battlesLeft} soubojů).` : ''}`
+        : skill.id === 'alchemy'
+          ? `Vyrobeno receptů: ${Object.keys(this.state?.alchemy?.made ?? {}).length}. Alchymistický stůl je v Alchymistickém obchodě.${this.state?.elixir ? ` Elixír: ${this.state.elixir.name}.` : ''}`
+          : skill.id === 'cooking'
+          ? `Uvařeno receptů: ${Object.keys(this.state?.cooking?.cooked ?? {}).length}. Vaří se u ohniště (V ve světě), sporáku nebo v hostinci.${this.state?.meal ? ` Najedený: ${this.state.meal.name}.` : ''}`
+          : 'Systém řemesel se připravuje.'
     ]);
   }
 

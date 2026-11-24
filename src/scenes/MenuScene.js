@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem.js';
+import { cardText, cardButton, uiWindow, uiTitle, nineImage, openCardModal } from '../ui/fantasyCard.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { menuButtonKey } from '../ui/menuButtons.js';
 
@@ -57,8 +58,8 @@ create(data) {
     firstY + step * 2,
     'load',
     'Nahrát hru',
-    () => this.loadFromMenu(),
-    Boolean(saved)
+    () => this.openSlots('load'),
+    SaveSystem.listSlots().some((slot) => !slot.empty)
   );
 
   this.addButton(
@@ -66,31 +67,9 @@ create(data) {
     firstY + step * 3,
     'save',
     'Uložit hru',
-    () => this.saveFromMenu(),
+    () => this.openSlots('save'),
     Boolean(this.menuState)
   );
-
-  const currentState = this.menuState ?? {
-    playerName: 'Arion',
-    level: 1,
-    gold: 25
-  };
-
-  this.add.text(
-    columnX,
-    firstY + step * 3 + 82,
-    `${currentState.playerName ?? 'Arion'}  |  Level ${currentState.level}  |  Zlato ${currentState.gold}`,
-    {
-      fontFamily: 'Verdana, Arial, sans-serif',
-      fontSize: '18px',
-      color: '#fff1c6',
-      backgroundColor: '#15120dcc',
-      padding: { x: 12, y: 6 }
-    }
-  )
-    .setResolution(2)
-    .setOrigin(0.5)
-    .setDepth(1);
 }
 
 openGameState(state) {
@@ -105,28 +84,93 @@ openGameState(state) {
   }
 }
 
-saveFromMenu() {
+// Okno se sloty (Uložit hru / Nahrát hru): 5 slotů s náhledem hry, jménem, úrovní a časem.
+openSlots(mode) {
+  this.closeSlots();
+  const layer = this.add.container(0, 0).setDepth(50);
+  this.slotLayer = layer;
+  const W = 1180;
+  const H = 860;
+  const X = (GAME_WIDTH - W) / 2;
+  const Y = (GAME_HEIGHT - H) / 2;
+  const before = this.children.list.length;
+  uiWindow(this, X, Y, W, H, { shade: 0.55 });
+  uiTitle(this, X + 40, Y + 26, mode === 'save' ? 'Uložit hru' : 'Nahrát hru', { icon: mode === 'save' ? 'scroll' : 'book', size: 36 });
+  const ROW_H = 120;
+  SaveSystem.listSlots().forEach((slot, i) => {
+    const y = Y + 100 + i * (ROW_H + 8);
+    const row = nineImage(this, 'nu-slot', X + 36, y, W - 72, ROW_H, 0.4);
+    // Náhled hry (poslední snímek při uložení), jinak prázdný rámeček.
+    const px = X + 56;
+    const py = y + 12;
+    const frame = this.add.rectangle(px, py, 192, 108, 0x05080c, 0.9).setOrigin(0).setStrokeStyle(2, 0xd6a23a);
+    if (!slot.empty && slot.preview) {
+      const key = `slot-preview-${slot.index}-${slot.savedAt}`;
+      const show = () => { if (this.slotLayer === layer && this.textures.exists(key)) layer.add(this.add.image(px, py, key).setOrigin(0).setDisplaySize(192, 108)); };
+      if (this.textures.exists(key)) show();
+      else {
+        this.textures.once(`addtexture-${key}`, show);
+        this.textures.addBase64(key, slot.preview);
+      }
+    }
+    const title = slot.empty ? `Slot ${slot.index} – prázdný` : `Slot ${slot.index} – ${slot.playerName}`;
+    const info = slot.empty ? (mode === 'save' ? 'Ulož sem rozehranou hru.' : 'Zatím nic uloženého.')
+      : `Úroveň ${slot.level} · ${slot.region} · Zlato ${slot.gold}
+Uloženo ${new Date(slot.savedAt).toLocaleString('cs-CZ')}`;
+    cardText(this, px + 216, y + 18, title, { size: 26, bold: true, color: slot.empty ? '#9fb3c8' : '#ffe7ae' });
+    cardText(this, px + 216, y + 58, info, { size: 19, color: '#dbe6f3', lineSpacing: 6 });
+    const action = mode === 'save'
+      ? () => this.saveToSlot(slot)
+      : () => this.loadFromSlot(slot);
+    cardButton(this, null, X + W - 290, y + ROW_H / 2 - 30, 220, 60, mode === 'save' ? 'Uložit sem' : 'Nahrát', action, { disabled: mode === 'load' && slot.empty });
+  });
+  cardButton(this, null, GAME_WIDTH / 2 - 120, Y + H - 84, 240, 60, 'Zavřít', () => this.closeSlots(), { danger: true });
+  // Vše, co okno vytvořilo, patří do vrstvy (zavře se najednou).
+  layer.add(this.children.list.slice(before).filter((o) => o !== layer));
+  this.slotKey = (event) => { if (event.code === 'Escape') this.closeSlots(); };
+  this.input.keyboard.on('keydown', this.slotKey);
+}
+
+closeSlots() {
+  if (this.slotKey) this.input.keyboard.off('keydown', this.slotKey);
+  this.slotKey = null;
+  this.slotModal?.destroy();
+  this.slotModal = null;
+  this.slotLayer?.destroy();
+  this.slotLayer = null;
+}
+
+saveToSlot(slot) {
   if (!this.menuState) {
     this.showMessage('Není otevřená hra k uložení.');
     return;
   }
-
-  const saved = SaveSystem.save(this.menuState);
-
-  this.showMessage(
-    saved ? 'Hra byla uložena.' : 'Hru se nepodařilo uložit.'
-  );
-}
-
-loadFromMenu() {
-  const saved = SaveSystem.load();
-
-  if (!saved) {
-    this.showMessage('Není dostupná uložená hra.');
+  const write = () => {
+    const ok = SaveSystem.saveToSlot(slot.index, this.menuState);
+    this.openSlots('save');
+    this.showMessage(ok ? `Hra je uložená ve slotu ${slot.index}.` : 'Hru se nepodařilo uložit (málo místa v prohlížeči?).');
+  };
+  if (slot.empty) {
+    write();
     return;
   }
+  this.slotModal = openCardModal(this, `Přepsat slot ${slot.index}?`, [`Ve slotu je ${slot.playerName}, úroveň ${slot.level}. Uložená hra se nahradí.`], [
+    { label: 'Přepsat', danger: true, onClick: () => { this.slotModal?.destroy(); this.slotModal = null; write(); } },
+    { label: 'Zrušit', onClick: () => { this.slotModal?.destroy(); this.slotModal = null; } }
+  ]);
+  this.slotModal.setDepth(60);
+}
 
-  this.openGameState(saved);
+loadFromSlot(slot) {
+  const state = SaveSystem.loadSlot(slot.index);
+  if (!state) {
+    this.showMessage('Slot se nepodařilo nahrát.');
+    return;
+  }
+  // Nahraná hra se stane rozehranou hrou (Pokračovat).
+  SaveSystem.save(state);
+  this.closeSlots();
+  this.openGameState(state);
 }
 
 
@@ -163,7 +207,7 @@ loadFromMenu() {
   // Náhradní textové tlačítko, kdyby se obrázek tlačítek nepodařilo načíst.
   addTextButton(x, y, label, callback, enabled = true) {
     const button = this.add.text(x, y, label, {
-      fontFamily: 'Verdana, Arial, sans-serif',
+      fontFamily: 'Lora, Georgia, "Times New Roman", serif',
       fontSize: '16px',
       color: enabled ? '#fff1c6' : '#aaa18c',
       backgroundColor: enabled ? '#59421f' : '#39352d',
@@ -210,7 +254,7 @@ loadFromMenu() {
       GAME_HEIGHT / 2 - 52,
       'JMÉNO HRDINY',
       {
-        fontFamily: 'Verdana, Arial, sans-serif',
+        fontFamily: 'Lora, Georgia, "Times New Roman", serif',
         fontSize: '16px',
         color: '#f2d28a'
       }
@@ -226,7 +270,7 @@ loadFromMenu() {
       GAME_HEIGHT / 2 - 8,
       'Arion',
       {
-        fontFamily: 'Verdana, Arial, sans-serif',
+        fontFamily: 'Lora, Georgia, "Times New Roman", serif',
         fontSize: '18px',
         color: '#fff1c6',
         backgroundColor: '#263126',
@@ -245,7 +289,7 @@ loadFromMenu() {
       GAME_HEIGHT / 2 + 31,
       'Napiš jméno, potom stiskni Enter. Prázdné jméno použije Arion.',
       {
-        fontFamily: 'Verdana, Arial, sans-serif',
+        fontFamily: 'Lora, Georgia, "Times New Roman", serif',
         fontSize: '9px',
         color: '#ead9af'
       }
@@ -261,7 +305,7 @@ loadFromMenu() {
       GAME_HEIGHT / 2 + 54,
       'Esc: zpět  |  Nejvýše 20 znaků',
       {
-        fontFamily: 'Verdana, Arial, sans-serif',
+        fontFamily: 'Lora, Georgia, "Times New Roman", serif',
         fontSize: '9px',
         color: '#aaa18c'
       }
@@ -335,11 +379,7 @@ loadFromMenu() {
 
     const state = SaveSystem.createNew(playerName || 'Arion');
    SaveSystem.save(state);
-this.scene.start('Interior', {
-  state,
-  interiorId: state.interiorId,
-  fromWorld: false
-});
+this.openGameState(state);
 
   }
 
@@ -349,7 +389,7 @@ this.scene.start('Interior', {
       GAME_HEIGHT - 30,
       message,
       {
-        fontFamily: 'Verdana, Arial, sans-serif',
+        fontFamily: 'Lora, Georgia, "Times New Roman", serif',
         fontSize: '14px',
         color: '#ffe28b',
         backgroundColor: '#263126',
@@ -358,7 +398,7 @@ this.scene.start('Interior', {
     )
       .setResolution(2)
       .setOrigin(0.5)
-      .setDepth(5);
+      .setDepth(100); // nad oknem slotů
 
     this.time.delayedCall(1800, () => text.destroy());
   }

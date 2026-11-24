@@ -1,5 +1,12 @@
 import { GREENVALE_MAP } from './greenvale.js';
 import { TILE_BY_CHAR } from '../tiles.js';
+import { generateRegionMap } from './auria.js';
+
+// Brány z ručně navržených map do sousedních regionů.
+const HAND_MAP_EXITS = {
+  // Konec cesty od mostu na jižním pobřeží Greenvale.
+  Greenvale: [{ x: 93, y: 97, to: 'Verdant Forest' }]
+};
 
 const MAPS = {
   Greenvale: GREENVALE_MAP
@@ -32,7 +39,8 @@ function createPlaceholderMap(regionId) {
 
 // Převede textovou mapu na čísla dlaždic a zkontroluje, že sedí rozměry.
 export function loadWorldMap(regionId) {
-  const definition = MAPS[regionId] ?? createPlaceholderMap(regionId);
+  const base = MAPS[regionId] ?? generateRegionMap(regionId) ?? createPlaceholderMap(regionId);
+  const definition = { exits: [], ...base, exits: base.exits ?? HAND_MAP_EXITS[regionId] ?? [] };
   const height = definition.ground.length;
   const width = definition.ground[0].length;
   const fallback = TILE_BY_CHAR.get('.');
@@ -56,6 +64,12 @@ export function loadWorldMap(regionId) {
       return tile;
     });
   });
+
+  // Pole bran jsou vždy dlaždice brány.
+  const gate = TILE_BY_CHAR.get('G');
+  for (const exit of definition.exits) {
+    if (tiles[exit.y]?.[exit.x]) tiles[exit.y][exit.x] = gate;
+  }
 
   return { ...definition, width, height, tiles };
 }

@@ -7,15 +7,15 @@
 import { clearWhiteFromEdges } from './tabSprites.js';
 
 export const HERO_CARD_FEMALE = 'hero-card-female';
-export const HERO_CARD_FEMALE_PATH = 'assets/ui/hero/hero_card_female.png';
+export const HERO_CARD_FEMALE_PATH = 'assets/ui/_stare/hero/hero_card_female.png';
 
 // Pořadí stavů v listech (řádky u škol, sloupce u dovedností).
 export const BUTTON_STATES = ['normal', 'selected', 'hover', 'locked'];
 
 const SHEETS = {
-  magic: { key: 'hero-magic-sheet', path: 'assets/ui/hero/magic_school.png' },
-  skills1: { key: 'hero-skills-sheet-1', path: 'assets/ui/hero/skillsset1.png' },
-  skills2: { key: 'hero-skills-sheet-2', path: 'assets/ui/hero/skillset2.png' }
+  magic: { key: 'hero-magic-sheet', path: 'assets/ui/_stare/hero/magic_school.png' },
+  skills1: { key: 'hero-skills-sheet-1', path: 'assets/ui/_stare/hero/skillsset1.png' },
+  skills2: { key: 'hero-skills-sheet-2', path: 'assets/ui/_stare/hero/skillset2.png' }
 };
 
 const MAGIC_ORDER = ['fire', 'water', 'earth', 'air', 'light', 'dark'];

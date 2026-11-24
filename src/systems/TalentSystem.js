@@ -192,7 +192,7 @@ export function canInvestTalent(state, talentId) {
     return { ok: false, reason: `Stupeň se odemkne po ${TIER_REQUIREMENTS[tierIndex]} bodech v tomto stromu.` };
   }
   if (getTalentRank(state, talentId) >= TALENT_MAX_RANK) return { ok: false, reason: 'Talent má maximální hodnost.' };
-  if (getTreeInvestment(state, tree.id) >= TREE_POINT_LIMIT) return { ok: false, reason: 'Strom je dokončený (30 bodů).' };
+  // 30 bodů strom dokončí (závěrečný talent, otevřou se ostatní stromy), další body jdou přidávat dál.
   if (progress.pointsAvailable <= 0) return { ok: false, reason: 'Nemáš volný talentový bod.' };
   return { ok: true };
 }
@@ -247,6 +247,8 @@ export function getTalentBonuses(state) {
     manaCostReduction: 0,
     masteryExpBonus: 0,
     otherSchoolsExpBonus: 0,
+    fishingBonusChance: 0,
+    miningBonusChance: 0,
     focusSchool: state?.talentProgress?.focusSchool ?? null
   };
   const progress = state?.talentProgress;

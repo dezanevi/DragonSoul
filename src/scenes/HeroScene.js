@@ -11,6 +11,8 @@ import {
 } from '../ui/heroCard/cardLayout.js';
 import FantasyButton from '../ui/heroCard/FantasyButton.js';
 import CharacterTabs from '../ui/heroCard/CharacterTabs.js';
+import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
+import { drawCardFrame, CARD_FIT } from '../ui/fantasyCard.js';
 import CardTooltip from '../ui/heroCard/CardTooltip.js';
 import EquipmentPanel from '../ui/heroCard/EquipmentPanel.js';
 import SkillsPanel from '../ui/heroCard/SkillsPanel.js';
@@ -59,19 +61,13 @@ export default class HeroScene extends Phaser.Scene {
 
     normalizeEquipment(this.state);
 
-    // Ztmavení světa pod kartou; zároveň chytá kliknutí mimo kartu.
-    this.add
-      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02060c, 0.72)
-      .setOrigin(0)
-      .setInteractive();
+    // Panel karty jako karta Mapa, bez ztmavení okolí (chytá kliknutí mimo kartu).
+    drawCardFrame(this);
 
-    // Celá karta je v jednom kontejneru v souřadnicích podkladu 1536 × 1024.
-    const scale = Math.min(GAME_WIDTH / CARD_WIDTH, GAME_HEIGHT / CARD_HEIGHT);
-    this.card = this.add.container(
-      (GAME_WIDTH - CARD_WIDTH * scale) / 2,
-      (GAME_HEIGHT - CARD_HEIGHT * scale) / 2
-    );
-    this.card.setScale(scale);
+    // Celá karta je v jednom kontejneru v souřadnicích podkladu 1536 × 1024,
+    // zmenšená do panelu (CARD_FIT).
+    this.card = this.add.container(CARD_FIT.OFFSET_X, CARD_FIT.OFFSET_Y);
+    this.card.setScale(CARD_FIT.SCALE);
 
     // Ženská postava má vlastní podklad karty (stejné rozložení).
     const cardTexture = this.state.gender === 'female' && this.textures.exists(HERO_CARD_FEMALE) ? HERO_CARD_FEMALE : CARD_TEXTURE;
@@ -97,7 +93,18 @@ export default class HeroScene extends Phaser.Scene {
     this.createHeroTab();
     this.createOtherTabPanel();
 
-    this.tabs = new CharacterTabs(this, this.uiLayer, (tab) => this.showTab(tab));
+    // Záložky karty: vlastní logika (klávesy 1–8) ve skryté vrstvě, na obrazovce společná
+    // horní lišta jako na ostatních kartách (klik na aktivní záložku kartu zavře).
+    this.hiddenTabsLayer = this.add.container(0, 0).setVisible(false);
+    this.card.add(this.hiddenTabsLayer);
+    this.tabs = new CharacterTabs(this, this.hiddenTabsLayer, (tab) => this.showTab(tab));
+    this.tabBar = createCardTabBar(this, 'hero', {
+      state: this.state,
+      onSelect: (tabId) => this.tabs.select(tabId),
+      onClose: () => this.closeCard()
+    });
+    // Otevřeno ze světa / interiéru: karta vyjede zpod lišty.
+    if (data?.animateIn) slideCardIn(this, { hide: this.tabBar.objects });
 
     // Zavřít: obrázek ze „Čtyři stavy fantasy tlačítka Zavřít“ přes namalované tlačítko
     // (klid / pod myší / stisk / nedostupné). Záře tlačítka jen jako záloha bez grafiky.
@@ -141,7 +148,7 @@ export default class HeroScene extends Phaser.Scene {
 
     // Otevřeno z lišty jiné karty na záložce bez vlastní karty (Inventář, Mapa…).
     const initialTab = data?.initialTab;
-    if (initialTab && !['hero', 'talents', 'party', 'inventory'].includes(initialTab)) {
+    if (initialTab && !['hero', 'talents', 'party', 'inventory', 'map'].includes(initialTab)) {
       this.tabs.select(initialTab);
     }
 
@@ -159,7 +166,7 @@ export default class HeroScene extends Phaser.Scene {
   createHeroTab() {
     this.panels = [
       new HeroOverview(this, this.heroLayer),
-      new HeroStats(this, this.heroLayer),
+      new HeroStats(this, this.heroLayer, this.tooltip),
       new MagicSchoolsPanel(this, this.heroLayer, (school, info) => {
         this.setStatus(
           info.unlocked
@@ -179,7 +186,12 @@ export default class HeroScene extends Phaser.Scene {
 
     this.skills = new SkillsPanel(this, this.heroLayer, this.tooltip, (skill) => {
       this.game.events.emit(HERO_CARD_EVENTS.skillSelected, { skill, state: this.state });
-      this.setStatus(`${skill.label}: řemeslo se připravuje.`);
+      // Klik na dovednost otevře kartu Řemesla na této profesi.
+      SaveSystem.save(this.state);
+      this.closing = true;
+      this.scene.stop();
+      this.scene.launch('Professions', { state: this.state, returnScene: this.returnScene, storageAccess: this.storageAccess, profession: skill.id });
+      this.scene.bringToTop('Professions');
     });
 
     this.panels.push(this.equipment, this.skills);
@@ -227,7 +239,7 @@ export default class HeroScene extends Phaser.Scene {
 
   showTab(tab) {
     // Záložky Talenty a Party otevřou samostatné karty (stejné jako klávesy T a P).
-    const cardScenes = { talents: 'Talents', party: 'Party', inventory: 'Inventory' };
+    const cardScenes = { talents: 'Talents', party: 'Party', inventory: 'Inventory', crafting: 'Professions', map: 'WorldMap', quests: 'Quests' };
     if (cardScenes[tab.id]) {
       const sceneKey = cardScenes[tab.id];
       SaveSystem.save(this.state);
@@ -239,6 +251,7 @@ export default class HeroScene extends Phaser.Scene {
     }
 
     const isHero = tab.id === 'hero';
+    this.tabBar?.setActive(tab.id);
 
     this.heroLayer.setVisible(isHero);
     this.otherLayer.setVisible(!isHero);
@@ -341,7 +354,10 @@ export default class HeroScene extends Phaser.Scene {
 
     SaveSystem.save(this.state);
     this.game.events.emit(HERO_CARD_EVENTS.closed, { state: this.state });
-    this.scene.stop();
-    this.scene.resume(this.returnScene);
+    // Karta zajede pod lištu, pak se vrátí scéna pod ní.
+    slideCardOut(this, () => {
+      this.scene.stop();
+      this.scene.resume(this.returnScene);
+    }, { hide: this.tabBar?.objects });
   }
 }

@@ -6,10 +6,10 @@ import { addTrainingPoints, getTotalTrainingPoints } from '../systems/TrainingSy
 import { getMonsterSpecies } from '../systems/MonsterSystem.js';
 import { getBondLevel } from '../systems/MonsterBondSystem.js';
 import { elementName } from '../systems/ElementSystem.js';
-import { createMonsterModel, elementColor } from '../battle/monsterModels.js';
+import { createMonsterModel } from '../battle/monsterModels.js';
 import { monsterHeadKey, monsterStillKey } from '../battle/monsterAnimations.js';
-import { cardText, openCardModal } from '../ui/fantasyCard.js';
-import { createCardTabBar } from '../ui/cardTabBar.js';
+import { cardText, openCardModal, drawCardFrame, CARD_FIT, nineImage } from '../ui/fantasyCard.js';
+import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 import { closeStateKey } from '../ui/heroCard/tabSprites.js';
 import {
   PARTY_CARD,
@@ -33,7 +33,7 @@ import {
 // a úschovnou lze jen u Liory v hostinci (data.storageAccess).
 
 const PARTY_LIMIT = 4;
-const MAX_FREE_TRAINING = 100;
+const MAX_FREE_TRAINING = 510; // stejný strop jako při načtení hry (SaveSystem)
 const TRAINING_PER_STAT_UP = 5;
 const MAX_TRAINING_PER_STAT = 255;
 const MAX_TRAINING_TOTAL = 510;
@@ -42,13 +42,11 @@ const STORAGE_ROWS = 3;
 
 const CARD_W = 1536;
 const CARD_H = 1024;
-const SCALE = Math.min(GAME_WIDTH / CARD_W, GAME_HEIGHT / CARD_H);
-const OFFSET_X = (GAME_WIDTH - CARD_W * SCALE) / 2;
-const OFFSET_Y = (GAME_HEIGHT - CARD_H * SCALE) / 2;
+// Obsah karty zmenšený do panelu karty Mapa (ui/fantasyCard.js CARD_FIT).
+const { SCALE, OFFSET_X, OFFSET_Y } = CARD_FIT;
 const CLOSE_IMAGE_WIDTH = 310;
 // Obrázek políčka monstra je o tolik větší než klikací plocha, aby zakryl namalovaný rám.
 const SLOT_PAD = 9;
-const STATS_HINT = 'Každých 5 bodů tréninku zvýší statistiku o 1.';
 
 // Pořadí odpovídá řádkům namalovaným na kartě (Vitalita … Přesnost).
 const STAT_LABELS = {
@@ -62,7 +60,6 @@ const STAT_LABELS = {
 };
 
 const CATEGORY_LABELS = { physical: 'Fyzická', magical: 'Magická', healing: 'Léčení', buff: 'Posílení' };
-const CATEGORY_COLORS = { physical: 0xd98a4a, magical: 0x9a6cff, healing: 0x4fd2a0, buff: 0xffd23a };
 
 export default class PartyScene extends Phaser.Scene {
   constructor() {
@@ -85,12 +82,13 @@ export default class PartyScene extends Phaser.Scene {
     this.state.party ??= [];
     this.state.monsterStorage ??= [];
     this.storageOffset = 0;
-    this.selected = this.state.party.length > 0 ? { type: 'party', index: 0 } : null;
-    // Vybrané (modré) políčko až po kliknutí; první monstrum je vybrané jen pro detail.
-    this.picked = false;
+    // Po otevření je monstrum rovnou označené: naposledy vybrané (pokud v kartě hráč už byl),
+    // jinak první v aktivní partě.
+    this.selected = this.rememberedSelection() ?? (this.state.party.length > 0 ? { type: 'party', index: 0 } : null);
+    this.picked = true;
     this.hasSprites = preparePartyFrames(this);
 
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02060c, 0.78).setOrigin(0).setInteractive();
+    drawCardFrame(this);
     this.card = this.add.container(OFFSET_X, OFFSET_Y).setScale(SCALE);
     if (this.textures.exists(PARTY_CARD.background)) {
       this.card.add(this.add.image(0, 0, PARTY_CARD.background).setOrigin(0));
@@ -101,13 +99,16 @@ export default class PartyScene extends Phaser.Scene {
     this.card.add(this.layer);
 
     this.createCloseButton();
-    createCardTabBar(this, 'party', {
+    const tabBar = createCardTabBar(this, 'party', {
+      onClose: () => this.closeCard(),
       state: this.state,
       returnScene: this.returnScene,
       storageAccess: this.storageAccess,
-      drawStrip: false,
       beforeLeave: () => SaveSystem.save(this.state)
     });
+    this.tabBar = tabBar;
+    // Otevřeno ze světa / interiéru: karta vyjede zpod lišty.
+    if (data?.animateIn) slideCardIn(this, { hide: tabBar.objects });
     this.render();
 
     if (this.onKey) this.input.keyboard.off('keydown', this.onKey);
@@ -131,6 +132,17 @@ export default class PartyScene extends Phaser.Scene {
 
   list(type) {
     return type === 'party' ? this.state.party : this.state.monsterStorage;
+  }
+
+  // Naposledy vybrané monstrum (podle instanceId, takže sedí i po přesunech v partě / úschovně).
+  rememberedSelection() {
+    const id = this.registry.get('partySelection');
+    if (!id) return null;
+    for (const type of ['party', 'storage']) {
+      const index = this.list(type).findIndex((m) => m?.instanceId === id);
+      if (index >= 0) return { type, index };
+    }
+    return null;
   }
 
   selectedMonster() {
@@ -242,6 +254,8 @@ export default class PartyScene extends Phaser.Scene {
     if (this.selected && !this.selectedMonster()) {
       this.selected = party.length > 0 ? { type: 'party', index: 0 } : null;
     }
+    // Zapamatovat výběr pro příští otevření karty (v rámci hry).
+    this.registry.set('partySelection', this.selectedMonster()?.instanceId ?? null);
 
     this.text(HEADER.infoX, HEADER.infoY,
       this.storageAccess
@@ -292,8 +306,7 @@ export default class PartyScene extends Phaser.Scene {
       });
       const { hp, maxHp } = this.hpBar(g, rect.x + 119, rect.y + rect.h - 30, 248, 18, monster);
       this.text(rect.x + 376, rect.y + rect.h - 21, `${hp}/${maxHp}`, { size: 14, color: '#dbe6f3', originY: 0.5, strokeThickness: 2 });
-      g.fillStyle(elementColor(monster.element), 1).fillCircle(rect.x + 432, rect.y + 29, 13);
-      this.text(rect.x + 410, rect.y + 29, ready.label, { size: 13, bold: true, color: ready.color, originX: 1, originY: 0.5, strokeThickness: 2 });
+      this.text(rect.x + 440, rect.y + 29, ready.label, { size: 13, bold: true, color: ready.color, originX: 1, originY: 0.5, strokeThickness: 2 });
     });
     this.layer.add(g);
   }
@@ -364,7 +377,6 @@ export default class PartyScene extends Phaser.Scene {
     this.addModel(monster, DETAIL.model.x, DETAIL.model.y, 1.05);
 
     this.text(DETAIL.textX, DETAIL.nameY, monster.name, { size: 34, bold: true, color: '#ffe7ae', originY: 0.5, strokeThickness: 5 });
-    g.fillStyle(elementColor(monster.element), 1).fillCircle(DETAIL.elementDot.x, DETAIL.elementDot.y, DETAIL.elementDot.r);
     this.text(DETAIL.textX, DETAIL.line1Y - 8, `${this.speciesName(monster)} · ${elementName(monster.element)} · Úroveň ${monster.level} · ${where}`, {
       size: 16, color: '#c9b98f', strokeThickness: 2, originY: 0.5
     });
@@ -386,11 +398,12 @@ export default class PartyScene extends Phaser.Scene {
   }
 
   renderStats(g, monster, free, total) {
-    const potential = monster.geneticPotential ?? {};
-    const training = monster.trainingPoints ?? {};
-    const info = this.text(STATS.labelX - 40, STATS.infoY, STATS_HINT, {
-      size: 13, color: '#8f9aa6', originY: 0.5, strokeThickness: 2
+    // Volné body k rozdělení – vlastní řádek dole v rámečku statistik.
+    g.lineStyle(2, 0xc9a35a, 0.6).lineBetween(590, STATS.freeLineY, 1048, STATS.freeLineY);
+    this.text(STATS.freeX, STATS.freeY, `Volné body k rozdělení: ${free}`, {
+      size: 22, bold: true, color: free > 0 ? '#ffd76a' : '#c9b98f', originX: 0.5, originY: 0.5, strokeThickness: 4
     });
+    const training = monster.trainingPoints ?? {};
 
     Object.keys(STAT_LABELS).forEach((stat, index) => {
       const y = STATS.rowsY[index];
@@ -406,11 +419,11 @@ export default class PartyScene extends Phaser.Scene {
         g.fillStyle(0xffd23a, 1).fillPoints([{ x: cx, y: y - h }, { x: cx + h, y }, { x: cx, y: y + h }, { x: cx - h, y }], true);
       }
 
-      const rowInfo = `${STAT_LABELS[stat]}: geny ${Number(potential[stat]) || 0} · trénink ${invested}/${MAX_TRAINING_PER_STAT}`;
-      // Najetí na řádek ukáže geny a trénink.
+      const rowInfo = `${STAT_LABELS[stat]} ${value}\n${this.statEffect(stat, value)}`;
+      // Najetí na řádek ukáže, co statistika dělá v boji.
       const rowZone = this.add.zone(STATS.labelX - 50, y - 18, 340, 36).setOrigin(0).setInteractive();
-      rowZone.on('pointerover', () => info.setText(rowInfo));
-      rowZone.on('pointerout', () => info.setText(STATS_HINT));
+      rowZone.on('pointerover', () => this.showStatTip(rowInfo, y));
+      rowZone.on('pointerout', () => this.hideSkillTip());
       this.layer.add(rowZone);
       this.zones.push(rowZone);
 
@@ -419,8 +432,8 @@ export default class PartyScene extends Phaser.Scene {
         kind: 'plus',
         disabled: !canSpend,
         onClick: () => this.spendTrainingPoint(stat),
-        onHover: () => info.setText(canSpend ? `${rowInfo} · klik = +1 bod` : `${rowInfo} · žádné body k přidělení`),
-        onOut: () => info.setText(STATS_HINT)
+        onHover: () => this.showStatTip(rowInfo, y),
+        onOut: () => this.hideSkillTip()
       });
     });
   }
@@ -432,20 +445,69 @@ export default class PartyScene extends Phaser.Scene {
       return;
     }
     const shown = skills.slice(0, SKILLS.rowsY.length);
-    shown.forEach((skill, index) => {
-      this.stateButton({ rect: { x: SKILLS.x, y: SKILLS.rowsY[index], w: SKILLS.w, h: SKILLS.h }, kind: 'skill', selected: Boolean(skill.bondOnly) });
-    });
-    const g = this.add.graphics();
-    this.layer.add(g);
+    // Jen schopnost (název a použití); podrobnosti útoku v tooltipu pod myší.
     shown.forEach((skill, index) => {
       const y = SKILLS.rowsY[index];
-      g.fillStyle(CATEGORY_COLORS[skill.category] ?? 0x9aa4ae, 1).fillCircle(SKILLS.iconX, y + SKILLS.h / 2, 11);
-      this.text(SKILLS.textX, y + 5, skill.name, { size: 16, bold: true, color: skill.remainingUses > 0 ? '#f3e4bd' : '#7f8a96', strokeThickness: 2 });
-      this.text(SKILLS.textX, y + 27, `${CATEGORY_LABELS[skill.category] ?? skill.category} · dosah ${skill.range ?? 1}${skill.bondOnly ? ' · Bond' : ''}`, {
-        size: 12, color: '#9fb3c4', strokeThickness: 2
+      this.stateButton({
+        rect: { x: SKILLS.x, y, w: SKILLS.w, h: SKILLS.h }, kind: 'skill', selected: Boolean(skill.bondOnly),
+        onHover: () => this.showSkillTip(skill, y),
+        onOut: () => this.hideSkillTip()
       });
+    });
+    shown.forEach((skill, index) => {
+      const y = SKILLS.rowsY[index];
+      this.text(SKILLS.x + 22, y + SKILLS.h / 2, skill.name, { size: 19, bold: true, color: skill.remainingUses > 0 ? '#f3e4bd' : '#7f8a96', originY: 0.5, strokeThickness: 3 });
       this.text(SKILLS.usesX, y + SKILLS.h / 2, `${skill.remainingUses}/${skill.maxUses}`, { size: 17, color: '#dbe6f3', originX: 1, originY: 0.5 });
     });
+  }
+
+  // Tooltip k řádku statistiky (geny, trénink) – vpravo od tlačítka +.
+  showStatTip(info, rowY) {
+    this.hideSkillTip();
+    const w = 380;
+    const body = cardText(this, 0, 0, info, { size: 18, color: '#e8eef5', wrap: w - 40 });
+    const h = body.height + 28;
+    const x = STATS.plus.cx + 40;
+    const y = Math.min(rowY - 16, 880 - h);
+    const tip = this.add.container(0, 0);
+    const bg = nineImage(this, 'nu-panel', x, y, w, h, 0.5);
+    if (bg) tip.add(bg); else tip.add(this.add.rectangle(x, y, w, h, 0x0d1d33, 0.96).setOrigin(0).setStrokeStyle(3, 0xd6a23a));
+    body.setPosition(x + 20, y + 14);
+    tip.add(body);
+    this.layer.add(tip);
+    this.skillTip = tip;
+  }
+
+  // Tooltip s informacemi o útoku (vlevo od panelu schopností).
+  showSkillTip(skill, rowY) {
+    this.hideSkillTip();
+    const STATUS = { poison: 'Otrava', sleep: 'Spánek', paralysis: 'Paralýza', freeze: 'Zmrazení', burn: 'Popálení', curse: 'Prokletí', stun: 'Omráčení', bleed: 'Krvácení' };
+    const lines = [
+      `${CATEGORY_LABELS[skill.category] ?? skill.category} · ${elementName(skill.element)}${skill.bondOnly ? ' · Bond' : ''}`,
+      skill.power ? `Síla útoku ${skill.power} · přesnost ${Math.round((skill.accuracy ?? 1) * 100)} %` : `Přesnost ${Math.round((skill.accuracy ?? 1) * 100)} %`,
+      `Dosah ${skill.range ?? 1} · použití ${skill.remainingUses}/${skill.maxUses}`
+    ];
+    if (skill.statusEffect) lines.push(`Efekt: ${STATUS[skill.statusEffect.id] ?? skill.statusEffect.id} (${Math.round((skill.statusEffect.chance ?? 0) * 100)} %, ${skill.statusEffect.duration ?? 1} tahy)`);
+    if (skill.effect?.stat) lines.push(`Posílení: ${skill.effect.stat} +${skill.effect.amount} na ${skill.effect.duration} tahy`);
+    const w = 400;
+    const title = cardText(this, 0, 0, skill.name, { size: 22, bold: true, color: '#ffe7ae' });
+    const body = cardText(this, 0, 0, [...lines, '', skill.description ?? ''].join('\n').trim(), { size: 16, color: '#e8eef5', wrap: w - 40 });
+    const h = 34 + title.height + body.height;
+    const x = SKILLS.x - w - 14;
+    const y = Math.min(rowY - 10, 880 - h);
+    const tip = this.add.container(0, 0);
+    const bg = nineImage(this, 'nu-panel', x, y, w, h, 0.5);
+    if (bg) tip.add(bg); else tip.add(this.add.rectangle(x, y, w, h, 0x0d1d33, 0.96).setOrigin(0).setStrokeStyle(3, 0xd6a23a));
+    title.setPosition(x + 20, y + 14);
+    body.setPosition(x + 20, y + 22 + title.height);
+    tip.add([title, body]);
+    this.layer.add(tip);
+    this.skillTip = tip;
+  }
+
+  hideSkillTip() {
+    this.skillTip?.destroy();
+    this.skillTip = null;
   }
 
   renderHistory(monster) {
@@ -482,6 +544,26 @@ export default class PartyScene extends Phaser.Scene {
     this.selected = { type, index };
     this.picked = true;
     this.render();
+  }
+
+  // Co statistika dělá v boji – srozumitelně a s čísly pro aktuální hodnotu.
+  statEffect(stat, value) {
+    const half = Math.floor(value / 2);
+    switch (stat) {
+      case 'vitality': return `Životy: monstrum má v boji ${value} HP. Když HP klesnou na 0, omdlí.`;
+      case 'force': return `Fyzické útoky: +${half} k poškození každého fyzického zásahu (polovina Síly).`;
+      case 'armor': return `Obrana proti fyzickým útokům: každý fyzický zásah je o ${half} slabší (polovina Zbroje).`;
+      case 'aether': return `Magické útoky: +${half} k poškození každého magického zásahu (polovina Magické síly).`;
+      case 'resolve': return `Obrana proti magii: každý magický zásah je o ${half} slabší (polovina Magické obrany).`;
+      case 'tempo': return value >= 12
+        ? 'Pohyb: v boji ujde 3 pole za tah (Rychlost 12 a víc).'
+        : `Pohyb: v boji ujde 2 pole za tah. Od Rychlosti 12 ujde 3 pole (chybí ${12 - value}).`;
+      case 'precision': {
+        const diff = (value - 80) * 0.5;
+        return `Zásah: ${diff >= 0 ? '+' : '−'}${String(Math.abs(diff)).replace('.', ',')} % k šanci zasáhnout schopností (0,5 % za každý bod nad 80, nejvýš 98 %).`;
+      }
+      default: return '';
+    }
   }
 
   spendTrainingPoint(stat) {
@@ -604,7 +686,10 @@ export default class PartyScene extends Phaser.Scene {
     if (this.closing) return;
     this.closing = true;
     SaveSystem.save(this.state);
-    this.scene.stop();
-    this.scene.resume(this.returnScene);
+    // Karta zajede pod lištu, pak se vrátí scéna pod ní.
+    slideCardOut(this, () => {
+      this.scene.stop();
+      this.scene.resume(this.returnScene);
+    }, { hide: this.tabBar?.objects });
   }
 }

@@ -9,9 +9,9 @@
 // vedle sebe: klid, pod myší, aktivní (stisk), nedostupné.
 
 export const TAB_SHEET_KEY = 'hero-card-tab-states';
-export const TAB_SHEET_PATH = 'assets/ui/hero/tab-states.png';
+export const TAB_SHEET_PATH = 'assets/ui/_stare/hero/tab-states.png';
 export const CLOSE_SHEET_KEY = 'hero-card-close-states';
-export const CLOSE_SHEET_PATH = 'assets/ui/hero/close-states.png';
+export const CLOSE_SHEET_PATH = 'assets/ui/_stare/hero/close-states.png';
 
 export const TAB_STATES = ['normal', 'hover', 'active'];
 const TAB_ROWS = {

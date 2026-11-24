@@ -3,7 +3,7 @@
 // takže při jiném rozlišení zůstávají na stejném místě obrázku.
 
 export const CARD_TEXTURE = 'hero-card';
-export const CARD_TEXTURE_PATH = 'assets/ui/hero/hero_card.png';
+export const CARD_TEXTURE_PATH = 'assets/ui/_stare/hero/hero_card.png';
 export const CARD_WIDTH = 1536;
 export const CARD_HEIGHT = 1024;
 
@@ -84,12 +84,12 @@ export const CONTENT_AREA = rect(30, 96, 1476, 806);
 
 // Pole pro hodnoty, která v podkladu zůstala prázdná.
 export const FIELDS = {
-  name: { x: 462, y: 158 },
-  level: { x: 456, y: 215 },
-  expText: { x: 630, y: 264 },
-  expBar: rect(357, 290, 273, 15),
-  manaText: { x: 630, y: 330 },
-  manaBar: rect(357, 346, 273, 15),
+  name: { x: 462, y: 152 },
+  level: { x: 456, y: 204 },
+  expText: { x: 630, y: 248 },
+  expBar: rect(357, 272, 273, 15),
+  manaText: { x: 630, y: 306 },
+  manaBar: rect(357, 330, 273, 15),
   heroStats: { x: 1036, rows: [181, 221, 259, 296, 334] },
   commanderStats: { x: 1466, rows: [182, 226, 270, 313] },
   gold: { x: 1428, y: 647 },
@@ -109,4 +109,4 @@ export const MAGIC_SCHOOLS = [
 ];
 export const MAGIC_BAR = { y: 554, width: 74, height: 13, levelY: 488 };
 
-export const TEXT_FONT = 'Georgia, "Times New Roman", serif';
+export const TEXT_FONT = 'Lora, Georgia, "Times New Roman", serif';

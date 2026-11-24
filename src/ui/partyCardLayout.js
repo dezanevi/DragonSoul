@@ -13,9 +13,9 @@ export const PARTY_CARD = {
 export const PARTY_STATES = ['normal', 'hover', 'selected', 'disabled'];
 
 export function loadPartyCardTextures(scene) {
-  scene.load.image(PARTY_CARD.background, 'assets/ui/partyscene/partyscene.png');
-  scene.load.image(PARTY_CARD.buttons, 'assets/ui/partyscene/partyscene-buttons.png');
-  scene.load.image(PARTY_CARD.monsterSelect, 'assets/ui/partyscene/monsterselect.png');
+  scene.load.image(PARTY_CARD.background, 'assets/ui/_stare/partyscene/partyscene.png');
+  scene.load.image(PARTY_CARD.buttons, 'assets/ui/_stare/partyscene/partyscene-buttons.png');
+  scene.load.image(PARTY_CARD.monsterSelect, 'assets/ui/_stare/partyscene/monsterselect.png');
 }
 
 // Výřezy v partyscene-buttons.png (2172 × 724): [x, y, w, h] pro každý stav.
@@ -84,11 +84,13 @@ export const DETAIL = {
 };
 
 export const STATS = {
-  rowsY: [409, 449, 489, 529, 569, 609, 652],
+  rowsY: [398, 436, 474, 512, 550, 588, 626],
   valueX: 878,
   diamondX: 899, diamondStep: 19.2, diamondHalf: 7,
   plus: { cx: 1027, w: 50, h: 32 },
-  infoY: 684, labelX: 645
+  labelX: 645,
+  // Volné tréninkové body: vlastní řádek dole v rámečku statistik (pod čarou).
+  freeX: 819, freeY: 672, freeLineY: 651
 };
 
 export const SKILLS = {

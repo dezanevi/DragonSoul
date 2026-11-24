@@ -1,3 +1,5 @@
+import { mealMoveBonus } from './CookingSystem.js';
+import { exploreBonus } from './AlchemySystem.js';
 // Rychlost, Štěstí a Charisma hrdiny.
 //
 // Nový hrdina má všechny tři na 1. S úrovní nerostou – zvyšují je vybavené předměty,
@@ -60,7 +62,8 @@ export function getHeroCharisma(state) {
 
 // Násobek rychlosti chůze po mapě (1 = základ).
 export function getMovementMultiplier(state) {
-  return 1 + Math.min(0.5, Math.max(0, getHeroSpeed(state) - 1) * 0.02);
+  // + cestovní bonus z jídla (Vaření).
+  return 1 + Math.min(0.5, Math.max(0, getHeroSpeed(state) - 1) * 0.02) + mealMoveBonus(state) + exploreBonus(state, 'move') / 100;
 }
 
 // Přídavná šance (0–0,15), že náhodné setkání bude se vzácným monstrem.

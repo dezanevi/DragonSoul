@@ -26,9 +26,10 @@ function unlockSpellsForMastery(save, school, level) {
   return unlockedSpellIds;
 }
 
-// Šest škol magie. Odemykají se postupně během hry: nový hrdina má jen Air.
+// Šest škol magie. Odemykají se postupně během hry: nový hrdina nemá žádnou, Air odemkne
+// úkol Píseň větrů (Mág v Hvězdárně, Bard v hostinci).
 export const MAGIC_SCHOOLS = ['air', 'water', 'fire', 'earth', 'light', 'dark'];
-export const STARTING_SCHOOLS = ['air'];
+export const STARTING_SCHOOLS = [];
 export const MAGIC_SCHOOL_UNLOCKED = 'magic-school-unlocked';
 
 export function isMagicSchoolUnlocked(save, school) {

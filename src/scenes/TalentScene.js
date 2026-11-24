@@ -23,7 +23,8 @@ import {
 import { MAGIC_SCHOOLS, isMagicSchoolUnlocked } from '../systems/MagicMasterySystem.js';
 import { elementName } from '../systems/ElementSystem.js';
 import { closeStateKey } from '../ui/heroCard/tabSprites.js';
-import { createCardTabBar } from '../ui/cardTabBar.js';
+import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
+import { drawCardFrame, CARD_FIT } from '../ui/fantasyCard.js';
 import {
   TALENT_CARD,
   FRAME_INNER,
@@ -33,6 +34,7 @@ import {
   FINAL_BOXES,
   TREE_HEADER_RIGHT,
   FREE_POINTS,
+  HEADER,
   CLOSE_AREA
 } from '../ui/talentCardLayout.js';
 
@@ -41,13 +43,12 @@ import {
 // talenty výřezy ze šedé verze. Modrý rámeček = talent pod myší, zlatý = přidělené body.
 // Klik na talent přidá hodnost, pokud to pravidla dovolí (TalentSystem).
 
-const FONT = 'Georgia, "Times New Roman", serif';
+const FONT = 'Lora, Georgia, "Times New Roman", serif';
 const GOLD = 0xd6a23a;
 const CARD_W = 1536;
 const CARD_H = 1024;
-const SCALE = Math.min(GAME_WIDTH / CARD_W, GAME_HEIGHT / CARD_H);
-const OFFSET_X = (GAME_WIDTH - CARD_W * SCALE) / 2;
-const OFFSET_Y = (GAME_HEIGHT - CARD_H * SCALE) / 2;
+// Obsah karty zmenšený do panelu karty Mapa (ui/fantasyCard.js CARD_FIT).
+const { SCALE, OFFSET_X, OFFSET_Y } = CARD_FIT;
 const CLOSE_IMAGE_WIDTH = 310;
 
 const toScreen = (x, y) => ({ x: OFFSET_X + x * SCALE, y: OFFSET_Y + y * SCALE });
@@ -60,7 +61,8 @@ const text = (scene, x, y, value, options = {}) =>
       fontStyle: options.bold ? 'bold' : 'normal',
       color: options.color ?? '#f3e4bd',
       stroke: options.stroke ?? '#0a0603',
-      strokeThickness: options.strokeThickness ?? 3,
+      // Tenčí písmo: netučné texty jen se slabým obrysem (jinak drobné písmo slévá).
+      strokeThickness: options.strokeThickness ?? (options.bold ? 3 : 2),
       align: options.align ?? 'left',
       wordWrap: options.wrap ? { width: options.wrap } : undefined,
       lineSpacing: 4
@@ -86,7 +88,7 @@ export default class TalentScene extends Phaser.Scene {
     }
     normalizeTalentProgress(this.state);
 
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02060c, 0.78).setOrigin(0).setInteractive();
+    drawCardFrame(this);
 
     // Celá karta v souřadnicích podkladu 1536 × 1024.
     this.card = this.add.container(OFFSET_X, OFFSET_Y).setScale(SCALE);
@@ -100,13 +102,16 @@ export default class TalentScene extends Phaser.Scene {
 
     this.tooltip = this.createTooltip();
     this.createCloseButton();
-    createCardTabBar(this, 'talents', {
+    const tabBar = createCardTabBar(this, 'talents', {
+      onClose: () => this.closeCard(),
       state: this.state,
       returnScene: this.returnScene,
       storageAccess: this.storageAccess,
-      drawStrip: false,
       beforeLeave: () => SaveSystem.save(this.state)
     });
+    this.tabBar = tabBar;
+    // Otevřeno ze světa / interiéru: karta vyjede zpod lišty.
+    if (data?.animateIn) slideCardIn(this, { hide: tabBar.objects });
     this.render();
 
     if (this.onKey) this.input.keyboard.off('keydown', this.onKey);
@@ -137,7 +142,7 @@ export default class TalentScene extends Phaser.Scene {
       })
     );
     this.layer.add(
-      text(this, 1488, 152, `Utraceno ${progress.pointsSpent} z ${progress.pointsEarned} · 1 bod za každou sudou úroveň`, {
+      text(this, 1488, HEADER.spentY, `Utraceno ${progress.pointsSpent} z ${progress.pointsEarned} · 1 bod za každou sudou úroveň`, {
         size: 14, color: '#c9d3dd', originX: 1
       })
     );
@@ -148,7 +153,7 @@ export default class TalentScene extends Phaser.Scene {
       : canChooseSpecialization(this.state).ok
         ? 'Zvol hlavní specializaci (tlačítko Zvolit u stromu). Její pasivní bonus bude jediný aktivní, do ostatních stromů se dostaneš až po jejím dokončení.'
         : `${canChooseSpecialization(this.state).reason} Body se zatím ukládají.`;
-    this.layer.add(text(this, 320, 116, subtitle, { size: 17, color: '#dbe6f3', wrap: 840, originY: 0.5 }));
+    this.layer.add(text(this, HEADER.subtitleX, HEADER.subtitleY, subtitle, { size: 17, color: '#dbe6f3', wrap: 840, originY: 0.5 }));
 
     TALENT_TREES.forEach((tree, index) => this.renderTree(tree, index));
   }
@@ -193,10 +198,18 @@ export default class TalentScene extends Phaser.Scene {
     // Zamčený strom (po volbě specializace) celý šedě.
     const treeLocked = Boolean(progress.specialization) && !open;
     if (treeLocked) this.addGray(panel);
-    if (isMain) this.addFrame(TALENT_CARD.frameActive, { x: panel.x + 6, y: panel.y + 4, w: panel.w - 12, h: 86 });
+    const headerRect = { x: panel.x + 6, y: panel.y + 4, w: panel.w - 12, h: 86 };
+    if (isMain) this.addFrame(TALENT_CARD.frameActive, headerRect);
+
+    // Hlavička stromu: pod myší modrý rámeček a tooltip s bonusy stromu (tlačítko Zvolit zůstává nad ní).
+    const headerHover = this.addFrame(TALENT_CARD.frameHover, headerRect).setVisible(false);
+    const headerZone = this.add.zone(headerRect.x, headerRect.y, headerRect.w, headerRect.h).setOrigin(0).setInteractive();
+    headerZone.on('pointerover', () => { headerHover.setVisible(true); this.showTreeTip(tree, headerRect); });
+    headerZone.on('pointerout', () => { headerHover.setVisible(false); this.tooltip.hide(); });
+    this.layer.add(headerZone);
 
     this.layer.add(
-      text(this, right, 196, `${invested} / ${TREE_POINT_LIMIT}`, {
+      text(this, right, HEADER.investedY, invested >= TREE_POINT_LIMIT ? `${invested} bodů` : `${invested} / ${TREE_POINT_LIMIT}`, {
         size: 26, bold: true, originX: 1, strokeThickness: 4,
         color: invested >= TREE_POINT_LIMIT ? '#8ff0b0' : '#f3e4bd'
       })
@@ -205,7 +218,7 @@ export default class TalentScene extends Phaser.Scene {
     let status = '';
     if (!progress.specialization) {
       if (canChooseSpecialization(this.state).ok) {
-        this.addButton(right - 120, 230, 120, 34, 'Zvolit', () => this.confirmSpecialization(tree));
+        this.addButton(right - 120, HEADER.buttonY, 120, 34, 'Zvolit', () => this.confirmSpecialization(tree));
       } else {
         status = 'Odemkne úkol Jeskynní sliz';
       }
@@ -215,7 +228,7 @@ export default class TalentScene extends Phaser.Scene {
       status = open ? 'Otevřen (bez pasivního bonusu)' : 'Zamčeno do dokončení hlavního stromu';
     }
     if (status) {
-      this.layer.add(text(this, right, 234, status, { size: 14, color: isMain ? '#8fd3ff' : '#aab4bf', originX: 1, wrap: 200, align: 'right' }));
+      this.layer.add(text(this, right, HEADER.statusY, status, { size: 14, color: isMain ? '#8fd3ff' : '#aab4bf', originX: 1, wrap: 200, align: 'right' }));
     }
 
     tree.tiers.forEach((tier, tierIndex) => {
@@ -247,16 +260,20 @@ export default class TalentScene extends Phaser.Scene {
     // Zlatý rámeček: talent má přidělené body.
     if (rank > 0) this.addFrame(TALENT_CARD.frameActive, rect);
 
-    // Vyplněné kosočtverečky hodností přes namalované.
-    if (rank > 0) {
+    // Kosočtverečky hodností: plné = přidělené, tmavé = zbývající.
+    {
       const g = this.add.graphics();
-      for (let i = 0; i < rank; i++) {
-        const cx = rect.x + RANK_DIAMONDS.dx + i * RANK_DIAMONDS.step;
+      const { textLeft, textRight, step } = RANK_DIAMONDS;
+      const centerX = rect.x + (textLeft + rect.w - textRight) / 2;
+      const firstX = centerX - ((TALENT_MAX_RANK - 1) * step) / 2;
+      for (let i = 0; i < TALENT_MAX_RANK; i++) {
+        const cx = firstX + i * step;
         const cy = rect.y + RANK_DIAMONDS.dy;
         const h = RANK_DIAMONDS.half;
         const points = [{ x: cx, y: cy - h }, { x: cx + h, y: cy }, { x: cx, y: cy + h }, { x: cx - h, y: cy }];
-        g.fillStyle(maxed ? 0x8fdcff : 0xffd23a, 1).fillPoints(points, true);
-        g.lineStyle(1.5, 0x5a3a08, 1).strokePoints(points, true);
+        const filled = i < rank;
+        g.fillStyle(filled ? (maxed ? 0x8fdcff : 0xffd23a) : 0x2a3340, 1).fillPoints(points, true);
+        g.lineStyle(RANK_DIAMONDS.line, filled ? 0x5a3a08 : 0x8a96a6, 1).strokePoints(points, true);
       }
       this.layer.add(g);
     }
@@ -278,6 +295,28 @@ export default class TalentScene extends Phaser.Scene {
     zone.on('pointerout', () => { hover.setVisible(false); this.tooltip.hide(); });
     zone.on('pointerdown', () => this.tryInvest(talent));
     this.layer.add(zone);
+  }
+
+  // Bonusy celého stromu: pasivní bonus (jen hlavní specializace), talenty s body, závěrečný talent.
+  showTreeTip(tree, rect) {
+    const progress = this.state.talentProgress;
+    const isMain = progress.specialization === tree.id;
+    const invested = getTreeInvestment(this.state, tree.id);
+    const lines = [`${tree.title ?? ''}${tree.title ? ' · ' : ''}${invested} bodů ve stromu`];
+    lines.push(`Pasivní bonus${isMain ? '' : ' (jen jako hlavní specializace)'}: ${tree.passive}`);
+    const owned = tree.tiers.flatMap((tier) => tier.talents).filter((talent) => getTalentRank(this.state, talent.id) > 0);
+    lines.push('');
+    if (owned.length) {
+      lines.push('Aktivní talenty:');
+      for (const talent of owned) lines.push(`• ${talent.name} – hodnost ${getTalentRank(this.state, talent.id)}/${TALENT_MAX_RANK}`);
+    } else {
+      lines.push('Zatím žádné talenty s body.');
+    }
+    const done = isTreeComplete(this.state, tree.id);
+    lines.push('', `${tree.final.name}${done ? ' (získáno)' : ` (po ${TREE_POINT_LIMIT} bodech)`}: ${tree.final.text}`);
+    const top = toScreen(rect.x + rect.w / 2, rect.y);
+    const bottom = toScreen(rect.x, rect.y + rect.h);
+    this.tooltip.show(top.x, top.y, bottom.y, tree.name, lines);
   }
 
   showTalentTip(talent, rect, check, rank, tierIndex, tierUnlocked) {
@@ -418,7 +457,7 @@ export default class TalentScene extends Phaser.Scene {
     const container = this.add.container(0, 0).setDepth(150).setVisible(false);
     const bg = this.add.graphics();
     const title = text(this, 16, 12, '', { size: 21, bold: true, color: '#ffd76a' });
-    const body = text(this, 16, 46, '', { size: 17, color: '#e8eef5', wrap: 380 });
+    const body = text(this, 16, 46, '', { size: 17, color: '#e8eef5', wrap: 460 });
     container.add([bg, title, body]);
     return {
       show: (x, top, bottom, heading, lines) => {
@@ -465,7 +504,10 @@ export default class TalentScene extends Phaser.Scene {
     if (this.closing) return;
     this.closing = true;
     SaveSystem.save(this.state);
-    this.scene.stop();
-    this.scene.resume(this.returnScene);
+    // Karta zajede pod lištu, pak se vrátí scéna pod ní.
+    slideCardOut(this, () => {
+      this.scene.stop();
+      this.scene.resume(this.returnScene);
+    }, { hide: this.tabBar?.objects });
   }
 }

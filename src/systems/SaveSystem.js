@@ -15,12 +15,25 @@ import {
   normalizeTalentProgress
 } from './TalentSystem.js';
 import { INVENTORY_SIZE, normalizeInventory } from './InventorySystem.js';
+import { normalizeFishing } from './FishingSystem.js';
+import { normalizeCooking } from './CookingSystem.js';
+import { normalizeAlchemy } from './AlchemySystem.js';
+import { normalizeMining } from './MiningSystem.js';
+import { normalizeHerbalism } from './HerbalismSystem.js';
+import { normalizeCrafting } from './CraftingSystem.js';
+import { normalizeSmithing } from './SmithingSystem.js';
 
 
 
 
 const SAVE_KEY = 'dragon-souls-save';
 const SAVE_VERSION = 2;
+// Sloty pro ruční uložení a nahrání (menu). Každý slot: { state, preview, savedAt }.
+export const SAVE_SLOT_COUNT = 5;
+const slotKey = (index) => `dragon-souls-slot-${index}`;
+// Poslední náhled hry (zmenšený snímek obrazovky při odchodu do menu).
+const PREVIEW_KEY = 'dragon-souls-preview';
+const PREVIEW_SIZE = { w: 320, h: 180 };
 
 // Školy magie se odemykají postupně (MagicMasterySystem.unlockMagicSchool);
 // na začátku je odemčená jen Air.
@@ -29,7 +42,7 @@ function createStartingMagicMastery() {
     fire: { level: 0, exp: 0, unlocked: false },
     water: { level: 0, exp: 0, unlocked: false },
     earth: { level: 0, exp: 0, unlocked: false },
-    air: { level: 1, exp: 0, unlocked: true },
+    air: { level: 0, exp: 0, unlocked: false }, // odemkne úkol Píseň větrů (Mág v Hvězdárně)
     light: { level: 0, exp: 0, unlocked: false },
     dark: { level: 0, exp: 0, unlocked: false }
   };
@@ -67,7 +80,9 @@ export const SaveSystem = {
       version: SAVE_VERSION,
       chapter: 1,
       playerName: normalizedPlayerName,
-      interiorId: 'greenvale_hunter_lodge',
+      // Nová hra začíná venku před radnicí (svět postaví hráče na pole dveří).
+      interiorId: null,
+      exitDoor: 'greenvale_town_hall',
      unlockedRegions: createInitialUnlockedRegions(),
       x: 320,
       y: 415,
@@ -107,7 +122,7 @@ talentProgress: createInitialTalentProgress(1),
         boots: null
       },
 
-      spellbook: ['air_gale_needle', 'air_tailwind'],
+      spellbook: [], // kouzla přidá odemčení školy (úkol Píseň větrů)
       magicMastery: createStartingMagicMastery()
     };
   },
@@ -116,8 +131,17 @@ talentProgress: createInitialTalentProgress(1),
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
+      return this.restore(JSON.parse(raw));
+    } catch (error) {
+      console.error('Uloženou hru se nepodařilo načíst:', error);
+      return null;
+    }
+  },
 
-      const data = JSON.parse(raw);
+  // Převod uložených dat na stav hry (migrace a doplnění chybějících údajů).
+  restore(data) {
+    try {
+      if (!data) return null;
 
       // Staré uložené hry verze 1 se pro tento test nepoužijí.
       if (data.version !== SAVE_VERSION) return null;
@@ -128,6 +152,13 @@ talentProgress: createInitialTalentProgress(1),
       data.monsterStorage ??= [];
       data.bestiary ??= {};
       normalizeInventory(data);
+      normalizeFishing(data);
+      normalizeCooking(data);
+      normalizeAlchemy(data);
+      normalizeMining(data);
+      normalizeHerbalism(data);
+      normalizeCrafting(data);
+      normalizeSmithing(data);
       data.region ??= 'Greenvale';
 data.unlockedRegions = normalizeUnlockedRegions(
   data.unlockedRegions,
@@ -143,10 +174,11 @@ data.unlockedRegions = normalizeUnlockedRegions(
       for (const monster of [...data.party, ...data.monsterStorage]) {
         migrateMonsterStats(monster);
 
+        // Nejvýš 510 (celkový strop tréninku; testovací hra dává vlkovi všech 510).
         monster.unspentTrainingPoints = Math.max(
           0,
           Math.min(
-            100,
+            510,
             Math.floor(Number(monster.unspentTrainingPoints) || 0)
           )
         );
@@ -156,9 +188,6 @@ data.unlockedRegions = normalizeUnlockedRegions(
         data.spellbook = [];
       }
 
-      if (!data.spellbook.includes('air_gale_needle')) {
-        data.spellbook.push('air_gale_needle');
-      }
 
       data.magicMastery ??= {};
 
@@ -171,10 +200,10 @@ data.unlockedRegions = normalizeUnlockedRegions(
         };
       }
 
-      data.magicMastery.air.level = Math.max(
-        1,
-        Number(data.magicMastery.air.level) || 0
-      );
+      // Starší hry (před úkolem Píseň větrů) začínaly se vzduchem – ty ho mají dál.
+      if (data.magicMastery.air.unlocked) {
+        data.magicMastery.air.level = Math.max(1, Number(data.magicMastery.air.level) || 0);
+      }
 
       data.magicMastery.air.exp ??= 0;
       normalizeMagicSchools(data);
@@ -215,5 +244,71 @@ data.unlockedRegions = normalizeUnlockedRegions(
 
   clear() {
     localStorage.removeItem(SAVE_KEY);
+  },
+
+  // ---------------------------------------------------------------- sloty
+
+  saveToSlot(index, state) {
+    try {
+      const savedAt = new Date().toISOString();
+      const entry = {
+        state: { ...state, version: SAVE_VERSION, savedAt },
+        preview: localStorage.getItem(PREVIEW_KEY),
+        savedAt
+      };
+      localStorage.setItem(slotKey(index), JSON.stringify(entry));
+      return true;
+    } catch (error) {
+      console.error('Hru se nepodařilo uložit do slotu:', error);
+      return false;
+    }
+  },
+
+  loadSlot(index) {
+    try {
+      const raw = localStorage.getItem(slotKey(index));
+      if (!raw) return null;
+      return this.restore(JSON.parse(raw).state);
+    } catch (error) {
+      console.error('Slot se nepodařilo načíst:', error);
+      return null;
+    }
+  },
+
+  // Přehled slotů pro menu: jméno, úroveň, oblast, čas uložení, náhled (data URL).
+  listSlots() {
+    return Array.from({ length: SAVE_SLOT_COUNT }, (_, i) => {
+      const index = i + 1;
+      try {
+        const raw = localStorage.getItem(slotKey(index));
+        if (!raw) return { index, empty: true };
+        const { state, preview, savedAt } = JSON.parse(raw);
+        return { index, empty: false, playerName: state?.playerName ?? 'Arion', level: state?.level ?? 1,
+          gold: state?.gold ?? 0, region: state?.region ?? 'Greenvale', savedAt, preview: preview ?? null };
+      } catch {
+        return { index, empty: true };
+      }
+    });
+  },
+
+  // Zmenšený snímek hry jako „poslední náhled“ (volá se při odchodu do menu), pak done().
+  capturePreview(game, done) {
+    const finish = () => done?.();
+    try {
+      game.renderer.snapshot((image) => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = PREVIEW_SIZE.w;
+          canvas.height = PREVIEW_SIZE.h;
+          canvas.getContext('2d').drawImage(image, 0, 0, PREVIEW_SIZE.w, PREVIEW_SIZE.h);
+          localStorage.setItem(PREVIEW_KEY, canvas.toDataURL('image/jpeg', 0.72));
+        } catch (error) {
+          console.warn('Náhled hry se nepodařilo uložit:', error);
+        }
+        finish();
+      });
+    } catch {
+      finish();
+    }
   }
 };

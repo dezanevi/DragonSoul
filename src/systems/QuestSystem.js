@@ -1,3 +1,5 @@
+import { unlockMagicSchool } from './MagicMasterySystem.js';
+
 // ======================================================================
 // Úkoly. Stav úkolu se odvozuje z příznaků v uložené hře (state.flags),
 // takže starší uložené hry s loveckou zkouškou pokračují tam, kde byly.
@@ -20,10 +22,32 @@ export const QUESTS = {
     objective: 'Zabij jeskynního slizu v jeskyni u Greenvale (E u vchodu do jeskyně).',
     returnTo: 'Vrať se za starostou Edricem na radnici.',
     reward: 'Odemčení talentových stromů (volba specializace) a cesta do Verdant Forest.',
+    region: 'Greenvale',
+    // Cíle pro Sledovat (tečky ve světě): zadavatel = dveře budovy, cíl = jeskyně.
+    giverTarget: { type: 'building', id: 'greenvale_town_hall', label: 'Radnice' },
+    objectiveTarget: { type: 'cave', label: 'Jeskyně u Greenvale' },
     flags: {
       accepted: 'greenvaleHunterTrialAccepted',
       objective: 'greenvaleCaveBossDefeated',
       completed: 'greenvaleHunterPermitGranted'
+    }
+  },
+  greenvale_air_song: {
+    id: 'greenvale_air_song',
+    title: 'Píseň větrů',
+    giver: 'Mág v Hvězdárně',
+    description:
+      'Mág v Hvězdárně tě naučí magii vzduchu, až pochopíš řeč větru. Bard v hostinci zná starou Píseň větrů.',
+    objective: 'Promluv s Bardem v hostinci Greenvale.',
+    returnTo: 'Vrať se za Mágem do Hvězdárny (sever za radnicí).',
+    reward: 'Odemčení školy magie Vzduch a jejích prvních kouzel.',
+    region: 'Greenvale',
+    giverTarget: { type: 'building', id: 'greenvale_observatory', label: 'Hvězdárna' },
+    objectiveTarget: { type: 'building', id: 'greenvale_tavern', label: 'Hostinec' },
+    flags: {
+      accepted: 'airSongAccepted',
+      objective: 'airSongHeard',
+      completed: 'airSongDone'
     }
   }
 };
@@ -53,6 +77,8 @@ export function completeQuest(state, questId) {
   const quest = QUESTS[questId];
   state.flags ??= {};
   state.flags[quest.flags.completed] = true;
+  if (state.trackedQuest === questId) state.trackedQuest = null; // dokončený úkol se přestane sledovat
+  if (questId === 'greenvale_air_song') unlockMagicSchool(state, 'air');
   if (questId === 'greenvale_cave_slime') {
     state.flags.talentTreesUnlocked = true;
     // Klíčový předmět: Lovecké povolení Greenvale.
@@ -67,6 +93,53 @@ export function completeQuest(state, questId) {
 export function areTalentTreesUnlocked(state) {
   return Boolean(state?.flags?.talentTreesUnlocked || state?.flags?.greenvaleHunterPermitGranted);
 }
+
+export const QUEST_STATUS_LABEL = {
+  notStarted: 'Nepřijatý',
+  active: 'Probíhá',
+  ready: 'Splněno – vrať se',
+  done: 'Dokončeno'
+};
+
+// Co má hráč teď udělat (text kroku).
+export function questStep(state, questId) {
+  const quest = QUESTS[questId];
+  const status = getQuestStatus(state, questId);
+  if (status === QUEST_STATUS.notStarted) return `Zadává: ${quest.giver}.`;
+  if (status === QUEST_STATUS.active) return quest.objective;
+  if (status === QUEST_STATUS.ready) return quest.returnTo;
+  return `Odměna získána: ${quest.reward}`;
+}
+
+// Kam vede Sledovat: nepřijatý / splněný úkol k zadavateli, probíhající k cíli.
+export function questTarget(state, questId) {
+  const quest = QUESTS[questId];
+  if (!quest) return null;
+  const status = getQuestStatus(state, questId);
+  if (status === QUEST_STATUS.done) return null;
+  const target = status === QUEST_STATUS.active ? quest.objectiveTarget : quest.giverTarget;
+  return target ? { ...target, region: quest.region } : null;
+}
+
+// Sledovaný úkol (jen jeden). Dokončený se sledovat nedá.
+export function trackQuest(state, questId) {
+  if (!QUESTS[questId] || getQuestStatus(state, questId) === QUEST_STATUS.done) return false;
+  state.trackedQuest = state.trackedQuest === questId ? null : questId;
+  return true;
+}
+
+export const trackedQuest = (state) => {
+  const id = state?.trackedQuest;
+  return id && QUESTS[id] && getQuestStatus(state, id) !== QUEST_STATUS.done ? id : null;
+};
+
+// Úkoly v kartě Úkoly: přijaté (probíhající, splněné, dokončené).
+export const journalQuests = (state) =>
+  Object.values(QUESTS).filter((q) => getQuestStatus(state, q.id) !== QUEST_STATUS.notStarted);
+
+// Nástěnka ve městě: nedokončené úkoly oblasti (i nepřijaté).
+export const boardQuests = (state, region) =>
+  Object.values(QUESTS).filter((q) => q.region === region && getQuestStatus(state, q.id) !== QUEST_STATUS.done);
 
 // Řádky pro záložku Úkoly na kartě hrdiny.
 export function describeQuests(state) {

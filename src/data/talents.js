@@ -73,7 +73,7 @@ export const TALENT_TREES = [
         name: 'Základy sběru',
         talents: [
           { id: 'herbalist_hand', name: 'Bylinkářská ruka', text: '+5 % šance na dodatečnou surovinu při sběru bylin za hodnost (nejvýš +25 %).', effect: { herbBonusChance: 0.05 }, needsSystem: 'sběr bylin' },
-          { id: 'prospector', name: 'Zkušený prospektor', text: '+5 % šance na dodatečnou surovinu při těžbě za hodnost (nejvýš +25 %).', effect: { miningBonusChance: 0.05 }, needsSystem: 'těžba' }
+          { id: 'prospector', name: 'Zkušený prospektor', text: '+5 % šance na dodatečnou surovinu při těžbě za hodnost (nejvýš +25 %).', effect: { miningBonusChance: 0.05 } }
         ]
       },
       {

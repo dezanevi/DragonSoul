@@ -1,0 +1,546 @@
+[
+    {
+        "key":  "newui-button_blue",
+        "file":  "assets/ui/newui/split/buttons/button_blue.png",
+        "group":  "buttons",
+        "width":  813,
+        "height":  265,
+        "description":  ""
+    },
+    {
+        "key":  "newui-button_blue_hover",
+        "file":  "assets/ui/newui/split/buttons/button_blue_hover.png",
+        "group":  "buttons",
+        "width":  818,
+        "height":  267,
+        "description":  ""
+    },
+    {
+        "key":  "newui-button_gold_active",
+        "file":  "assets/ui/newui/split/buttons/button_gold_active.png",
+        "group":  "buttons",
+        "width":  813,
+        "height":  266,
+        "description":  ""
+    },
+    {
+        "key":  "newui-button_grey_disable",
+        "file":  "assets/ui/newui/split/buttons/button_grey_disable.png",
+        "group":  "buttons",
+        "width":  813,
+        "height":  265,
+        "description":  ""
+    },
+    {
+        "key":  "newui-button_red",
+        "file":  "assets/ui/newui/split/buttons/button_red.png",
+        "group":  "buttons",
+        "width":  813,
+        "height":  266,
+        "description":  ""
+    },
+    {
+        "key":  "newui-card_frame_large",
+        "file":  "assets/ui/newui/split/card_frame/card_frame_large.png",
+        "group":  "card_frame",
+        "width":  856,
+        "height":  930,
+        "description":  ""
+    },
+    {
+        "key":  "newui-card_panel",
+        "file":  "assets/ui/newui/split/card_frame/card_panel.png",
+        "group":  "card_frame",
+        "width":  587,
+        "height":  319,
+        "description":  ""
+    },
+    {
+        "key":  "newui-card_slot",
+        "file":  "assets/ui/newui/split/card_frame/card_slot.png",
+        "group":  "card_frame",
+        "width":  220,
+        "height":  216,
+        "description":  ""
+    },
+    {
+        "key":  "newui-card_tooltip",
+        "file":  "assets/ui/newui/split/card_frame/card_tooltip.png",
+        "group":  "card_frame",
+        "width":  566,
+        "height":  194,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_frame_blue",
+        "file":  "assets/ui/newui/split/icon_frame/icon_frame_blue.png",
+        "group":  "icon_frame",
+        "width":  388,
+        "height":  384,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_frame_blue_hover",
+        "file":  "assets/ui/newui/split/icon_frame/icon_frame_blue_hover.png",
+        "group":  "icon_frame",
+        "width":  389,
+        "height":  385,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_frame_empty",
+        "file":  "assets/ui/newui/split/icon_frame/icon_frame_empty.png",
+        "group":  "icon_frame",
+        "width":  579,
+        "height":  566,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_frame_gold_active",
+        "file":  "assets/ui/newui/split/icon_frame/icon_frame_gold_active.png",
+        "group":  "icon_frame",
+        "width":  389,
+        "height":  384,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_frame_grey",
+        "file":  "assets/ui/newui/split/icon_frame/icon_frame_grey.png",
+        "group":  "icon_frame",
+        "width":  390,
+        "height":  385,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_air",
+        "file":  "assets/ui/newui/split/icons_cards/icon_air.png",
+        "group":  "icons_cards",
+        "width":  149,
+        "height":  147,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_amulet",
+        "file":  "assets/ui/newui/split/icons_cards/icon_amulet.png",
+        "group":  "icons_cards",
+        "width":  127,
+        "height":  157,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_anvil",
+        "file":  "assets/ui/newui/split/icons_cards/icon_anvil.png",
+        "group":  "icons_cards",
+        "width":  174,
+        "height":  118,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_armor",
+        "file":  "assets/ui/newui/split/icons_cards/icon_armor.png",
+        "group":  "icons_cards",
+        "width":  169,
+        "height":  157,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_bag",
+        "file":  "assets/ui/newui/split/icons_cards/icon_bag.png",
+        "group":  "icons_cards",
+        "width":  137,
+        "height":  138,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_book",
+        "file":  "assets/ui/newui/split/icons_cards/icon_book.png",
+        "group":  "icons_cards",
+        "width":  167,
+        "height":  136,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_boots",
+        "file":  "assets/ui/newui/split/icons_cards/icon_boots.png",
+        "group":  "icons_cards",
+        "width":  162,
+        "height":  146,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_brain",
+        "file":  "assets/ui/newui/split/icons_cards/icon_brain.png",
+        "group":  "icons_cards",
+        "width":  153,
+        "height":  134,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_castle",
+        "file":  "assets/ui/newui/split/icons_cards/icon_castle.png",
+        "group":  "icons_cards",
+        "width":  167,
+        "height":  166,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_clover",
+        "file":  "assets/ui/newui/split/icons_cards/icon_clover.png",
+        "group":  "icons_cards",
+        "width":  147,
+        "height":  135,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_coins",
+        "file":  "assets/ui/newui/split/icons_cards/icon_coins.png",
+        "group":  "icons_cards",
+        "width":  172,
+        "height":  155,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_compass",
+        "file":  "assets/ui/newui/split/icons_cards/icon_compass.png",
+        "group":  "icons_cards",
+        "width":  164,
+        "height":  171,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_cooking_pot",
+        "file":  "assets/ui/newui/split/icons_cards/icon_cooking_pot.png",
+        "group":  "icons_cards",
+        "width":  158,
+        "height":  144,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_crossed_swords",
+        "file":  "assets/ui/newui/split/icons_cards/icon_crossed_swords.png",
+        "group":  "icons_cards",
+        "width":  154,
+        "height":  147,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_crown",
+        "file":  "assets/ui/newui/split/icons_cards/icon_crown.png",
+        "group":  "icons_cards",
+        "width":  162,
+        "height":  155,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_crystal",
+        "file":  "assets/ui/newui/split/icons_cards/icon_crystal.png",
+        "group":  "icons_cards",
+        "width":  149,
+        "height":  175,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_dragon_gold",
+        "file":  "assets/ui/newui/split/icons_cards/icon_dragon_gold.png",
+        "group":  "icons_cards",
+        "width":  175,
+        "height":  168,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_dragon_purple",
+        "file":  "assets/ui/newui/split/icons_cards/icon_dragon_purple.png",
+        "group":  "icons_cards",
+        "width":  157,
+        "height":  152,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_fire",
+        "file":  "assets/ui/newui/split/icons_cards/icon_fire.png",
+        "group":  "icons_cards",
+        "width":  147,
+        "height":  168,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_fishing_rod",
+        "file":  "assets/ui/newui/split/icons_cards/icon_fishing_rod.png",
+        "group":  "icons_cards",
+        "width":  167,
+        "height":  142,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_flag",
+        "file":  "assets/ui/newui/split/icons_cards/icon_flag.png",
+        "group":  "icons_cards",
+        "width":  156,
+        "height":  156,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_gear",
+        "file":  "assets/ui/newui/split/icons_cards/icon_gear.png",
+        "group":  "icons_cards",
+        "width":  152,
+        "height":  152,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_handshake",
+        "file":  "assets/ui/newui/split/icons_cards/icon_handshake.png",
+        "group":  "icons_cards",
+        "width":  150,
+        "height":  120,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_heart",
+        "file":  "assets/ui/newui/split/icons_cards/icon_heart.png",
+        "group":  "icons_cards",
+        "width":  149,
+        "height":  128,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_helmet",
+        "file":  "assets/ui/newui/split/icons_cards/icon_helmet.png",
+        "group":  "icons_cards",
+        "width":  158,
+        "height":  158,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_herbs",
+        "file":  "assets/ui/newui/split/icons_cards/icon_herbs.png",
+        "group":  "icons_cards",
+        "width":  166,
+        "height":  148,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_hero_wheel",
+        "file":  "assets/ui/newui/split/icons_cards/icon_hero_wheel.png",
+        "group":  "icons_cards",
+        "width":  173,
+        "height":  169,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_chest",
+        "file":  "assets/ui/newui/split/icons_cards/icon_chest.png",
+        "group":  "icons_cards",
+        "width":  166,
+        "height":  155,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_ingots",
+        "file":  "assets/ui/newui/split/icons_cards/icon_ingots.png",
+        "group":  "icons_cards",
+        "width":  169,
+        "height":  126,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_key",
+        "file":  "assets/ui/newui/split/icons_cards/icon_key.png",
+        "group":  "icons_cards",
+        "width":  145,
+        "height":  155,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_leaf",
+        "file":  "assets/ui/newui/split/icons_cards/icon_leaf.png",
+        "group":  "icons_cards",
+        "width":  141,
+        "height":  170,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_legs",
+        "file":  "assets/ui/newui/split/icons_cards/icon_legs.png",
+        "group":  "icons_cards",
+        "width":  133,
+        "height":  149,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_magic_staff",
+        "file":  "assets/ui/newui/split/icons_cards/icon_magic_staff.png",
+        "group":  "icons_cards",
+        "width":  155,
+        "height":  153,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_magic_star",
+        "file":  "assets/ui/newui/split/icons_cards/icon_magic_star.png",
+        "group":  "icons_cards",
+        "width":  159,
+        "height":  163,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_map",
+        "file":  "assets/ui/newui/split/icons_cards/icon_map.png",
+        "group":  "icons_cards",
+        "width":  171,
+        "height":  146,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_map_pin",
+        "file":  "assets/ui/newui/split/icons_cards/icon_map_pin.png",
+        "group":  "icons_cards",
+        "width":  119,
+        "height":  152,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_moon",
+        "file":  "assets/ui/newui/split/icons_cards/icon_moon.png",
+        "group":  "icons_cards",
+        "width":  147,
+        "height":  149,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_party",
+        "file":  "assets/ui/newui/split/icons_cards/icon_party.png",
+        "group":  "icons_cards",
+        "width":  161,
+        "height":  132,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_paw",
+        "file":  "assets/ui/newui/split/icons_cards/icon_paw.png",
+        "group":  "icons_cards",
+        "width":  155,
+        "height":  136,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_pickaxe",
+        "file":  "assets/ui/newui/split/icons_cards/icon_pickaxe.png",
+        "group":  "icons_cards",
+        "width":  145,
+        "height":  148,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_potion",
+        "file":  "assets/ui/newui/split/icons_cards/icon_potion.png",
+        "group":  "icons_cards",
+        "width":  129,
+        "height":  155,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_ring",
+        "file":  "assets/ui/newui/split/icons_cards/icon_ring.png",
+        "group":  "icons_cards",
+        "width":  158,
+        "height":  146,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_scroll",
+        "file":  "assets/ui/newui/split/icons_cards/icon_scroll.png",
+        "group":  "icons_cards",
+        "width":  158,
+        "height":  156,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_scroll_quest",
+        "file":  "assets/ui/newui/split/icons_cards/icon_scroll_quest.png",
+        "group":  "icons_cards",
+        "width":  126,
+        "height":  144,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_shield_defense",
+        "file":  "assets/ui/newui/split/icons_cards/icon_shield_defense.png",
+        "group":  "icons_cards",
+        "width":  147,
+        "height":  161,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_shield_magic",
+        "file":  "assets/ui/newui/split/icons_cards/icon_shield_magic.png",
+        "group":  "icons_cards",
+        "width":  135,
+        "height":  161,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_spellbook",
+        "file":  "assets/ui/newui/split/icons_cards/icon_spellbook.png",
+        "group":  "icons_cards",
+        "width":  174,
+        "height":  162,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_star",
+        "file":  "assets/ui/newui/split/icons_cards/icon_star.png",
+        "group":  "icons_cards",
+        "width":  163,
+        "height":  153,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_sun",
+        "file":  "assets/ui/newui/split/icons_cards/icon_sun.png",
+        "group":  "icons_cards",
+        "width":  181,
+        "height":  176,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_sword",
+        "file":  "assets/ui/newui/split/icons_cards/icon_sword.png",
+        "group":  "icons_cards",
+        "width":  159,
+        "height":  155,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_target",
+        "file":  "assets/ui/newui/split/icons_cards/icon_target.png",
+        "group":  "icons_cards",
+        "width":  175,
+        "height":  169,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_vortex",
+        "file":  "assets/ui/newui/split/icons_cards/icon_vortex.png",
+        "group":  "icons_cards",
+        "width":  168,
+        "height":  162,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_water",
+        "file":  "assets/ui/newui/split/icons_cards/icon_water.png",
+        "group":  "icons_cards",
+        "width":  125,
+        "height":  162,
+        "description":  ""
+    },
+    {
+        "key":  "newui-icon_winged_boot",
+        "file":  "assets/ui/newui/split/icons_cards/icon_winged_boot.png",
+        "group":  "icons_cards",
+        "width":  151,
+        "height":  150,
+        "description":  ""
+    }
+]

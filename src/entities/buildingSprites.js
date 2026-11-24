@@ -2,23 +2,58 @@
 // načtení hry automaticky odstraní (bílá plocha propojená s okrajem obrázku).
 // Obrázek se pak ořízne na samotnou budovu, aby spodní okraj = základy domu.
 //
-//   path     cesta k obrázku
-//   scale    šířka obrázku jako násobek šířky půdorysu na obrazovce
-//            (izometrický půdorys: od levého po pravý roh kosodélníku)
-//   offsetY  posun dolů (px) pod přední (jihovýchodní) roh půdorysu – schody, stín
+//   path        cesta k obrázku
+//   scale       šířka obrázku jako násobek šířky půdorysu na obrazovce
+//               (izometrický půdorys: od levého po pravý roh kosodélníku)
+//   pixelScale  místo `scale`: pevné zvětšení obrázku (sada v2 – všechny budovy stejně,
+//               takže si drží vzájemné velikosti z listu)
+//   offsetY     posun dolů (px) pod přední (jihovýchodní) roh půdorysu – schody, stín
+//   flipX       zrcadlově (další dům stejného vzhledu, dveře na druhé straně)
+//   openings    smazat i uzavřené bílé plochy (mezera mezi zbožím a stříškou u stánků):
+//               { minArea, minHeight } – menší plochy (bílé pruhy markýzy) zůstanou
+//
+// Sada v2 (assets/buildings/greenvale/v2): rozřezaný list „Izometrická sada budov a stánků
+// vesnice“ (dveře vpravo = strana +x, kde mají budovy pole dveří). Staré obrázky: _stare.
+
+const V2 = 'assets/buildings/greenvale/v2/';
+const V2_SCALE = 2;
+// Stánky: průhledná mezera mezi zbožím a stříškou (viz openings).
+export const STALL_OPENINGS = { minArea: 250, minHeight: 25 };
+const v2 = (file, extra = {}) => ({ path: `${V2}${file}.png`, pixelScale: V2_SCALE, offsetY: 10, ...extra });
 
 export const BUILDING_SPRITES = {
-  greenvale_town_hall: { path: 'assets/buildings/greenvale/town-hall.png', scale: 1, offsetY: 12 },
-  greenvale_tavern: { path: 'assets/buildings/greenvale/tavern.png', scale: 1, offsetY: 12 },
+  // Měřítko radnice a nástěnky upravené v editoru terénu (× 0,44 / 0,52).
+  greenvale_town_hall: v2('town-hall', { pixelScale: V2_SCALE * 0.44 }),
+  greenvale_tavern: v2('tavern'),
   // Tržiště u náměstí = dva stánky (potraviny a zboží).
-  greenvale_market: { path: 'assets/buildings/greenvale/stallfood.png', scale: 1, offsetY: 12 },
-  greenvale_market_wares: { path: 'assets/buildings/greenvale/stallmats.png', scale: 1, offsetY: 12 },
-  greenvale_smithy: { path: 'assets/buildings/greenvale/smithy.webp', scale: 1, offsetY: 12 },
-  greenvale_fishing_hut: { path: 'assets/buildings/greenvale/fishing-hut.png', scale: 1, offsetY: 12 },
-  greenvale_hunter_lodge: { path: 'assets/buildings/greenvale/hunter-lodge.png', scale: 1, offsetY: 12 },
-  greenvale_home_1: { path: 'assets/buildings/greenvale/home-a.png', scale: 1, offsetY: 12 },
-  greenvale_home_2: { path: 'assets/buildings/greenvale/home-b.png', scale: 1, offsetY: 12 },
-  greenvale_home_3: { path: 'assets/buildings/greenvale/home-c.png', scale: 1, offsetY: 12 }
+  // Stánky a rybářská chata vložené v editoru terénu (měřítko a strana dveří odtud; flipX = dveře na jihozápad).
+  greenvale_market: v2('stall-fruit', { openings: STALL_OPENINGS, flipX: true, pixelScale: 1.42 }),
+  greenvale_market_wares: v2('stall-pots', { openings: STALL_OPENINGS, flipX: true, pixelScale: 1.32 }),
+  greenvale_smithy: v2('smithy'),
+  greenvale_fishing_hut: v2('fishing-hut', { pixelScale: 1.88 }),
+  greenvale_hunter_lodge: v2('hunter-lodge'),
+  greenvale_home_1: v2('house-red'),
+  greenvale_home_2: v2('house-thatch'),
+  greenvale_home_3: v2('house-blue'),
+  // Budovy a doplňky bez interiéru (zatím jen ve světě).
+  greenvale_alchemist: v2('alchemist'),
+  greenvale_observatory: v2('observatory'),
+  greenvale_warehouse: v2('warehouse'),
+  greenvale_stable: v2('stable'),
+  greenvale_windmill: v2('windmill'),
+  greenvale_house_green: v2('house-green'),
+  greenvale_house_n2: v2('house-red', { flipX: true }),
+  greenvale_house_n3: v2('house-thatch', { flipX: true }),
+  greenvale_house_e1: v2('house-blue', { flipX: true }),
+  greenvale_house_e2: v2('house-green', { flipX: true }),
+  greenvale_fountain: v2('fountain', { offsetY: 6 }),
+  greenvale_notice_board: v2('notice-board', { offsetY: 4, pixelScale: V2_SCALE * 0.52 }),
+  greenvale_well: v2('well', { offsetY: 6, pixelScale: V2_SCALE * 0.71 }),
+  greenvale_stall_fish: v2('stall-fish', { openings: STALL_OPENINGS, offsetY: 6, pixelScale: V2_SCALE * 0.75 }),
+  greenvale_stall_flowers: v2('stall-flowers', { openings: STALL_OPENINGS, offsetY: 6, pixelScale: V2_SCALE * 0.73 }),
+  // Vložené v editoru terénu: zelený dům u tržiště a kostel (dveře na jihozápad).
+  greenvale_house_w1: v2('house-green', { flipX: true, pixelScale: 1.84 }),
+  greenvale_church: v2('church', { flipX: true, pixelScale: 2.41 })
 };
 
 export function buildingTextureKey(buildingId) {
@@ -44,14 +79,14 @@ export function prepareBuildingTextures(scene) {
     if (scene.textures.exists(key) || !scene.textures.exists(rawKey(id))) continue;
 
     const source = scene.textures.get(rawKey(id)).getSourceImage();
-    const canvas = removeWhiteBackground(source);
+    const canvas = removeWhiteBackground(source, 232, BUILDING_SPRITES[id].openings);
     scene.textures.addCanvas(key, canvas);
     scene.textures.remove(rawKey(id));
   }
 }
 
 // Odstraní bílé pozadí spojené s okrajem obrázku a ořízne prázdné okraje.
-export function removeWhiteBackground(image, threshold = 232) {
+export function removeWhiteBackground(image, threshold = 232, openings = null) {
   const width = image.width;
   const height = image.height;
   const canvas = document.createElement('canvas');
@@ -107,6 +142,32 @@ export function removeWhiteBackground(image, threshold = 232) {
     if (x < width - 1) push(x + 1, y);
     if (y > 0) push(x, y - 1);
     if (y < height - 1) push(x, y + 1);
+  }
+
+  // Uzavřené bílé plochy (průhledy mezi sloupky stánku): velké souvislé oblasti pozadí,
+  // které se nedotýkají okraje. Malé (bílé pruhy markýzy, okna) zůstanou.
+  if (openings) {
+    const seen = new Uint8Array(width * height);
+    for (let start = 0; start < width * height; start++) {
+      if (removed[start] || seen[start] || !isBackground(start * 4)) continue;
+      const region = [start];
+      seen[start] = 1;
+      let minY = height, maxY = 0;
+      for (let i = 0; i < region.length; i++) {
+        const p = region[i];
+        const x = p % width;
+        const y = (p - x) / width;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        for (const q of [x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1, p - width, p + width]) {
+          if (q < 0 || q >= width * height || seen[q] || removed[q] || !isBackground(q * 4)) continue;
+          seen[q] = 1;
+          region.push(q);
+        }
+      }
+      if (region.length < (openings.minArea ?? 250) || maxY - minY + 1 < (openings.minHeight ?? 25)) continue;
+      for (const p of region) { removed[p] = 1; data[p * 4 + 3] = 0; }
+    }
   }
 
   // Zjemnění světlého lemu kolem budovy (zbytky vyhlazení k bílé).

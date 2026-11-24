@@ -7,7 +7,8 @@ import { magicStateKey, spriteState } from './heroButtonSprites.js';
 // Karty magických škol: plocha karty, velikost obrázku stavu a ukazatel zkušeností v něm.
 const MAGIC_CARD = { y: 437, h: 136, spriteW: 104, spriteH: 122, barY: 547, barW: 66, barH: 12 };
 import { getHeroSpeed, getHeroLuck, getHeroCharisma } from '../../systems/HeroStatsSystem.js';
-import { getEffectiveSpellPower } from '../../systems/TalentSystem.js';
+import { getEffectiveSpellPower, getTalentBonuses } from '../../systems/TalentSystem.js';
+import { getMovementMultiplier, getRareEncounterBonus, getShopDiscount } from '../../systems/HeroStatsSystem.js';
 
 // Panely záložky Hrdina, které jen zobrazují data ze stavu hry.
 // Nic nepočítají – hodnoty berou tak, jak je uložily herní systémy.
@@ -57,8 +58,22 @@ export class HeroOverview {
 
 // Statistiky hrdiny a velitelské statistiky.
 export class HeroStats {
-  constructor(scene, parent) {
+  constructor(scene, parent, tooltip = null) {
     const style = { size: 28, originX: 1, color: '#fff2c4' };
+    this.tooltip = tooltip;
+    this.state = null;
+    // Najetí na řádek statistiky ukáže, co dělá (zóny přes celý řádek panelu).
+    const HERO_ROW = { x: 712, w: 340 };
+    const COMMANDER_ROW = { x: 1116, w: 368 };
+    const addZones = (rows, area, kind) => rows.forEach((y, index) => {
+      const rectArea = { x: area.x, y: y - 20, w: area.w, h: 40 };
+      const zone = scene.add.zone(rectArea.x, rectArea.y, rectArea.w, rectArea.h).setOrigin(0).setInteractive();
+      zone.on('pointerover', () => this.showTip(kind, index, rectArea));
+      zone.on('pointerout', () => this.tooltip?.hide());
+      parent.add(zone);
+    });
+    addZones(FIELDS.heroStats.rows, HERO_ROW, 'hero');
+    addZones(FIELDS.commanderStats.rows, COMMANDER_ROW, 'commander');
 
     this.heroValues = FIELDS.heroStats.rows.map((y) =>
       cardText(scene, parent, FIELDS.heroStats.x, y, '', style)
@@ -68,7 +83,40 @@ export class HeroStats {
     );
   }
 
+  showTip(kind, index, area) {
+    const state = this.state;
+    if (!this.tooltip || !state) return;
+    const pct = (value) => `${Math.round(value * 1000) / 10}`.replace('.', ',');
+    if (kind === 'hero') {
+      const sp = getEffectiveSpellPower(state);
+      const tips = [
+        ['Intelekt', [`Hodnota ${number(state.intellect)}.`, 'Zatím sám nic nedělá. Každou 5. úroveň roste spolu s ním i maximální mana (+1) a Spell Power (+1).']],
+        ['Spell Power', [`Hodnota ${sp}.`, `Kouzla hrdiny: +${Math.floor(sp / 2)} k poškození každého kouzla (polovina Spell Power).`]],
+        ['Rychlost', [`Hodnota ${number(state.speed, 1)}.`, `Chůze po mapě: ${pct(getMovementMultiplier(state) * 100 - 100)} % rychleji (+2 % za každý bod nad 1, nejvýš +50 %, plus jídlo a lektvary).`]],
+        ['Štěstí', [`Hodnota ${number(state.luck, 1)}.`, `Šance na vzácné monstrum v setkání +${pct(getRareEncounterBonus(state) * 100)} % (0,5 % za bod nad 1). Zatím se v setkáních nepoužívá.`]],
+        ['Charisma', [`Hodnota ${number(state.charisma, 1)}.`, `Sleva u obchodníků ${pct(getShopDiscount(state) * 100)} % (1 % za bod nad 1, nejvýš 25 %). Zatím se v obchodech nepoužívá.`]]
+      ];
+      const [title, lines] = tips[index];
+      this.tooltip.show(area, title, lines);
+      return;
+    }
+    const talents = getTalentBonuses(state);
+    const rows = [
+      ['Fyzický útok', number(state.attack), talents.commanderAttack, 'Síle', 'fyzické útoky'],
+      ['Magický útok', number(state.magicAttack), talents.commanderMagicAttack, 'Magické síle', 'magické útoky'],
+      ['Obrana', number(state.defense), talents.commanderDefense, 'Zbroji', 'obranu proti fyzickým útokům'],
+      ['Magická odolnost', number(state.magicResistance), talents.commanderMagicResistance, 'Magické obraně', 'obranu proti magii']
+    ];
+    const [title, value, talent, stat, what] = rows[index];
+    const bonus = Math.floor(Math.max(0, value) / 5) + talent;
+    this.tooltip.show(area, title, [
+      `Velitelský bonus: +${bonus} k ${stat} každého monstra v boji (posílí ${what}).`,
+      `Hodnota ${value} ÷ 5 = ${Math.floor(Math.max(0, value) / 5)}${talent ? `, talenty +${talent}` : ''}.`
+    ]);
+  }
+
   refresh(state) {
+    this.state = state;
     const hero = [
       number(state.intellect),
       getEffectiveSpellPower(state), // včetně talentů Kouzelníka
@@ -104,7 +152,6 @@ export class MagicSchoolsPanel {
     parent.add(this.plates);
     this.sprites = MAGIC_SCHOOLS.map((school) => {
       if (!hasSprites) return null;
-      this.plates.fillStyle(0x0a1322, 1).fillRoundedRect(school.x - 50, MAGIC_CARD.y - 3, 100, MAGIC_CARD.h + 6, 8);
       const sprite = scene.add.image(school.x, MAGIC_CARD.y + MAGIC_CARD.h / 2, magicStateKey(school.id, 'normal'));
       sprite.setDisplaySize(MAGIC_CARD.spriteW, MAGIC_CARD.spriteH);
       parent.add(sprite);
