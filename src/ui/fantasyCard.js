@@ -74,7 +74,9 @@ export function cardButton(scene, container, x, y, w, h, label, onClick, options
   let disabled = Boolean(options.disabled);
   let active = Boolean(options.active); // zlaté = vybraná volba (kategorie, záložka)
   const danger = Boolean(options.danger);
-  const sliced = nineImage(scene, danger ? 'nu-btnRed' : 'nu-btn', x, y, w, h, 0.5);
+  // Užší zlaté rámování (menší měřítko okrajů 9-slice); velká tlačítka si drží původní rám.
+  const frame = options.frameScale ?? (h <= 70 ? 0.28 : 0.5);
+  const sliced = nineImage(scene, danger ? 'nu-btnRed' : 'nu-btn', x, y, w, h, frame);
   const g = sliced ?? scene.add.graphics();
   const draw = (hover) => {
     if (sliced) {

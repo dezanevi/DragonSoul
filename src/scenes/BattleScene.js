@@ -33,6 +33,7 @@ import {
   Tooltip
 } from '../battle/battleUi.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
+import { markQuestObjective } from '../systems/QuestSystem.js';
 import { cardText, cardButton, nineImage } from '../ui/fantasyCard.js';
 import { estimateBattle, runSimulation, applySimulationResult, SIMULATION_HANDICAP, SIMULATION_REWARD } from '../systems/BattleSimulationSystem.js';
 import { gainMagicExperience } from '../systems/MagicMasterySystem.js';
@@ -146,6 +147,26 @@ const CATEGORY = {
 };
 
 const isOffensive = (skill) => skill?.category === 'physical' || skill?.category === 'magical';
+// Fyzické schopnosti mají vždy dosah 1 pole (zblízka). Magické (útoky na dálku) se použijí na cíl
+// kdekoli na bojišti: do 5 polí plné poškození, dál postih −70 %. Kouzla hrdiny bez postihu i omezení.
+const RANGED_FULL_RANGE = 5;
+const RANGED_FAR_MULTIPLIER = 0.3;
+const isRangedSkill = (skill) => isOffensive(skill) && skill.category === 'magical';
+const MELEE_RANGE = 1;
+// Monstra navíc v setkáních oblasti (mimo vlastní region druhu). Air Elemental v Greenvale
+// je jen jednou – v úvodním úkolu (tutoriál souboje), v běžných setkáních ne.
+const EXTRA_ENCOUNTER_SPECIES = {};
+const NO_RANDOM_SPECIES = new Set(['air_elemental']);
+// Tutoriál souboje (úvodní úkol Krotitelova zkouška): texty Mága podle kroku.
+const TUTORIAL_TEXT = {
+  attack: 'Tvůj Dire Wolf je na tahu. Klikni na Air Elementala a vyber útok – vlk k němu sám doběhne a zaútočí.',
+  wait: 'Air Elemental krouží a vyčkává. Počkej, až bude tvůj vlk znovu na tahu.',
+  spell: 'Výborně, vlk zasáhl! Teď ty: klikni na Kouzla (Q) dole, vyber kouzlo Vzduchu a pak klikni na Air Elementala.',
+  capture: 'Je oslabený! Teď klikni na Ochočení (C) dole a pak na Air Elementala. Soul Crystal ho získá.',
+  done: 'Krystal zazářil – Air Elemental je tvůj. Přenesu tě zpět do Hvězdárny.'
+};
+const SCHOOL_NAMES = { air: 'Vzduch', water: 'Voda', fire: 'Oheň', earth: 'Země', light: 'Světlo', dark: 'Temnota' };
+const SCHOOL_ORDER = ['air', 'water', 'fire', 'earth', 'light', 'dark'];
 
 export default class BattleScene extends Phaser.Scene {
   constructor() {
@@ -236,25 +257,36 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   // Divoká monstra souboje. Náhodné setkání: počet podle oblasti (systém umí 1–5,
-  // začáteční Greenvale zatím 1–3). Jeskynní sliz má s sebou 2 gobliny 5. úrovně.
+  // začáteční Greenvale zatím 1–3). Boss Orčí válečník má s sebou 2 gobliny 5. úrovně,
+  // tutoriál (úvodní úkol) jediného Air Elementala.
   createWildMonsters() {
     const currentRegion = this.state.region || 'Greenvale';
     const playerLevel = Number(this.state.level) || 1;
     this.isBoss = this.encounter?.type === 'greenvale_cave_boss';
+    this.tutorial = this.encounter?.type === 'tutorial_air';
+    this.tutorialStep = this.tutorial ? 'attack' : null;
     this.wildMonsters = [];
 
-    if (this.isBoss) {
+    if (this.tutorial) {
+      // Jediný Air Elemental (úvodní úkol): jeden zásah a jisté ochočení.
+      this.wildMonsters.push(createMonster('air_elemental', 1));
+    } else if (this.isBoss) {
+      // Úkol Orčí hrozba: boss Orc Warrior se dvěma gobliny (bez simulace a ochočení).
       const bossLevel = Math.max(3, Math.min(10, playerLevel + 2));
-      const slime = createMonster('cave_slime', bossLevel);
-      slime.name = 'Jeskynní sliz';
-      slime.isBoss = true;
-      this.wildMonsters.push(slime, createMonster('goblin', 5), createMonster('goblin', 5));
+      const orc = createMonster('orc_warrior', bossLevel);
+      orc.name = 'Orčí válečník';
+      orc.isBoss = true;
+      this.wildMonsters.push(orc, createMonster('goblin', 5), createMonster('goblin', 5));
     } else {
       let availableSpecies = MONSTER_SPECIES.filter(
-        (species) => species.region === currentRegion && species.rarity !== 'rare'
+        (species) => species.region === currentRegion && species.rarity !== 'rare' && !NO_RANDOM_SPECIES.has(species.id)
       );
       if (availableSpecies.length === 0) {
         availableSpecies = MONSTER_SPECIES.filter((species) => species.rarity === 'common');
+      }
+      for (const id of EXTRA_ENCOUNTER_SPECIES[currentRegion] ?? []) {
+        const extra = MONSTER_SPECIES.find((species) => species.id === id);
+        if (extra && !availableSpecies.includes(extra)) availableSpecies = [...availableSpecies, extra];
       }
 
       const [min, max] = this.encounter?.count
@@ -804,7 +836,8 @@ export default class BattleScene extends Phaser.Scene {
 
     const unit = this.currentUnit;
     const playerTurn = this.phase === 'units' && unit?.side === 'player';
-    const skills = playerTurn ? getMonsterSkills(unit.monster).slice(0, 6) : [];
+    // Schopnosti monstra se volí kliknutím na nepřítele (nabídka útoku), ne ze spodní lišty.
+    const skills = [];
 
     const skillW = 184;
     const actionW = ACTION_W;
@@ -857,15 +890,16 @@ export default class BattleScene extends Phaser.Scene {
       .setSelected(this.mode === 'spellTarget' || this.popover?.kind === 'spells');
     this.captureButton
       .setContent('Ochočení', `krystaly ${crystals}`, 'C')
-      .setDisabled(!playerTurn || crystals <= 0 || this.isBoss)
+      .setDisabled(!playerTurn || crystals <= 0 || this.isBoss || (this.tutorial && this.tutorialStep !== 'capture'))
       .setSelected(this.mode === 'capture');
     const itemKinds = this.battleItems().length;
     this.itemButton
       .setContent('Předmět', itemKinds ? `${itemKinds} druhů` : 'nic', 'X')
       .setDisabled(!playerTurn || !itemKinds)
       .setSelected(this.mode === 'itemAlly' || this.mode === 'itemEnemy' || this.popover?.kind === 'items');
-    this.waitButton.setContent('Čekat', 'přeskočit tah', 'Mezera').setDisabled(!playerTurn);
-    this.fleeButton.setContent('Útěk', `šance ${ESCAPE_CHANCE} %`, 'F').setDisabled(!playerTurn);
+    // Tutoriál: bez čekání a útěku.
+    this.waitButton.setContent('Čekat', 'přeskočit tah', 'Mezera').setDisabled(!playerTurn || this.tutorial);
+    this.fleeButton.setContent('Útěk', `šance ${ESCAPE_CHANCE} %`, 'F').setDisabled(!playerTurn || this.tutorial);
 
     for (const button of this.skillButtons) {
       button.setSelected(this.selectedSkill?.id === button.skill.id && this.mode === 'act');
@@ -873,15 +907,20 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  showSkillTip(skill, button) {
+  showSkillTip(skill, button, at = null, plan = null) {
     const category = CATEGORY[skill.category] ?? CATEGORY.physical;
+    const ranged = isRangedSkill(skill);
     const lines = [
       `${category.label} · ${ELEMENT_LABELS[normalizeElement(skill.element)] ?? 'Neutrální'}`,
       `Síla ${skill.power ?? 0} · přesnost ${Math.round((skill.accuracy ?? 1) * 100)} %`,
-      `Dosah ${skill.range ?? 1} · použití ${skill.remainingUses}/${skill.maxUses}`
+      ranged ? `Na dálku po celém bojišti: plné poškození do ${RANGED_FULL_RANGE} polí, dál −70 %` : `Zblízka (dosah 1 pole) · použití ${skill.remainingUses}/${skill.maxUses}`
     ];
+    if (plan?.far) lines.push('Pozor: cíl je dál než 5 polí – poškození −70 %.');
+    if (plan?.cell) lines.push('Monstrum nejdřív dojde k cíli a hned zaútočí (jeden tah).');
     if (skill.description) lines.push(skill.description);
-    this.tooltip.show(button.container.x + button.w / 2, button.container.y, skill.name, lines, category.color);
+    const x = (at?.x ?? 0) + button.container.x + button.w / 2;
+    const y = (at?.y ?? 0) + button.container.y;
+    this.tooltip.show(x, y, skill.name, lines, plan?.far ? 0xff9a5a : category.color);
   }
 
   showActionTip(button) {
@@ -1067,10 +1106,6 @@ export default class BattleScene extends Phaser.Scene {
         this.log('Klikni na nepřítele v dosahu kouzla.');
         return;
       }
-      if (this.grid.distance(SPELL_ORIGIN.x, SPELL_ORIGIN.y, target.x, target.y) > this.selectedSpell.range) {
-        this.log('Nepřítel je mimo dosah tohoto kouzla.');
-        return;
-      }
       this.castSelectedSpell(target);
       return;
     }
@@ -1118,55 +1153,84 @@ export default class BattleScene extends Phaser.Scene {
   // Kliknutí na nepřítele: nabídka útoků – schopnosti monstra a Arionova kouzla.
   // Nic se nepoužije automaticky, volí se až v nabídce.
   openAttackMenu(target) {
+    // Tutoriál: po zásahu vlkem už jen kouzlo a ochočení.
+    if (this.tutorialStep === 'capture' || this.tutorialStep === 'spell') {
+      this.setHint(this.tutorialStep === 'spell' ? 'Teď kouzlo: klikni na Kouzla (Q).' : 'Air Elemental je oslabený – použij Ochočení (C).');
+      return;
+    }
     const unit = this.currentUnit;
-    const distance = this.grid.distance(unit.x, unit.y, target.x, target.y);
     const entries = [];
-
     for (const skill of getMonsterSkills(unit.monster).filter(isOffensive)) {
-      const range = skill.range ?? 1;
-      const inRange = range >= distance;
+      const plan = this.planAttack(unit, target, skill);
       const category = CATEGORY[skill.category] ?? CATEGORY.physical;
+      const where = !plan.ok ? 'mimo dosah' : plan.cell ? 'přesun + útok' : plan.far ? '−70 % (dál než 5 polí)' : 'v dosahu';
       entries.push({
         label: skill.name,
-        sub: `${category.label} · síla ${skill.power} · dosah ${range} · ${skill.remainingUses}/${skill.maxUses}${inRange ? '' : ' · mimo dosah'}`,
-        accent: category.color,
-        disabled: !inRange || skill.remainingUses <= 0,
+        sub: `${category.label} · síla ${skill.power} · ${where} · ${skill.remainingUses}/${skill.maxUses}`,
+        accent: plan.far ? 0xff9a5a : category.color,
+        disabled: !plan.ok || skill.remainingUses <= 0,
+        onHover: (button, at) => this.showSkillTip(skill, button, at, plan),
         onClick: () => {
           this.closePopover();
-          this.selectedSkill = skill;
-          this.useSelectedSkill(target);
+          this.executeAttack(skill, target, plan);
         }
       });
     }
-
-    if (this.spellReady) {
-      const spellDistance = this.grid.distance(SPELL_ORIGIN.x, SPELL_ORIGIN.y, target.x, target.y);
-      for (const spell of this.availableSpells('enemy')) {
-        const inRange = spell.range >= spellDistance;
-        entries.push({
-          label: `${spell.name} (Arion)`,
-          sub: `Kouzlo · ${this.spellManaCost(spell)} MP · poškození ${spell.damage}${inRange ? '' : ' · mimo dosah'}`,
-          accent: elementColor(spell.school),
-          disabled: !inRange || this.state.mp < this.spellManaCost(spell),
-          onClick: () => {
-            this.closePopover();
-            this.selectedSpell = spell;
-            this.castSelectedSpell(target);
-          }
-        });
-      }
-    }
-
+    // Kouzla Ariona: místo seznamu všech kouzel užší odlišený panel Kouzlit pod schopnostmi.
+    const canCast = this.spellReady && this.availableSpells('enemy').length > 0;
+    const footer = canCast ? {
+      label: 'Kouzlit',
+      sub: `Arion · MP ${this.state.mp}/${this.state.maxMp}`,
+      onClick: () => this.openSpellbook(target)
+    } : null;
     const top = target.model.y - 175 * target.model.scale;
-    this.openPopover('attack', target.model.x, top, `Útok na: ${target.name}`, entries, UI_COLORS.inRangeAll);
+    this.openPopover('attack', target.model.x, top, `Útok na: ${target.name}`, entries, UI_COLORS.inRangeAll, footer);
+  }
+
+  // Jak se schopnost na cíl použije: z místa, po přesunu (pohyb + útok v jednom tahu),
+  // nebo z dálky s postihem (jen schopnosti na dálku a magické).
+  planAttack(unit, target, skill) {
+    const dist = (x, y) => this.grid.distance(x, y, target.x, target.y);
+    const ranged = isRangedSkill(skill);
+    const reach = ranged ? RANGED_FULL_RANGE : MELEE_RANGE;
+    if (skill.remainingUses <= 0) return { ok: false };
+    if (dist(unit.x, unit.y) <= reach) return { ok: true, cell: null, far: false };
+    if (!unit.movedThisTurn) {
+      const cells = this.grid.getReachable(unit, this.units)
+        .filter((c) => c.distance > 0 && dist(c.x, c.y) <= reach)
+        .sort((a, b) => a.distance - b.distance || dist(a.x, a.y) - dist(b.x, b.y));
+      if (cells[0]) return { ok: true, cell: cells[0], far: false };
+    }
+    return ranged ? { ok: true, cell: null, far: true } : { ok: false };
+  }
+
+  // Útok podle plánu: případně nejdřív přesun na pole u cíle, pak hned schopnost (jeden tah).
+  executeAttack(skill, target, plan) {
+    const unit = this.currentUnit;
+    if (!plan?.ok || !unit) return;
+    if (plan.cell) {
+      unit.x = plan.cell.x;
+      unit.y = plan.cell.y;
+      unit.movedThisTurn = true;
+      this.mode = 'busy';
+      this.placeUnit(unit, true, 300);
+      this.refreshBoard();
+      this.refreshActionButtons();
+      this.time.delayedCall(380, () => {
+        this.selectedSkill = skill;
+        this.useSelectedSkill(target);
+      });
+      return;
+    }
+    this.selectedSkill = skill;
+    this.useSelectedSkill(target);
   }
 
   // Útočné schopnosti, které z pozice jednotky dosáhnou na cíl.
   skillsReaching(unit, target) {
     if (!unit?.monster || !target) return [];
-    const distance = this.grid.distance(unit.x, unit.y, target.x, target.y);
     return getMonsterSkills(unit.monster)
-      .filter((skill) => isOffensive(skill) && skill.remainingUses > 0 && (skill.range ?? 1) >= distance)
+      .filter((skill) => isOffensive(skill) && skill.remainingUses > 0 && this.planAttack(unit, target, skill).ok)
       .sort((a, b) => b.power - a.power);
   }
 
@@ -1197,7 +1261,7 @@ export default class BattleScene extends Phaser.Scene {
     if (!unit) return '';
     const anyReach = this.units.some((other) => other.side === 'enemy' && other.hp > 0 && this.skillsReaching(unit, other).length > 0);
     return anyReach
-      ? 'Klikni na nepřítele a vyber útok, nebo na tyrkysové pole pro pohyb. Pohyb i útok ukončí tah.'
+      ? 'Klikni na nepřítele a vyber útok (monstrum k němu samo dojde), nebo na tyrkysové pole pro pohyb.'
       : 'Nikdo není v dosahu – klikni na tyrkysové pole pro pohyb (ukončí tah), nebo Čekat = přeskočit tah.';
   }
 
@@ -1245,14 +1309,11 @@ export default class BattleScene extends Phaser.Scene {
     if (this.mode === 'spellTarget' && this.selectedSpell) {
       for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLUMNS; x++) {
-          if (this.grid.distance(SPELL_ORIGIN.x, SPELL_ORIGIN.y, x, y) <= this.selectedSpell.range) {
-            fillCell(x, y, UI_COLORS.skillRange, 0.07);
-          }
+          fillCell(x, y, UI_COLORS.skillRange, 0.05); // kouzla hrdiny mají neomezený dosah
         }
       }
       for (const enemy of this.units.filter((u) => u.side === 'enemy' && u.hp > 0)) {
-        const inRange = this.grid.distance(SPELL_ORIGIN.x, SPELL_ORIGIN.y, enemy.x, enemy.y) <= this.selectedSpell.range;
-        if (inRange) {
+        {
           fillCell(enemy.x, enemy.y, 0xb48cff, 0.3, 0.9);
           glowUnit(enemy, 0xb48cff, true);
         }
@@ -1324,7 +1385,7 @@ export default class BattleScene extends Phaser.Scene {
     this.refreshActionButtons();
   }
 
-  openPopover(kind, x, y, title, entries, accent) {
+  openPopover(kind, x, y, title, entries, accent, footer = null) {
     this.closePopover();
     this.tooltip.hide();
 
@@ -1335,8 +1396,9 @@ export default class BattleScene extends Phaser.Scene {
     const rowH = 64;
     const rowsCount = Math.max(1, Math.ceil(entries.length / columns));
     const height = 54 + rowsCount * (rowH + 8);
+    const footerH = footer ? 100 : 0;
     const px = Phaser.Math.Clamp(x - width / 2, 16, 1920 - width - 16);
-    const py = Phaser.Math.Clamp(y - height, 16, 1080 - height - 16);
+    const py = Phaser.Math.Clamp(y - height - footerH, 16, 1080 - height - footerH - 16);
 
     const container = this.add.container(px, py).setDepth(DEPTH.popover);
     const bg = this.add.graphics();
@@ -1356,11 +1418,31 @@ export default class BattleScene extends Phaser.Scene {
         sub: entry.sub,
         accent: entry.accent ?? accent,
         titleSize: 17,
-        onClick: () => entry.onClick()
+        onClick: () => entry.onClick(),
+        onHover: entry.onHover ? (b) => entry.onHover(b, { x: px, y: py }) : null,
+        onOut: entry.onHover ? () => this.tooltip.hide() : null
       });
       button.setDisabled(Boolean(entry.disabled));
       container.add(button.container);
     });
+
+    // Panel Kouzlit: užší, fialový, pod tabulkou schopností.
+    if (footer) {
+      const fw = 280;
+      const fx = (width - fw) / 2;
+      const fy = height + 12;
+      const fbg = this.add.graphics();
+      drawGlass(fbg, fx, fy, fw, 88, { edge: 0xb48cff, edgeAlpha: 0.95, alpha: 0.96, radius: 14 });
+      container.add(fbg);
+      const cast = new BattleButton(this, fx + 12, fy + 12, fw - 24, 64, {
+        label: footer.label,
+        sub: footer.sub,
+        accent: 0xb48cff,
+        titleSize: 19,
+        onClick: () => footer.onClick()
+      });
+      container.add(cast.container);
+    }
 
     // Ztlumení zbytku: klik mimo popover ho zavře (řeší pointerdown scény).
     this.popover = { kind, container };
@@ -1387,17 +1469,63 @@ export default class BattleScene extends Phaser.Scene {
       this.log('Arion už toto kolo kouzlil. Kouzla se obnoví po tazích tvých monster.');
       return;
     }
+    this.openSpellbook(null);
+  }
 
-    const entries = this.availableSpells('enemy').map((spell) => ({
-      label: spell.name,
-      sub: `${this.spellManaCost(spell)} MP · dosah ${spell.range} · poškození ${spell.damage}`,
-      accent: elementColor(spell.school),
-      disabled: this.state.mp < this.spellManaCost(spell),
-      onClick: () => this.selectBattleSpell(spell)
-    }));
-
-    const anchor = this.spellButton.container;
-    this.openPopover('spells', anchor.x + 68, anchor.y - 12, 'Útočná kouzla', entries, 0xb48cff);
+  // Kniha kouzel: vlevo školy magie, vpravo útočná kouzla vybrané školy. S cílem (z nabídky
+  // útoku) se kouzlo sešle rovnou na něj, jinak se cíl vybere kliknutím. Kouzla mají neomezený dosah.
+  openSpellbook(target = null) {
+    this.closePopover();
+    this.tooltip.hide();
+    const spells = this.availableSpells('enemy');
+    const unlocked = (school) => this.state.magicMastery?.[school]?.unlocked !== false && (this.state.magicMastery?.[school]?.level ?? 0) > 0;
+    if (!this.spellbookSchool || !spells.some((s) => s.school === this.spellbookSchool)) {
+      this.spellbookSchool = SCHOOL_ORDER.find((school) => spells.some((s) => s.school === school)) ?? 'air';
+    }
+    const width = 700;
+    const height = 60 + SCHOOL_ORDER.length * 66;
+    const px = 960 - width / 2;
+    const py = Phaser.Math.Clamp(1080 - 140 - height, 16, 1080 - height - 16);
+    const container = this.add.container(px, py).setDepth(DEPTH.popover);
+    const bg = this.add.graphics();
+    drawGlass(bg, 0, 0, width, height, { edge: 0xb48cff, edgeAlpha: 0.85, alpha: 0.95, radius: 16 });
+    container.add(bg);
+    container.add(uiText(this, 18, 14, target ? `Kniha kouzel – cíl: ${target.name}` : 'Kniha kouzel', { size: 19, bold: true, color: UI_COLORS.gold }));
+    container.add(uiText(this, width - 18, 16, `MP ${this.state.mp}/${this.state.maxMp} · neomezený dosah`, { size: 15, color: UI_COLORS.muted, originX: 1 }));
+    SCHOOL_ORDER.forEach((school, i) => {
+      const count = spells.filter((s) => s.school === school).length;
+      const open = unlocked(school);
+      const button = new BattleButton(this, 14, 50 + i * 66, 200, 58, {
+        label: SCHOOL_NAMES[school],
+        sub: open ? `${count} kouzel` : 'zamčeno',
+        accent: elementColor(school),
+        titleSize: 18,
+        onClick: () => { this.spellbookSchool = school; this.openSpellbook(target); }
+      });
+      button.setDisabled(!open || count === 0);
+      button.setSelected(school === this.spellbookSchool);
+      container.add(button.container);
+    });
+    const list = spells.filter((s) => s.school === this.spellbookSchool);
+    if (!list.length) container.add(uiText(this, 240, 70, 'V této škole zatím nemáš útočné kouzlo.', { size: 16, color: UI_COLORS.muted }));
+    list.slice(0, SCHOOL_ORDER.length).forEach((spell, i) => {
+      const button = new BattleButton(this, 230, 50 + i * 66, width - 244, 58, {
+        label: spell.name,
+        sub: `${this.spellManaCost(spell)} MP · poškození ${spell.damage}`,
+        accent: elementColor(spell.school),
+        titleSize: 17,
+        onClick: () => {
+          if (!target) { this.selectBattleSpell(spell); return; }
+          this.closePopover();
+          this.selectedSpell = spell;
+          this.castSelectedSpell(target);
+        }
+      });
+      button.setDisabled(this.state.mp < this.spellManaCost(spell));
+      container.add(button.container);
+    });
+    this.popover = { kind: 'spells', container };
+    this.refreshActionButtons();
   }
 
   selectBattleSpell(spell) {
@@ -1408,7 +1536,7 @@ export default class BattleScene extends Phaser.Scene {
     this.closePopover();
     this.selectedSpell = spell;
     this.mode = 'spellTarget';
-    this.setHint(`${spell.name}: klikni na nepřítele v dosahu ${spell.range} (Esc zruší).`);
+    this.setHint(`${spell.name}: klikni na nepřítele (Esc zruší).`);
     this.refreshBoard();
     this.refreshActionButtons();
   }
@@ -1669,14 +1797,14 @@ export default class BattleScene extends Phaser.Scene {
   // ============================================================== akce
 
   wait() {
-    if (!this.isPlayerActing()) return;
+    if (!this.isPlayerActing() || this.tutorial) return;
     this.closePopover();
     this.log(`${this.currentUnit.name} přeskakuje tah.`);
     this.endTurn();
   }
 
   runAway() {
-    if (!this.isPlayerActing()) return;
+    if (!this.isPlayerActing() || this.tutorial) return;
     this.closePopover();
 
     if (exploreBonus(this.state, 'escape') || Phaser.Math.Between(1, 100) <= ESCAPE_CHANCE) {
@@ -1691,7 +1819,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   chooseCapture() {
-    if (!this.isPlayerActing()) return;
+    if (!this.isPlayerActing() || this.isBoss || (this.tutorial && this.tutorialStep !== 'capture')) return;
     if (getItemCount(this.state, 'basic_crystal') <= 0) {
       this.log('Nemáš žádný Basic Soul Crystal.');
       return;
@@ -1725,6 +1853,11 @@ export default class BattleScene extends Phaser.Scene {
     const tameBonus = exploreBonus(this.state, 'tame');
     const result = tryCaptureMonster(wild, crystal.type, activeStatus?.id ?? null, Math.random() - tameBonus);
     result.chance = Math.min(1, result.chance + tameBonus);
+    // Tutoriál: po jednom zásahu je ochočení jisté (100 %).
+    if (this.tutorial) {
+      result.success = true;
+      result.chance = 1;
+    }
 
     this.fxProjectile(this.currentUnit.model, target.model, 0xffd27a, () => {
       this.fxBurst(target.model.x, target.model.y - 70 * target.model.scale, 0xffd27a);
@@ -1735,6 +1868,10 @@ export default class BattleScene extends Phaser.Scene {
         wild.currentHp = Math.max(1, Math.round((Number(wild.stats?.vitality) || target.maxHp) * ratio));
         const destination = addMonsterToCollection(this.state, wild);
         wild.captured = true;
+        if (this.tutorial) {
+          markQuestObjective(this.state, 'greenvale_mage_intro');
+          this.setTutorialStep('done');
+        }
         this.capturedHp = this.capturedHp ?? new Map();
         this.capturedHp.set(wild, wild.currentHp);
         const where = destination === 'party' ? 'Přidáno do party.' : 'Party je plná – monstrum jde do úschovny.';
@@ -1835,7 +1972,8 @@ export default class BattleScene extends Phaser.Scene {
 
     const offensive = isOffensive(skill);
     const precision = Number(monster.stats?.precision) || 80;
-    const hitChance = Phaser.Math.Clamp(skill.accuracy + (precision - 80) * 0.005, 0.05, 0.98);
+    // Tutoriál: útok hráče vždy zasáhne.
+    const hitChance = this.tutorial && attacker.side === 'player' ? 1 : Phaser.Math.Clamp(skill.accuracy + (precision - 80) * 0.005, 0.05, 0.98);
 
     let message = '';
     let outcome = { type: 'none' };
@@ -1854,11 +1992,14 @@ export default class BattleScene extends Phaser.Scene {
       const baseDamage = Math.max(1, Math.floor(skill.power + attackPower * 0.5 - targetDefense * 0.5));
       const damageResult = calculateElementalDamage(baseDamage, skill.element, target.monster?.element);
       damageResult.damage = this.applyTalentDamage(damageResult, attacker, target, skill.category, skill.element);
+      const far = isRangedSkill(skill) && this.grid.distance(attacker.x, attacker.y, target.x, target.y) > RANGED_FULL_RANGE;
+      if (far) damageResult.damage = Math.max(1, Math.floor(damageResult.damage * RANGED_FAR_MULTIPLIER));
 
       target.hp = Math.max(0, target.hp - damageResult.damage);
       if (target.monster) target.monster.currentHp = target.hp;
+      if (attacker.side === 'player') this.tutorialAfterHit(target, 'monster');
 
-      message = `${monster.name}: ${skill.name} → ${damageResult.damage} poškození.${damageResult.effectivenessMessage}`;
+      message = `${monster.name}: ${skill.name} → ${damageResult.damage} poškození${far ? ' (z dálky −70 %)' : ''}.${damageResult.effectivenessMessage}`;
       outcome = { type: 'damage', amount: damageResult.damage, multiplier: damageResult.multiplier };
 
       if (skill.statusEffect) {
@@ -1980,6 +2121,7 @@ export default class BattleScene extends Phaser.Scene {
 
     target.hp = Math.max(0, target.hp - damageResult.damage);
     if (target.monster) target.monster.currentHp = target.hp;
+    this.tutorialAfterHit(target, 'spell');
 
     this.log(`Arion seslal ${spell.name}: ${damageResult.damage} poškození.${damageResult.effectivenessMessage}${note}`);
 
@@ -2103,7 +2245,7 @@ export default class BattleScene extends Phaser.Scene {
       this.time.delayedCall(450, done);
     };
 
-    if (target === attacker || !isOffensive(skill) || (skill.range ?? 1) > 1) {
+    if (target === attacker || !isOffensive(skill) || isRangedSkill(skill)) {
       if (target === attacker) {
         this.fxBurst(model.x, model.y - 60 * model.scale, color);
         this.time.delayedCall(200, finish);
@@ -2212,6 +2354,7 @@ export default class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (isPlayer && this.tutorialStep === 'wait') this.setTutorialStep('attack');
     if (!isPlayer) {
       this.setHint(`${this.currentUnit.name} se chystá k útoku…`);
       this.time.delayedCall(750, () => this.enemyTurn());
@@ -2224,6 +2367,13 @@ export default class BattleScene extends Phaser.Scene {
     if (this.finished || !this.currentUnit) return;
 
     const unit = this.currentUnit;
+    // Tutoriál: Air Elemental neútočí (hráč si v klidu vyzkouší útok a ochočení).
+    if (this.tutorial) {
+      this.log(`${unit.name} krouží kolem a vyčkává.`);
+      if (this.tutorialStep === 'attack') this.setTutorialStep('wait');
+      this.time.delayedCall(600, () => this.endTurn());
+      return;
+    }
     const enemyMonster = unit.monster;
     const availableSkills = getMonsterSkills(enemyMonster)
       .filter((skill) => isOffensive(skill) && skill.remainingUses > 0)
@@ -2245,11 +2395,15 @@ export default class BattleScene extends Phaser.Scene {
       return;
     }
 
-    const skill = availableSkills[0];
-    const skillRange = Number(skill.range) || unit.range || 1;
+    // Agresivní monstra (počáteční oblast): nejdou s dosahem taktizovat – vždy jdou k cíli a útočí
+    // nejsilnější schopností, která na cíl dosáhne naplno; jinak schopností na dálku s postihem.
+    const fullReach = (s) => (isRangedSkill(s) ? RANGED_FULL_RANGE : MELEE_RANGE);
+    const pick = (distance) =>
+      [...availableSkills].filter((s) => distance <= fullReach(s)).sort((a, b) => b.power - a.power)[0] ??
+      [...availableSkills].filter(isRangedSkill).sort((a, b) => b.power - a.power)[0] ?? null;
     const act = () => {
-      const distance = this.grid.distance(unit.x, unit.y, target.x, target.y);
-      if (distance <= skillRange) {
+      const skill = pick(this.grid.distance(unit.x, unit.y, target.x, target.y));
+      if (skill) {
         this.selectedSkill = skill;
         this.useSelectedSkill(target);
       } else {
@@ -2257,8 +2411,7 @@ export default class BattleScene extends Phaser.Scene {
         this.time.delayedCall(400, () => this.endTurn());
       }
     };
-
-    if (this.grid.distance(unit.x, unit.y, target.x, target.y) > skillRange) {
+    if (this.grid.distance(unit.x, unit.y, target.x, target.y) > 1) {
       const destination = chooseAIMove(unit, target, this.units, this.grid);
       if (destination) {
         unit.x = destination.x;
@@ -2365,7 +2518,7 @@ export default class BattleScene extends Phaser.Scene {
     if (this.isBoss) {
       this.state.flags ??= {};
       this.state.flags.greenvaleCaveBossDefeated = true;
-      notes.push('Jeskynní sliz je mrtvý. Vrať se za starostou Edricem na radnici.');
+      notes.push('Orčí válečník je poražen. Vrať se za starostou Edricem na radnici.');
     }
 
     for (const wild of this.wildMonsters ?? []) {
@@ -2468,6 +2621,13 @@ export default class BattleScene extends Phaser.Scene {
   // Panel před bojem: nepřátelé, porovnání sil, šance na výhru a tři volby.
   openPreBattle() {
     if (this.finished) return;
+    // Tutoriál: bez panelu (žádná simulace ani útěk), rovnou boj s průvodcem.
+    if (this.tutorial) {
+      this.preBattle = true;
+      this.createTutorialPanel();
+      this.preBattleFight();
+      return;
+    }
     this.preBattle = true;
     this.mode = 'busy';
     // Lišta akcí se rozmístí až s prvním tahem – do té doby schovaná.
@@ -2510,12 +2670,51 @@ export default class BattleScene extends Phaser.Scene {
       cardButton(this, layer, bx, y + height - 130, 270, 96, `${label} (${hotkey})
 ${sub}`, onClick, { size: 21, ...options });
     button(x + 40, 'Bojovat', 'ruční souboj', 'Enter', () => this.preBattleFight());
-    button(x + 335, 'Simulovat', `výhra ${chance} %`, 'S', () => this.preBattleSimulate());
+    // Boss (Orčí hrozba) se simulovat nedá.
+    button(x + 335, 'Simulovat', this.isBoss ? 'u bosse nejde' : `výhra ${chance} %`, 'S', () => this.preBattleSimulate(), { disabled: this.isBoss });
     button(x + 630, 'Útěk', `šance ${escape} %`, 'F', () => this.preBattleFlee(), { danger: true });
     layer.setAlpha(0);
     this.tweens.add({ targets: layer, alpha: 1, duration: 250 });
     this.preBattleLayer = layer;
     this.setHint('');
+  }
+
+  // Panel průvodce (Mág) nahoře uprostřed – jedna instrukce podle kroku tutoriálu.
+  createTutorialPanel() {
+    const w = 1000;
+    const h = 136;
+    const x = 960 - w / 2;
+    const y = 150;
+    const layer = this.add.container(0, 0).setDepth(DEPTH.popover - 5);
+    let bg = nineImage(this, 'nu-panel', x, y, w, h, 0.6);
+    if (!bg) { bg = this.add.graphics(); drawGlass(bg, x, y, w, h, { edge: 0xffd98a, edgeAlpha: 0.8, alpha: 0.95, radius: 18 }); }
+    const name = cardText(this, x + 34, y + 18, 'Mág', { size: 24, bold: true, color: '#ffd76a' });
+    this.tutorialText = cardText(this, x + 34, y + 52, '', { size: 21, color: '#f3e4bd', wrap: w - 68 });
+    layer.add([bg, name, this.tutorialText]);
+    this.tutorialLayer = layer;
+    this.setTutorialStep(this.tutorialStep);
+  }
+
+  setTutorialStep(step) {
+    if (!this.tutorial) return;
+    this.tutorialStep = step;
+    this.tutorialText?.setText(TUTORIAL_TEXT[step] ?? '');
+    if (this.captureButton) this.refreshActionButtons(); // Ochočení se odemkne až v kroku capture
+  }
+
+  // Tutoriál: Air Elemental po zásahu neklesne pod 1 HP (musí se ochočit). Kroky: zásah
+  // Dire Wolfem → kouzlo Vzduchu → ochočení. Ochočení se odemkne jen po zásahu vlkem.
+  tutorialAfterHit(target, source) {
+    if (!this.tutorial || target?.side !== 'enemy') return;
+    if (target.hp < 1) target.hp = 1;
+    if (target.monster) target.monster.currentHp = target.hp;
+    this.refreshUnitBars(target);
+    if (source === 'monster' && (this.tutorialStep === 'attack' || this.tutorialStep === 'wait')) {
+      // Bez kouzla Vzduchu (nemělo by nastat) rovnou ochočení.
+      this.setTutorialStep(this.availableSpells('enemy').length ? 'spell' : 'capture');
+    } else if (source === 'spell' && this.tutorialStep === 'spell') {
+      this.setTutorialStep('capture');
+    }
   }
 
   closePreBattle() {
@@ -2533,7 +2732,7 @@ ${sub}`, onClick, { size: 21, ...options });
 
   // Simulace: jeden průběh rozhodne; HP a spotřebované techniky se přenesou do party.
   preBattleSimulate() {
-    if (!this.preBattle) return;
+    if (!this.preBattle || this.isBoss || this.tutorial) return;
     this.closePreBattle();
     const result = runSimulation(this.units, { modify: this.simulationModify() });
     applySimulationResult(result);
@@ -2548,7 +2747,7 @@ ${sub}`, onClick, { size: 21, ...options });
   // Útěk před bojem: stejná šance jako v souboji. Neúspěch boj nespustí,
   // ale všechna monstra v partě přijdou o polovinu svých HP.
   preBattleFlee() {
-    if (!this.preBattle) return;
+    if (!this.preBattle || this.tutorial) return;
     this.closePreBattle();
     this.finished = true;
     this.mode = 'busy';
@@ -2770,7 +2969,15 @@ ${sub}`, onClick, { size: 21, ...options });
       applyReinforcementAfterBattle(this.state);
       SaveSystem.save(this.state);
       this.cameras.main.fadeOut(350, 4, 8, 12);
-      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('World', { state: this.state }));
+      // Tutoriál: po ochočení Air Elementala Mág přenese hráče zpět do Hvězdárny.
+      const teleport = this.tutorial && this.state.flags?.mageIntroCaught;
+      if (teleport) {
+        this.state.interiorId = 'greenvale_observatory';
+        SaveSystem.save(this.state);
+      }
+      this.cameras.main.once('camerafadeoutcomplete', () => (teleport
+        ? this.scene.start('Interior', { state: this.state, interiorId: 'greenvale_observatory', fromWorld: false })
+        : this.scene.start('World', { state: this.state })));
     };
 
     if (delay > 0) this.time.delayedCall(delay, finish);

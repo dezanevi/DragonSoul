@@ -181,6 +181,63 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
   filtry Vše / Lze vyrobit / Chybí suroviny / Zamčené, detail se surovinami (jen prohlížení,
   vyrábí se u stolu). Naleziště: lokality Rybolovu, Těžby a Sběru bylin s obsahem a šancemi,
   nenalezené druhy jsou „???“. Diplomacie zatím jen „připravuje se“.
+- Úvodní úkoly profesí (se sledováním, značkami a odměnou zlato + zkušenosti v profesi):
+  **Čistá voda** (Alchymista – 3× Čistá voda od Trhovkyně), **Kožený řemínek** (Učednice
+  v kovárně – 1× řemínek od Obchodníka s látkami nebo z Řemeslnictví), **Byliny od řeky**
+  (Bylinkářka – 3× Čisticí byliny z naleziště Břeh řeky). Úkol je splněný, jakmile máš
+  suroviny v inventáři; zůstanou ti.
+- Kruhy u vchodů jsou výraznější (záře, silný obrys, výplň, mírné pulzování) a kreslí se přes
+  budovu za nimi, ale pod hrdinou – dřív je u radnice a Hvězdárny zakrýval obrázek budovy.
+- Rybářská chata je o pole výš (i s dvorkem, ploty a keři), cesta vede až k jejím dveřím;
+  vstup do radnice leží na dlažbě napojené na cesty. Všechny vchody jsou na cestní síti.
+- Trvalé žluté kruhy před vstupy do budov s interiérem; modrý kruh tam, kde má hráč dokončit
+  krok úkolu (rozhovor u cíle, návrat k zadavateli).
+- Vstup do radnice je přímo před nakreslenými dveřmi (pole 60, 44); hrdina u dveří se kreslí
+  před budovou.
+- Nová hra začíná s prázdným inventářem (dřív 50 lektvarů many a 5 Soul Crystalů).
+- Vrácené úkoly (25. 11.):
+  - Talenty: Elementární soustředění se po volbě školy jmenuje podle ní (např. Ohnivé
+    soustředění) na kartě i v tooltipu.
+  - Karta hrdiny: tooltipy statistik ukazují „Teď“ a „Po +1 bodu“, strop (Rychlost +50 %,
+    Štěstí 15 %, Charisma 25 %) a u velitelských statistik hodnotu, při které přijde další +1.
+  - Úkoly: tečky sledovaného úkolu po souboji už nemizí. Zlaté „!“ / „?“ nad budovou zadavatele
+    ve světě i nad postavou v interiéru (Starosta, Mág), modré „?“ tam, kde je úkolem rozhovor
+    (hostinec / Bard).
+  - Kolize: pole za budovami, kde by hrdinu zakryl obrázek budovy, jsou neprůchozí (podle
+    průhlednosti obrázku); cesty zůstávají průchozí a budova, za kterou hrdina na cestě zajde,
+    zprůsvitní. Útes uprostřed cesty před Hvězdárnou je dlažba, cesta k Rybářské chatě vede
+    až ke dveřím.
+  - Souboj: fyzické schopnosti mají vždy dosah 1 pole; na celou mřížku (do 5 polí plně, dál
+    −70 %) jdou jen magické.
+- **Souboj – zjednodušení:** schopnosti monstra už nejsou na spodní liště (zůstaly Kouzla,
+  Předmět, Ochočení, Čekat, Útěk). Klik na nepřítele otevře nabídku schopností (v dosahu /
+  přesun + útok / −70 % z dálky / mimo dosah) a pod ní užší fialový panel **Kouzlit**, který
+  otevře **knihu kouzel**: vlevo školy magie, vpravo útočná kouzla školy – stejná kniha je
+  i na tlačítku Kouzla. Kouzla hrdiny mají neomezený dosah a žádný postih.
+- Pohyb + útok v jednom tahu: když je nepřítel v dosahu pohybu, monstrum k němu samo dojde
+  a hned zaútočí.
+- Schopnosti na dálku (dosah > 1) a magické jdou použít na cíl kdekoli na bojišti: do 5 polí
+  plné poškození, dál −70 % (tooltip schopnosti na to upozorní, bez potvrzování). Platí i pro
+  nepřátele.
+- Nepřátelská monstra jsou agresivní: jdou k cíli a útočí, s dosahem netaktizují. Na louce
+  Greenvale lze nově potkat Air Elementala (Jiskra – magický útok na dálku).
+- Kolize budov podle obrázků: kolizní obdélník se při startu spočítá z obrysu spodní části
+  obrázku budovy (stěny), ne z půdorysu v mapě – hrdina už neprochází zdmi (radnice měla kolizi
+  jen 3×2 pole, obrázek je 2,5× širší). Pole dveří zůstává vždy volné. Stejné kolize používají
+  tečky sledovaného úkolu.
+- Cesty ke dveřím: dlažba u kovárny je napojená na hlavní cestní síť (byla odříznutá);
+  Rybářská chata má dveře na jihozápadní straně, jak jsou nakreslené (dřív pole na východě).
+- **Karta Úkoly** (`src/scenes/QuestsScene.js`, záložka Úkoly): rozklikávací seznam úkolů (popis,
+  co dělat, zadavatel, odměna) a tlačítko Sledovat / Nesledovat. Sledovaný úkol vede hrdinu
+  tyrkysovými tečkami ve světě (A* po mapě, cesty a dlažba mají přednost): k zadavateli, po
+  přijetí k cíli a po splnění zpět k zadavateli; kroužek označí cíl. Tečky drží pole – při chůzi
+  po trase se prošlá pole odmazávají, celá cesta se přepočítá jen při změně cíle nebo když hrdina
+  z trasy sejde. Dokončený úkol se přestane sledovat.
+- Nástěnka úkolů (radnice i nástěnka na náměstí – E) ukazuje nedokončené úkoly oblasti včetně
+  nepřijatých se stejným Sledovat.
+- Nový úkol **Píseň větrů**: Mág v Hvězdárně ho zadá, Bard v hostinci zazpívá Píseň větrů, Mág pak
+  odemkne školu magie Vzduch a její první kouzla. Nová hra proto začíná bez odemčené magie
+  (uložené hry, které vzduch už mají, ho nepřijdou).
 - Karta hrdiny: bez dráčka za jménem; řádky Jméno – Mana posunuté výš, takže ukazatel many má
   odstup od spodního okraje rámečku. Najetí na statistiky ukáže tooltip jako na kartě Party:
   Spell Power (+½ k poškození kouzel), Rychlost (rychlost chůze v %), Štěstí a Charisma
@@ -334,6 +391,43 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
   než se scéna zastavila).
 
 ### Změněno
+- Úvodní úkoly profesí končí výrobou předmětu, který hráč odevzdá (z inventáře se vezme):
+  - Čistá voda: kup 3× Čistou vodu (Trhovkyně) a 2× Léčivé byliny (Bylinkářka), na
+    Alchymistickém stole vyrob Menší léčivý tonik.
+  - Kožený řemínek: kup Kůži (nově u Obchodníka s látkami, 6 zl) a na Koželužském stole
+    vyrob Kožený řemínek.
+  - Byliny od řeky: nasbírej 2× Čisticí byliny, kup Čistou vodu a vyrob Protijed
+    (recept je nově na Alchymii 1).
+
+  Krok, jehož předmět hráč už má, se přeskočí (s hotovým výrobkem rovnou „vrať se“).
+  Sledování, modrý kruh a modrý „?“ vedou vždy k aktuálnímu kroku. V obchodě je předmět
+  pro úkol nahoře, se zlatým rámečkem, „!“ a štítkem „Úkol: máš/potřeba“.
+- Obchodníci na tržišti (Trhovkyně, Obchodník s látkami) vykupují suroviny a výrobky
+  z inventáře: okno obchodu má vlevo Koupit a vpravo Prodat (Prodat 1 / Prodat vše,
+  stránkování). Výkup je za polovinu hodnoty předmětu: vlastní cena, jinak nejnižší cena
+  u obchodníků, u výrobků hodnota surovin receptu × 1,3, jinak podle vzácnosti
+  (`systems/ItemValueSystem.js`). Klíčové předměty se nevykupují, u předmětu pro úkol je
+  upozornění.
+- Přijatý úkol se rovnou sleduje (tečky ve světě vedou k jeho cíli). V kartě Úkoly jsou
+  dokončené úkoly až dole a šedě (šedý řádek a název).
+- Malá tlačítka (do výšky 70 px) mají užší zlaté rámování.
+- Karta Řemesla má nový vzhled. Profese vlevo jsou tmavé dlaždice s ikonou, úrovní a tenkým
+  pruhem XP. Seznamy (recepty s ikonou výrobku, naleziště, kategorie, Databáze) mají lehké
+  tmavé řádky se zlatavým okrajem pod myší a zlatým vybraným řádkem. Detaily jsou na tmavých
+  panelech s nadpisy sekcí a zlatou linkou, ikony v rámečku barvy vzácnosti. Přehled má
+  hlavičku s velkou ikonou a štítky se souhrnem.
+- Okna výroby (Vaření, Alchymie, Kovářství, Řemeslnictví) mají vzhled karty Řemesla: vlevo
+  filtry Vše a kategorie s počtem receptů, uprostřed recepty s ikonou výrobku, vpravo tmavý panel
+  s ikonou v rámečku vzácnosti a surovinami s ikonami. Ukazují se jen naučené recepty a nejvýš
+  o 5 úrovní nad úrovní profese. Nové vlastní množství: − / + (i šipky nahoru a dolů), Max
+  a tlačítko „Vyrobit ×N“.
+- Vstupy do budov leží mimo obrázky budov, na poli přímo pod nakreslenými dveřmi, a vede k nim
+  dlažba. Kruh je menší a kreslí se pod budovou, nikdy přes její texturu. Hostinec, dům 1 a dům 3
+  mají obrázek posunutý (`offsetX` v `buildingSprites.js`), aby dveře seděly nad polem vstupu.
+  Dům 2 je i s plotem a parcelou o pole na západ, protože mu před dveřmi stál dům 3. Před
+  budovami zmizely stromy, keře a rostliny, které zakrývaly vstupy.
+- Rybářská chata: vstup a kruh jsou přímo před nakreslenými dveřmi, před nimi vedou 2 pole
+  kamenné cesty.
 - Hra se jmenuje **AURION: LEGACY OF SOULS** (titulek stránky, CHANGELOG; logo je v obrázku
   úvodního pozadí). Klíče uložených her v prohlížeči (`dragon-souls-…`) zůstaly, aby se
   rozehrané hry neztratily.
@@ -604,6 +698,13 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
   (pro ladění; v sestavené verzi není).
 
 ### Opraveno (karty)
+- Odevzdání úkolu s odměnou ve zkušenostech profese (např. Kožený řemínek → Kovářství)
+  spadlo, když hráč tu profesi ještě nikdy nepoužil. Profese se teď nejdřív založí.
+- Pohyb hrdiny po diagonále (W+A, W+D, S+A, S+D a šipky) drží směr mřížky: jde přesně podél
+  řady / sloupce polí (na obrazovce v poměru 2 : 1, dřív pod 45°), stejnou rychlostí.
+- „Kde se používá“ z inventáře otevřelo prázdnou kartu Řemesla (Databáze se nevykreslila).
+  V oknech výroby (Vaření, Alchymie, Kovářství, Řemeslnictví) jde kliknout na surovinu:
+  otevře se Databáze (odkud ji získat, kde se používá) a po zavření karty se hra vrátí do okna výroby.
 - Karty otevřené z interiéru byly schované pod interiérem (pořadí scén) – karta se teď
   vždy přesune navrch.
 - ESC, které zavřelo kartu v interiéru, hned poslalo hru i do menu – interiér teď chvíli

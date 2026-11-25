@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { unlockRegion } from '../systems/RegionSystem.js';
-import { addItem } from '../systems/InventorySystem.js';
+import { addItem, getItemCount } from '../systems/InventorySystem.js';
 import { createCardTabBar, CARD_FOR_TAB, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 import { nineImage, drawCardFrame, cardCloseButton, cardText, CARD_PANEL } from '../ui/fantasyCard.js';
 import {
@@ -11,9 +11,14 @@ import {
   getQuestStatus,
   acceptQuest,
   completeQuest,
-  markQuestObjective
+  markQuestObjective,
+  questMark,
+  questStep,
+  isQuestAvailable,
+  questsBlocking
 } from '../systems/QuestSystem.js';
 const AIR_QUEST = 'greenvale_air_song';
+const INTRO_QUEST = 'greenvale_mage_intro';
 import skillRowsForInterior from '../data/skills.json';
 
 // Interiér = karta stejné velikosti jako ostatní karty s obrázkem místnosti
@@ -55,7 +60,7 @@ const INTERIOR_DEFINITIONS = {
     image: IMAGES.townHall,
     resident: 'Starosta Edric',
     spots: [
-      { label: 'Starosta Edric', verb: 'mluvit', rect: [418, 195, 130, 125], action: 'mayor', questMarker: true },
+      { label: 'Starosta Edric', verb: 'mluvit', rect: [418, 195, 130, 125], action: 'mayor', questMarker: { quest: 'greenvale_cave_slime', role: 'giver' } },
       { label: 'Nástěnka úkolů', verb: 'prohlédnout', rect: [22, 88, 212, 232], action: 'board' },
       { label: 'Mapa světa', verb: 'otevřít', rect: [752, 95, 232, 170], action: 'card', card: 'WorldMap' },
       { label: 'Úřednice', verb: 'mluvit', rect: [243, 182, 85, 165], action: 'talk',
@@ -73,7 +78,7 @@ const INTERIOR_DEFINITIONS = {
       { label: 'Liora, léčitelka', verb: 'léčit', rect: [185, 140, 120, 165], action: 'healer' },
       { label: 'Hostinská kuchyně', verb: 'vařit', rect: [582, 160, 235, 145], action: 'kitchen', station: 4 },
       { label: 'Sklep – úschovna monster', verb: 'otevřít', rect: [0, 170, 140, 135], action: 'card', card: 'Party' },
-      { label: 'Bard', verb: 'mluvit', rect: [478, 172, 110, 140], action: 'bard',
+      { label: 'Bard', verb: 'mluvit', rect: [478, 172, 110, 140], action: 'bard', questMarker: { quest: 'greenvale_air_song', role: 'objective' },
         lines: ['Zahraju ti o lovci, který ochočil draka… nebo aspoň Dire Wolfa.', 'Na louce západně od vesnice se toulají divoká monstra. Kdo je umí zkrotit, nikdy nebude sám.'] },
       { label: 'Lovec u stolu', verb: 'mluvit', rect: [840, 212, 112, 108], action: 'talk',
         lines: ['Než vyrazíš na louku, nech si od Liory vyléčit partu.', 'A dobrý pokrm z kuchyně ti v boji přidá sílu – ověřeno.'] }
@@ -88,7 +93,7 @@ const INTERIOR_DEFINITIONS = {
       { label: 'Hornický mistr', verb: 'mluvit', rect: [490, 118, 150, 350], action: 'miner' },
       { label: 'Výheň (dočasně umí vše)', verb: 'kovat', rect: [690, 110, 290, 300], action: 'forge', station: 4 },
       { label: 'Kovadlina', verb: 'kovat', rect: [443, 310, 165, 80], action: 'forge', station: 4 },
-      { label: 'Učednice', verb: 'mluvit', rect: [255, 140, 110, 260], action: 'talk',
+      { label: 'Učednice', verb: 'mluvit', rect: [255, 140, 110, 260], action: 'questGiver', quest: 'greenvale_leather_strap', questMarker: { quest: 'greenvale_leather_strap', role: 'giver' },
         lines: ['Mistr ti prodá krumpáč a vykoupí suroviny. U výhně si ukuješ výbavu.'] }
     ]
   },
@@ -106,7 +111,8 @@ const INTERIOR_DEFINITIONS = {
     image: IMAGES.foodStall,
     spots: [
       { label: 'Trhovkyně', verb: 'mluvit', rect: [445, 65, 250, 330], action: 'talk',
-        lines: ['Čerstvé ovoce, zelenina, houby a čistá voda! Podívej se, co dnes mám.'], shop: 'marketFood' }
+        lines: ['Čerstvé ovoce, zelenina, houby a čistá voda! Podívej se, co dnes mám.'], shop: 'marketFood',
+        questMarker: { quest: 'greenvale_clean_water', role: 'objective' } }
     ]
   },
   greenvale_market_wares: {
@@ -114,14 +120,15 @@ const INTERIOR_DEFINITIONS = {
     image: IMAGES.clothStall,
     spots: [
       { label: 'Obchodník s látkami', verb: 'mluvit', rect: [365, 95, 215, 320], action: 'talk',
-        lines: ['Látky, vlákno, řemínky a vosk – všechno pro řemeslníky.'], shop: 'marketWares' }
+        lines: ['Látky, vlákno, řemínky a vosk – všechno pro řemeslníky.'], shop: 'marketWares',
+        questMarker: { quest: 'greenvale_leather_strap', role: 'objective' } }
     ]
   },
   greenvale_alchemist: {
     title: 'Alchymistický obchod',
     image: IMAGES.alchemist,
     spots: [
-      { label: 'Alchymista', verb: 'mluvit', rect: [315, 125, 170, 275], action: 'talk',
+      { label: 'Alchymista', verb: 'mluvit', rect: [315, 125, 170, 275], action: 'questGiver', quest: 'greenvale_clean_water', questMarker: { quest: 'greenvale_clean_water', role: 'giver' },
         lines: ['Destilační přístroj i hmoždíř jsou ti k dispozici. Zatím umí všechny recepty.'] },
       { label: 'Alchymistický stůl (dočasně umí vše)', verb: 'alchymie', rect: [560, 195, 150, 235], action: 'alchemy', station: 4 },
       { label: 'Alchymistický stůl (dočasně umí vše)', verb: 'alchymie', rect: [200, 340, 330, 120], action: 'alchemy', station: 4 }
@@ -131,7 +138,7 @@ const INTERIOR_DEFINITIONS = {
     title: 'Hvězdárna',
     image: IMAGES.mage,
     spots: [
-      { label: 'Mág', verb: 'mluvit', rect: [290, 180, 180, 290], action: 'mage',
+      { label: 'Mág', verb: 'mluvit', rect: [290, 180, 180, 290], action: 'mage', questMarker: { quest: 'greenvale_mage_intro', role: 'giver', alt: 'greenvale_air_song' },
         lines: ['Hvězdy prozradí mnohé. Další školy magie tě naučím, až na to budeš připraven.', 'Křišťálová koule u mě slouží jako Soul Crystal Workbench – vyrobíš na ní Soul Crystaly.'] },
       { label: 'Soul Crystal Workbench', verb: 'vyrábět', rect: [200, 280, 140, 110], action: 'craft', station: 3 }
     ]
@@ -155,7 +162,7 @@ const INTERIOR_DEFINITIONS = {
     title: 'Dům Bylinkářky',
     image: IMAGES.herbalist,
     spots: [
-      { label: 'Bylinkářka', verb: 'mluvit', rect: [238, 125, 168, 425], action: 'herbalist' },
+      { label: 'Bylinkářka', verb: 'mluvit', rect: [238, 125, 168, 425], action: 'herbalist', questMarker: { quest: 'greenvale_river_herbs', role: 'giver' } },
       { label: 'Sušené byliny a semena', verb: 'obchod', rect: [0, 0, 230, 330], action: 'herbalistShop' },
       { label: 'Krb – kuchyňský sporák', verb: 'vařit', rect: [768, 150, 232, 200], action: 'kitchen', station: 2 }
     ]
@@ -204,7 +211,7 @@ export default class InteriorScene extends Phaser.Scene {
     this.afterDialog = null;
     this.closing = false;
     // Scéna se používá znovu – odkazy na objekty minulé místnosti zahodit.
-    this.questMarker = null;
+    this.questMarkers = [];
     this.spotLabel = null;
     this.spotPlate = null;
 
@@ -334,13 +341,23 @@ export default class InteriorScene extends Phaser.Scene {
       });
 
       if (spot.questMarker) {
-        this.questMarker = cardText(this, r.x + r.w / 2, r.y - 6, '', {
+        const marker = cardText(this, r.x + r.w / 2, r.y - 6, '', {
           size: 54, bold: true, color: '#ffd23a', originX: 0.5, originY: 1, strokeThickness: 7
         }).setDepth(11);
-        this.tweens.add({ targets: this.questMarker, y: r.y - 18, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: marker, y: r.y - 18, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.questMarkers.push({ marker, ...spot.questMarker });
       }
     }
     this.refreshQuestMarker();
+
+    // Hvězdárna: Mág promluví sám – na začátku nové hry (úvodní úkol) a po ochočení
+    // Air Elementala (hráč se sem přenese ze souboje).
+    if (this.interiorId === 'greenvale_observatory') {
+      const status = getQuestStatus(this.state, INTRO_QUEST);
+      if ((status === QUEST_STATUS.notStarted && this.state.flags?.introPending) || status === QUEST_STATUS.ready) {
+        this.time.delayedCall(450, () => { if (!this.dialogLines && !this.closing) this.talkMageIntro(); });
+      }
+    }
   }
 
   showSpotLabel(text, x, y) {
@@ -374,6 +391,7 @@ export default class InteriorScene extends Phaser.Scene {
       case 'card': this.openCard(spot.card); break;
       case 'board': this.showBoard(); break;
       case 'mage': this.talkToMage(spot); break;
+      case 'questGiver': this.talkQuestGiver(spot); break;
       case 'bard': this.talkToBard(spot); break;
       default:
         // Obchodník: po rozhovoru se otevře jeho obchod (data/merchants.js).
@@ -388,16 +406,62 @@ export default class InteriorScene extends Phaser.Scene {
     this.openCardWith('Quests', { board: this.state.region || 'Greenvale' });
   }
 
+  // Úvodní úkol Krotitelova zkouška (tutoriál souboje): Mág dá Soul Crystal a pošle hráče
+  // na louku k Air Elementalovi; po ochočení se hráč objeví zpět v Hvězdárně.
+  talkMageIntro() {
+    const speaker = 'Mág';
+    const name = this.state.playerName ?? 'Arion';
+    const status = getQuestStatus(this.state, INTRO_QUEST);
+    if (status === QUEST_STATUS.notStarted) {
+      acceptQuest(this.state, INTRO_QUEST);
+      addItem(this.state, 'basic_crystal', 1);
+      this.state.flags.introPending = false;
+      SaveSystem.save(this.state);
+      this.showDialog(speaker, [
+        `Vítej ve Hvězdárně, ${name}. Lovec z lesů a jeho věrný Dire Wolf – hvězdy mi o vás řekly.`,
+        'Tvůj vlk je dobrý lovecký pes. Skutečný krotitel ale umí víc: se Soul Crystalem si získá i divokou bytost.',
+        'Cítím v tobě jiskru magie – probudil jsem ti vítr. Kouzla Vzduchu najdeš v souboji pod tlačítkem Kouzla (Q).',
+        'Na louce u vesnice krouží Air Elemental. Vlk ho musí zasáhnout, ty vyzkoušíš kouzlo a oslabený ti pak uvěří – ochočíš ho.',
+        'Tady máš Soul Crystal. V souboji tě povedu krok za krokem.',
+        'Nový úkol: Krotitelova zkouška. Cestu ukazují zlaté tečky (úkol se sleduje sám).'
+      ]);
+      this.refreshQuestMarker();
+      return;
+    }
+    if (status === QUEST_STATUS.active) {
+      // Krystal pro jistotu doplnit, aby se úkol nedal zablokovat.
+      if (getItemCount(this.state, 'basic_crystal') <= 0) addItem(this.state, 'basic_crystal', 1);
+      SaveSystem.save(this.state);
+      this.showDialog(speaker, ['Air Elemental čeká na louce u vesnice. Jednou ho zasáhni a pak ho ochoč Soul Crystalem.']);
+      return;
+    }
+    completeQuest(this.state, INTRO_QUEST);
+    SaveSystem.save(this.state);
+    this.showDialog(speaker, [
+      'Vítej zpátky – přenesl jsem tě sem, sotva krystal zazářil. Air Elemental je teď tvůj společník.',
+      'Monstra v partě uvidíš v kartě Party (P). Zraněné vyléčí Liora v hostinci.',
+      'Ve vesnici tě čekají lidé s prací: Alchymista, Učednice v kovárně a Bylinkářka. Starosta Edric na radnici má vážnější úkol – ale až si získáš důvěru vesnice.',
+      'Za odvahu ti dávám pět Soul Crystalů – ať můžeš krotit dál.',
+      'A až budeš chtít vítr poznat hlouběji, vrať se ke mně.',
+      `Úkol dokončen: Krotitelova zkouška. Odměna: ${QUESTS[INTRO_QUEST].reward}`
+    ]);
+    this.refreshQuestMarker();
+  }
+
   // Úkol Píseň větrů: Mág zadá, Bard zazpívá, Mág odemkne magii vzduchu.
   talkToMage(spot) {
+    if (getQuestStatus(this.state, INTRO_QUEST) !== QUEST_STATUS.done) {
+      this.talkMageIntro();
+      return;
+    }
     const speaker = 'Mág';
     const status = getQuestStatus(this.state, AIR_QUEST);
     if (status === QUEST_STATUS.notStarted) {
       acceptQuest(this.state, AIR_QUEST);
       SaveSystem.save(this.state);
       this.showDialog(speaker, [
-        'Cítím v tobě jiskru magie. Nejsnáz se probouzí vzduch – ale nejdřív musíš slyšet, jak vítr mluví.',
-        'Bard v hostinci zná starou Píseň větrů. Nech si ji zazpívat a vrať se ke mně.',
+        'Vítr ti už naslouchá – ale abys mu opravdu rozuměl, musíš slyšet, jak mluví.',
+        'Bard v hostinci zná starou Píseň větrů. Nech si ji zazpívat a vrať se ke mně – tvá magie Vzduchu zesílí.',
         'Nový úkol: Píseň větrů. (Úkoly a Sledovat najdeš v kartě Úkoly.)'
       ]);
       return;
@@ -411,11 +475,32 @@ export default class InteriorScene extends Phaser.Scene {
       SaveSystem.save(this.state);
       this.showDialog(speaker, [
         'Slyším ji v tvém hlase – Píseň větrů. Teď už vzduch poslechne i tebe.',
-        'Úkol dokončen: odemčena škola magie Vzduch a její první kouzla (karta Hrdina, Spellbook).'
+        `Úkol dokončen: Píseň větrů. Odměna: ${QUESTS[AIR_QUEST].reward}`
       ]);
       return;
     }
     this.showDialog(speaker, spot.lines ?? ['…']);
+  }
+
+  // Zadavatel úvodního úkolu (Alchymista, Učednice): nabídka → připomínka → odměna.
+  talkQuestGiver(spot) {
+    const quest = QUESTS[spot.quest];
+    const status = getQuestStatus(this.state, spot.quest);
+    let lines;
+    if (status === QUEST_STATUS.notStarted) {
+      acceptQuest(this.state, spot.quest);
+      lines = quest.dialog.offer;
+    } else if (status === QUEST_STATUS.active) {
+      lines = [...quest.dialog.active, `Teď: ${questStep(this.state, spot.quest)}`];
+    } else if (status === QUEST_STATUS.ready) {
+      completeQuest(this.state, spot.quest);
+      lines = [...quest.dialog.ready, `Úkol dokončen: ${quest.title}. Odměna: ${quest.reward}`];
+    } else {
+      lines = spot.lines ?? quest.dialog.done;
+    }
+    SaveSystem.save(this.state);
+    this.refreshQuestMarker();
+    this.showDialog(spot.label, lines);
   }
 
   talkToBard(spot) {
@@ -434,21 +519,32 @@ export default class InteriorScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ postavy
 
-  // Úkol Jeskynní sliz: zadá ho starosta, odměnou jsou talentové stromy.
+  // Úkol Orčí hrozba (dřív Jeskynní sliz): starosta ho svěří až po všech ostatních úkolech
+  // v Greenvale, odměnou jsou talentové stromy a cesta do Verdant Forest.
   talkToMayor() {
     const name = this.state.playerName ?? 'Arion';
     const speaker = 'Starosta Edric';
     const status = getQuestStatus(this.state, CAVE_QUEST);
 
+    if (status === QUEST_STATUS.notStarted && !isQuestAvailable(this.state, CAVE_QUEST)) {
+      const left = questsBlocking(this.state, CAVE_QUEST).map((q) => `${q.title} (${q.giver})`).join(', ');
+      this.showDialog(speaker, [
+        `Vítej na radnici, ${name}. Lovec s Dire Wolfem – o tobě už se v Greenvale mluví.`,
+        'Mám pro tebe vážnou práci, ale nejdřív ukaž, že ti vesnice může věřit. Pomoz lidem, kteří tě potřebují.',
+        `Ještě nedokončené: ${left}.`
+      ]);
+      return;
+    }
+
     if (status === QUEST_STATUS.notStarted) {
       acceptQuest(this.state, CAVE_QUEST);
       SaveSystem.save(this.state);
       this.showDialog(speaker, [
-        `Vítej na radnici, ${name}. Jsi začínající lovec Greenvale.`,
-        'Dire Wolfa jsem ti svěřil jako prvního loveckého společníka.',
-        'V jeskyni za vesnicí se usadil obří jeskynní sliz. Pohlcuje kamení, zvěř i neopatrné lovce.',
-        'Zabij ho a vrať se za mnou. Pak tě naučím, jak se vydat cestou souboje, řemesel nebo magie.',
-        'Nový úkol: Jeskynní sliz. (Jeskyně: přijď k vchodu a stiskni E.)'
+        `${name}, celá vesnice o tobě mluví dobře. Teď tě potřebuju já.`,
+        'V jeskyni za vesnicí se usadil orčí válečník. Přepadá pocestné a lovce, co jdou k lesu.',
+        'Poraz ho a vrať se za mnou. Pak tě naučím, jak se vydat cestou souboje, řemesel nebo magie.',
+        'Pozor: s takovým soupeřem se nedá vyjednávat (bez simulace) a ochočit ho nepůjde.',
+        'Nový úkol: Orčí hrozba. (Jeskyně: přijď k vchodu a stiskni E.)'
       ]);
       this.refreshQuestMarker();
       return;
@@ -459,7 +555,7 @@ export default class InteriorScene extends Phaser.Scene {
       unlockRegion(this.state, 'Verdant Forest');
       SaveSystem.save(this.state);
       this.showDialog(speaker, [
-        'Jeskynní sliz je mrtvý? Greenvale ti dluží díky.',
+        'Orčí válečník je poražen? Greenvale ti dluží díky.',
         'Prokázal jsi, že jsi skutečný lovec. Od teď si můžeš zvolit svou cestu.',
         'Odemčeno: talentové stromy. Na kartě Talenty (T) si vyber hlavní specializaci.',
         'A cesta z Greenvale do Verdant Forest je také otevřená.'
@@ -476,16 +572,18 @@ export default class InteriorScene extends Phaser.Scene {
     }
 
     this.showDialog(speaker, [
-      'Jeskynní sliz pořád žije. Jeskyně je za vesnicí u skal – přijď k vchodu a stiskni E.',
+      'Orčí válečník pořád řádí. Jeskyně je za vesnicí u skal – přijď k vchodu a stiskni E.',
       'Než vyrazíš, ať tě Liora v hostinci dá do pořádku.'
     ]);
   }
 
   // „!“ = nový úkol, „?“ = splněno, vrať se. Jen u starosty.
   refreshQuestMarker() {
-    if (!this.questMarker) return;
-    const status = getQuestStatus(this.state, CAVE_QUEST);
-    this.questMarker.setText(status === QUEST_STATUS.notStarted ? '!' : status === QUEST_STATUS.ready ? '?' : '');
+    for (const { marker, quest, role, alt } of this.questMarkers ?? []) {
+      // alt = další úkol téže postavy (Mág: úvodní úkol, pak Píseň větrů).
+      const mark = questMark(this.state, quest, role, this.interiorId) ?? (alt ? questMark(this.state, alt, role, this.interiorId) : null);
+      marker.setText(mark?.char ?? '').setColor(mark?.color ?? '#ffd23a');
+    }
   }
 
   healAtInn() {
@@ -510,7 +608,7 @@ export default class InteriorScene extends Phaser.Scene {
       'Monstra mezi partou a úschovnou přesuneš ve sklepě (sud vlevo) nebo v kartě Party (P).'
     ];
     if (getQuestStatus(this.state, CAVE_QUEST) === QUEST_STATUS.active) {
-      lines.push('Jdeš na toho jeskynního slizu? Jeho útoky jsou těžké jako kámen. Vrať se, kdyby bylo zle.');
+      lines.push('Jdeš na toho orka? Jeho sekera je těžká jako kámen. Vrať se, kdyby bylo zle.');
     }
     this.showDialog('Liora, léčitelka', lines);
   }
@@ -576,6 +674,20 @@ export default class InteriorScene extends Phaser.Scene {
     } else {
       lines.push('Vítej zpátky. Čerstvé byliny, srp, výkup nebo specializace – co potřebuješ?');
     }
+    // Úkol Byliny od řeky (nasbírat 3× Čisticí byliny na břehu řeky).
+    const herbQuest = 'greenvale_river_herbs';
+    const herbStatus = getQuestStatus(this.state, herbQuest);
+    if (herbStatus === QUEST_STATUS.notStarted) {
+      acceptQuest(this.state, herbQuest);
+      lines.push('A jestli se chceš opravdu učit: na břehu řeky rostou čisticí byliny. Natrhej dvě, kup čistou vodu a u Alchymisty z nich uvař protijed. Ten mi přines.', 'Nový úkol: Byliny od řeky.');
+    } else if (herbStatus === QUEST_STATUS.active) {
+      lines.push(`Pořád čekám na protijed z čisticích bylin. Teď: ${questStep(this.state, herbQuest)}`);
+    } else if (herbStatus === QUEST_STATUS.ready) {
+      completeQuest(this.state, herbQuest);
+      lines.push('Protijed jako od mistra – čirý a bez hořkosti. Tady máš za snahu.', `Úkol dokončen: Byliny od řeky. Odměna: ${QUESTS[herbQuest].reward}`);
+    }
+    SaveSystem.save(this.state);
+    this.refreshQuestMarker();
     this.afterDialog = () => this.openHerbalistShop();
     this.showDialog('Bylinkářka', lines);
   }

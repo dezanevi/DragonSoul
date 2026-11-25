@@ -8,7 +8,7 @@ import { magicStateKey, spriteState } from './heroButtonSprites.js';
 const MAGIC_CARD = { y: 437, h: 136, spriteW: 104, spriteH: 122, barY: 547, barW: 66, barH: 12 };
 import { getHeroSpeed, getHeroLuck, getHeroCharisma } from '../../systems/HeroStatsSystem.js';
 import { getEffectiveSpellPower, getTalentBonuses } from '../../systems/TalentSystem.js';
-import { getMovementMultiplier, getRareEncounterBonus, getShopDiscount } from '../../systems/HeroStatsSystem.js';
+import { getMovementMultiplier } from '../../systems/HeroStatsSystem.js';
 
 // Panely záložky Hrdina, které jen zobrazují data ze stavu hry.
 // Nic nepočítají – hodnoty berou tak, jak je uložily herní systémy.
@@ -83,18 +83,49 @@ export class HeroStats {
     );
   }
 
+  // Tooltip statistiky: aktuální účinek v boji / ve hře, účinek po zlepšení o 1 bod a strop.
   showTip(kind, index, area) {
     const state = this.state;
     if (!this.tooltip || !state) return;
-    const pct = (value) => `${Math.round(value * 1000) / 10}`.replace('.', ',');
+    const pct = (value) => `${Math.round(value * 10) / 10}`.replace('.', ',');
+    const capped = (perPoint, cap) => (points) => Math.min(cap, Math.max(0, points - 1) * perPoint);
     if (kind === 'hero') {
       const sp = getEffectiveSpellPower(state);
+      const speed = number(state.speed, 1);
+      const luck = number(state.luck, 1);
+      const charisma = number(state.charisma, 1);
+      const speedOf = capped(2, 50);
+      const luckOf = capped(0.5, 15);
+      const charismaOf = capped(1, 25);
+      const next = (now, after, cap, unit) => (now >= cap
+        ? `Maximum: ${pct(cap)} ${unit} je dosažené, další body už nic nepřidají.`
+        : `Po +1 bodu: ${pct(after)} ${unit}${after >= cap ? ' (maximum)' : ''}.`);
       const tips = [
-        ['Intelekt', [`Hodnota ${number(state.intellect)}.`, 'Zatím sám nic nedělá. Každou 5. úroveň roste spolu s ním i maximální mana (+1) a Spell Power (+1).']],
-        ['Spell Power', [`Hodnota ${sp}.`, `Kouzla hrdiny: +${Math.floor(sp / 2)} k poškození každého kouzla (polovina Spell Power).`]],
-        ['Rychlost', [`Hodnota ${number(state.speed, 1)}.`, `Chůze po mapě: ${pct(getMovementMultiplier(state) * 100 - 100)} % rychleji (+2 % za každý bod nad 1, nejvýš +50 %, plus jídlo a lektvary).`]],
-        ['Štěstí', [`Hodnota ${number(state.luck, 1)}.`, `Šance na vzácné monstrum v setkání +${pct(getRareEncounterBonus(state) * 100)} % (0,5 % za bod nad 1). Zatím se v setkáních nepoužívá.`]],
-        ['Charisma', [`Hodnota ${number(state.charisma, 1)}.`, `Sleva u obchodníků ${pct(getShopDiscount(state) * 100)} % (1 % za bod nad 1, nejvýš 25 %). Zatím se v obchodech nepoužívá.`]]
+        ['Intelekt', [
+          `Hodnota ${number(state.intellect)}.`,
+          'Teď: sám zatím nic nedělá (roste každou 5. úroveň spolu s manou a Spell Power).',
+          'Po +1 bodu: zatím beze změny.'
+        ]],
+        ['Spell Power', [
+          `Hodnota ${sp}.`,
+          `Teď: kouzla hrdiny +${Math.floor(sp / 2)} k poškození každého kouzla (polovina Spell Power).`,
+          `Po +1 bodu: +${Math.floor((sp + 1) / 2)} k poškození${Math.floor((sp + 1) / 2) === Math.floor(sp / 2) ? ' (zvýší se až každý druhý bod)' : ''}. Bez stropu.`
+        ]],
+        ['Rychlost', [
+          `Hodnota ${speed}.`,
+          `Teď: chůze po mapě o ${pct(speedOf(speed))} % rychleji (2 % za bod nad 1; jídlo a lektvary navíc – celkem ${pct(getMovementMultiplier(state) * 100 - 100)} %).`,
+          next(speedOf(speed), speedOf(speed + 1), 50, '%')
+        ]],
+        ['Štěstí', [
+          `Hodnota ${luck}.`,
+          `Teď: šance na vzácné monstrum v setkání +${pct(luckOf(luck))} % (0,5 % za bod nad 1). Zatím se v setkáních nepoužívá.`,
+          next(luckOf(luck), luckOf(luck + 1), 15, '%')
+        ]],
+        ['Charisma', [
+          `Hodnota ${charisma}.`,
+          `Teď: sleva u obchodníků ${pct(charismaOf(charisma))} % (1 % za bod nad 1). Zatím se v obchodech nepoužívá.`,
+          next(charismaOf(charisma), charismaOf(charisma + 1), 25, '%')
+        ]]
       ];
       const [title, lines] = tips[index];
       this.tooltip.show(area, title, lines);
@@ -108,10 +139,15 @@ export class HeroStats {
       ['Magická odolnost', number(state.magicResistance), talents.commanderMagicResistance, 'Magické obraně', 'obranu proti magii']
     ];
     const [title, value, talent, stat, what] = rows[index];
-    const bonus = Math.floor(Math.max(0, value) / 5) + talent;
+    const base = Math.floor(Math.max(0, value) / 5);
+    const after = Math.floor(Math.max(0, value + 1) / 5);
+    const nextAt = (base + 1) * 5;
     this.tooltip.show(area, title, [
-      `Velitelský bonus: +${bonus} k ${stat} každého monstra v boji (posílí ${what}).`,
-      `Hodnota ${value} ÷ 5 = ${Math.floor(Math.max(0, value) / 5)}${talent ? `, talenty +${talent}` : ''}.`
+      `Hodnota ${value} (÷ 5 = ${base}${talent ? `, talenty +${talent}` : ''}).`,
+      `Teď: +${base + talent} k ${stat} každého monstra v boji (posílí ${what}).`,
+      after > base
+        ? `Po +1 bodu: +${after + talent} k ${stat}.`
+        : `Po +1 bodu: beze změny – další +1 přidá až hodnota ${nextAt}. Bez stropu.`
     ]);
   }
 

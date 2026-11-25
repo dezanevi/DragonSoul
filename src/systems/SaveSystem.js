@@ -67,9 +67,8 @@ function createStarterDireWolf() {
 
 // Počáteční inventář: 5 krystalů ochočení a 50 lektvarů many.
 function createStartingInventory() {
+  // Nová hra začíná s prázdným inventářem (předměty hráč získá od postav, obchodníků a za úkoly).
   const slots = new Array(INVENTORY_SIZE).fill(null);
-  slots[0] = { id: 'mana_potion', qty: 50 };
-  slots[1] = { id: 'basic_crystal', qty: 5 };
   return { slots };
 }
 
@@ -80,9 +79,10 @@ export const SaveSystem = {
       version: SAVE_VERSION,
       chapter: 1,
       playerName: normalizedPlayerName,
-      // Nová hra začíná venku před radnicí (svět postaví hráče na pole dveří).
-      interiorId: null,
-      exitDoor: 'greenvale_town_hall',
+      // Nová hra začíná v Hvězdárně u Mága (úvodní úkol Krotitelova zkouška); po odchodu
+      // svět postaví hráče před její dveře.
+      interiorId: 'greenvale_observatory',
+      exitDoor: 'greenvale_observatory',
      unlockedRegions: createInitialUnlockedRegions(),
       x: 320,
       y: 415,
@@ -103,7 +103,8 @@ magicPower: 0,
 gold: 25,
 
       // starterManaPotions: 50 lektvarů many je už v počátečním inventáři.
-      flags: { starterManaPotions: true },
+      // introPending: Mág v Hvězdárně sám zadá úvodní úkol.
+      flags: { starterManaPotions: true, introPending: true },
 talentProgress: createInitialTalentProgress(1),
 
       party: [createStarterDireWolf()],

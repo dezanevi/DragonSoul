@@ -126,7 +126,7 @@ export function canChooseSpecialization(state) {
   if (!progress) return { ok: false, reason: 'Chybí stav hry.' };
   if (progress.specialization) return { ok: false, reason: 'Specializace už je zvolená.' };
   if (!areTalentTreesUnlocked(state)) {
-    return { ok: false, reason: 'Talentové stromy odemkne úkol Jeskynní sliz od starosty Edrica (radnice Greenvale).' };
+    return { ok: false, reason: 'Talentové stromy odemkne úkol Orčí hrozba od starosty Edrica (radnice Greenvale).' };
   }
   return { ok: true };
 }

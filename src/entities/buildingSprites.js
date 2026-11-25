@@ -8,6 +8,7 @@
 //   pixelScale  místo `scale`: pevné zvětšení obrázku (sada v2 – všechny budovy stejně,
 //               takže si drží vzájemné velikosti z listu)
 //   offsetY     posun dolů (px) pod přední (jihovýchodní) roh půdorysu – schody, stín
+//   offsetX     posun doprava (px) – nakreslené dveře přesně nad polem vstupu (kruhem)
 //   flipX       zrcadlově (další dům stejného vzhledu, dveře na druhé straně)
 //   openings    smazat i uzavřené bílé plochy (mezera mezi zbožím a stříškou u stánků):
 //               { minArea, minHeight } – menší plochy (bílé pruhy markýzy) zůstanou
@@ -24,7 +25,7 @@ const v2 = (file, extra = {}) => ({ path: `${V2}${file}.png`, pixelScale: V2_SCA
 export const BUILDING_SPRITES = {
   // Měřítko radnice a nástěnky upravené v editoru terénu (× 0,44 / 0,52).
   greenvale_town_hall: v2('town-hall', { pixelScale: V2_SCALE * 0.44 }),
-  greenvale_tavern: v2('tavern'),
+  greenvale_tavern: v2('tavern', { offsetX: 34 }),
   // Tržiště u náměstí = dva stánky (potraviny a zboží).
   // Stánky a rybářská chata vložené v editoru terénu (měřítko a strana dveří odtud; flipX = dveře na jihozápad).
   greenvale_market: v2('stall-fruit', { openings: STALL_OPENINGS, flipX: true, pixelScale: 1.42 }),
@@ -32,9 +33,9 @@ export const BUILDING_SPRITES = {
   greenvale_smithy: v2('smithy'),
   greenvale_fishing_hut: v2('fishing-hut', { pixelScale: 1.88 }),
   greenvale_hunter_lodge: v2('hunter-lodge'),
-  greenvale_home_1: v2('house-red'),
+  greenvale_home_1: v2('house-red', { offsetX: -44 }),
   greenvale_home_2: v2('house-thatch'),
-  greenvale_home_3: v2('house-blue'),
+  greenvale_home_3: v2('house-blue', { offsetX: 44 }),
   // Budovy a doplňky bez interiéru (zatím jen ve světě).
   greenvale_alchemist: v2('alchemist'),
   greenvale_observatory: v2('observatory'),

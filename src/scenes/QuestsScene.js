@@ -57,8 +57,11 @@ export default class QuestsScene extends Phaser.Scene {
     this.render();
   }
 
+  // Dokončené úkoly až na konci seznamu (jinak pořadí zůstává).
   quests() {
-    return this.board ? boardQuests(this.state, this.board) : journalQuests(this.state);
+    const list = this.board ? boardQuests(this.state, this.board) : journalQuests(this.state);
+    const done = (q) => Number(getQuestStatus(this.state, q.id) === QUEST_STATUS.done);
+    return list.map((q, i) => [q, i]).sort((a, b) => done(a[0]) - done(b[0]) || a[1] - b[1]).map(([q]) => q);
   }
 
   render() {
@@ -82,9 +85,11 @@ export default class QuestsScene extends Phaser.Scene {
       const isTracked = tracked === quest.id;
 
       // Řádek úkolu (klik = rozbalit / sbalit).
-      const row = open ? uiSelectedRow(this, LIST.x, y, LIST.w, ROW_H) : nineImage(this, 'nu-btn', LIST.x, y, LIST.w, ROW_H, 0.4);
-      if (row) this.layer.add(row);
-      this.layer.add(cardText(this, LIST.x + 24, y + ROW_H / 2, `${open ? '▼' : '▶'}  ${quest.title}`, { size: 24, bold: true, color: '#ffe7ae', originY: 0.5, strokeThickness: 4 }));
+      // Dokončený úkol šedě (šedý podklad, ztlumený název).
+      const isDone = status === QUEST_STATUS.done;
+      const row = open ? uiSelectedRow(this, LIST.x, y, LIST.w, ROW_H) : nineImage(this, isDone ? 'nu-btnDisabled' : 'nu-btn', LIST.x, y, LIST.w, ROW_H, 0.4);
+      if (row) this.layer.add(row.setAlpha(isDone && !open ? 0.75 : 1));
+      this.layer.add(cardText(this, LIST.x + 24, y + ROW_H / 2, `${open ? '▼' : '▶'}  ${quest.title}`, { size: 24, bold: true, color: isDone ? '#8f969e' : '#ffe7ae', originY: 0.5, strokeThickness: 4 }));
       this.layer.add(cardText(this, LIST.x + LIST.w - 24, y + ROW_H / 2, `${isTracked ? 'Sledováno · ' : ''}${QUEST_STATUS_LABEL[status]}`, {
         size: 20, bold: true, color: isTracked ? '#ffd76a' : STATUS_COLOR[status], originX: 1, originY: 0.5, strokeThickness: 4
       }));

@@ -164,6 +164,16 @@ export const TALENT_TREES = [
   }
 ];
 
+// Název talentu podle stavu hry: Elementární soustředění se po volbě školy jmenuje podle ní.
+const FOCUS_NAMES = {
+  air: 'Vzdušné soustředění', water: 'Vodní soustředění', fire: 'Ohnivé soustředění',
+  earth: 'Zemní soustředění', light: 'Světelné soustředění', dark: 'Temné soustředění'
+};
+export function talentDisplayName(talent, progress) {
+  if (talent?.choosesSchool && progress?.focusSchool) return FOCUS_NAMES[progress.focusSchool] ?? talent.name;
+  return talent?.name ?? '';
+}
+
 export const TALENT_TREE_BY_ID = Object.fromEntries(TALENT_TREES.map((tree) => [tree.id, tree]));
 
 // Talent podle id → { tree, tierIndex, talent }.

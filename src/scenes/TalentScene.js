@@ -25,6 +25,8 @@ import { elementName } from '../systems/ElementSystem.js';
 import { closeStateKey } from '../ui/heroCard/tabSprites.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 import { drawCardFrame, CARD_FIT } from '../ui/fantasyCard.js';
+import { rebuildTalentCard } from '../ui/newUiKit.js';
+import { talentDisplayName, TALENT_INDEX as TALENT_LOOKUP } from '../data/talents.js';
 import {
   TALENT_CARD,
   FRAME_INNER,
@@ -87,6 +89,10 @@ export default class TalentScene extends Phaser.Scene {
       return;
     }
     normalizeTalentProgress(this.state);
+    // Podklad karty s aktuálními názvy (Elementární soustředění → zvolená škola).
+    const focus = TALENT_LOOKUP.get('elemental_focus')?.talent;
+    // (Vždy znovu – jiná uložená hra může mít jinou nebo žádnou školu.)
+    if (focus) rebuildTalentCard(this, { elemental_focus: talentDisplayName(focus, this.state.talentProgress) });
 
     drawCardFrame(this);
 
@@ -220,7 +226,7 @@ export default class TalentScene extends Phaser.Scene {
       if (canChooseSpecialization(this.state).ok) {
         this.addButton(right - 120, HEADER.buttonY, 120, 34, 'Zvolit', () => this.confirmSpecialization(tree));
       } else {
-        status = 'Odemkne úkol Jeskynní sliz';
+        status = 'Odemkne úkol Orčí hrozba';
       }
     } else if (isMain) {
       status = isTreeComplete(this.state, tree.id) ? 'Hlavní strom – dokončen' : 'Hlavní specializace';
@@ -331,7 +337,7 @@ export default class TalentScene extends Phaser.Scene {
     lines.push(check.ok ? 'Klikni pro přidání hodnosti.' : check.reason);
     const top = toScreen(rect.x + rect.w / 2, rect.y);
     const bottom = toScreen(rect.x, rect.y + rect.h);
-    this.tooltip.show(top.x, top.y, bottom.y, talent.name, lines);
+    this.tooltip.show(top.x, top.y, bottom.y, talentDisplayName(talent, this.state.talentProgress), lines);
   }
 
   // --------------------------------------------------------------- akce
@@ -388,7 +394,8 @@ export default class TalentScene extends Phaser.Scene {
         this.closeModal();
         if (!result.ok) { this.flash(result.reason); return; }
         SaveSystem.save(this.state);
-        this.render();
+        // Nový název talentu je v podkladu karty – karta se otevře znovu s ním.
+        this.scene.restart({ state: this.state, returnScene: this.returnScene, storageAccess: this.storageAccess });
       }
     }));
     buttons.push({ label: 'Zpět', onClick: () => this.closeModal() });

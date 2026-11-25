@@ -14,6 +14,7 @@ import {
   CARD_PANEL, cardText, cardButton, drawCardFrame, cardCloseButton, cardFlash, uiTitle, uiSection, uiSelectedRow, uiProgressBar, nineImage
 } from '../ui/fantasyCard.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
+import { LOOK, roundBox, drawTile, rarityColor, hexColor } from '../ui/craftLook.js';
 
 // Karta Řemesla (záložka Řemesla, klik na dovednost v kartě hrdiny, „Kde se používá“ v inventáři).
 // Vlevo osm profesí a Databáze. U profese záložky Přehled (úroveň, třída, specializace, kde se
@@ -81,7 +82,6 @@ const RECIPE_FILTERS = [
   { id: 'locked', label: 'Zamčené' }
 ];
 
-const rarityColor = (item) => (RARITY[item?.rarity] ?? RARITY.common).color;
 const ROW = 52;
 const PAGE = 10;
 
@@ -131,9 +131,10 @@ export default class ProfessionsScene extends Phaser.Scene {
     this.backButton = cardButton(this, null, P.x + P.w - 226, P.y + 18, 180, 56, 'Zpět (Enter)', () => this.back(), { size: 20 });
 
     // Profese vlevo + Databáze.
+    // Dlaždice s ikonou, úrovní a tenkým pruhem XP.
     this.profButtons = PROFS.map((prof, i) =>
-      cardButton(this, null, LEFT.x, LEFT.y + i * 66, LEFT.w, 56, prof.label, () => this.selectProf(prof.id), { size: 21 }));
-    this.dbButton = cardButton(this, null, LEFT.x, LEFT.y + PROFS.length * 66 + 22, LEFT.w, 60, 'Databáze', () => this.setMode('database'), { size: 22 });
+      this.profTile(LEFT.x, LEFT.y + i * 76, LEFT.w, 68, prof.icon, prof.label, () => this.selectProf(prof.id)));
+    this.dbButton = this.profTile(LEFT.x, LEFT.y + PROFS.length * 76 + 14, LEFT.w, 68, 'book', 'Databáze předmětů', () => this.setMode('database'));
 
     // Záložky profese.
     this.subButtons = {
@@ -213,7 +214,8 @@ export default class ProfessionsScene extends Phaser.Scene {
   }
 
   openItem(itemId) {
-    if (this.view.mode === 'database' && this.view.itemId === itemId) return;
+    // (Při otevření z inventáře je zobrazení už nastavené na předmět – i tak vykreslit.)
+    if (this.ready && this.view.mode === 'database' && this.view.itemId === itemId) return;
     this.push();
     this.view.mode = 'database';
     this.view.itemId = itemId;
@@ -295,9 +297,11 @@ export default class ProfessionsScene extends Phaser.Scene {
     this.content.removeAll(true);
     const v = this.view;
     PROFS.forEach((prof, i) => {
-      const button = this.profButtons[i];
-      button.setLabel(prof.id === 'diplomacy' ? prof.label : `${prof.label}  ${this.level(prof.id)}`);
-      button.setActive(v.mode !== 'database' && v.prof === prof.id);
+      const tile = this.profButtons[i];
+      const data = this.state.professions?.[prof.id];
+      if (prof.id === 'diplomacy' || !data) tile.setInfo('', null);
+      else tile.setInfo(String(data.level ?? 1), data.level >= 100 ? 1 : (data.exp ?? 0) / Math.max(1, data.next ?? 1));
+      tile.setActive(v.mode !== 'database' && v.prof === prof.id);
     });
     this.dbButton.setActive(v.mode === 'database');
     this.backButton.setDisabled(this.history.length === 0);
@@ -336,10 +340,65 @@ export default class ProfessionsScene extends Phaser.Scene {
     return b;
   }
 
+  // Panel detailu: tmavý, tenký zlatavý okraj a jemná vnitřní linka.
   section(x, y, w, h) {
-    const s = uiSection(this, x, y, w, h);
-    this.content.add(s);
-    return s;
+    const g = this.add.graphics();
+    roundBox(g, x, y, w, h, 0x08111d, 0.85, 0x8a6a30, 0.9, 1.5, 12);
+    g.lineStyle(1, LOOK.gold, 0.16).strokeRoundedRect(x + 6, y + 6, w - 12, h - 12, 9);
+    this.content.add(g);
+    return g;
+  }
+
+  // Nadpis sekce se zlatou linkou až k pravému okraji. Vrací výšku textu.
+  heading(x, y, w, value, options = {}) {
+    const t = this.text(x, y, value, { size: 21, bold: true, color: '#ffe7ae', ...options });
+    const g = this.add.graphics();
+    g.lineStyle(1.5, LOOK.gold, 0.4).lineBetween(x + t.width + 14, y + t.height / 2 + 1, x + w, y + t.height / 2 + 1);
+    this.content.add(g);
+    return t.height;
+  }
+
+  // Ikona předmětu v rámečku barvy vzácnosti.
+  iconFrame(itemId, cx, cy, size) {
+    const item = getItem(itemId);
+    const g = this.add.graphics();
+    const half = size / 2 + 8;
+    roundBox(g, cx - half, cy - half, half * 2, half * 2, 0x05080c, 0.85, hexColor(rarityColor(item)), 0.9, 2, 10);
+    this.content.add(g);
+    this.icon(itemId, cx, cy, size);
+  }
+
+  // Dlaždice profese vlevo (zůstává po celou dobu karty).
+  profTile(x, y, w, h, iconKey, label, onClick) {
+    const g = this.add.graphics();
+    const key = `nu-icon-${iconKey}`;
+    const icon = this.textures.exists(key) ? this.add.image(x + 38, y + h / 2, key) : null;
+    icon?.setScale(42 / Math.max(icon.width, icon.height));
+    const name = cardText(this, x + 70, y + h / 2 - 6, label, { size: 21, bold: true, originY: 0.5 });
+    const level = cardText(this, x + w - 16, y + h / 2 - 6, '', { size: 22, bold: true, color: '#ffd76a', originX: 1, originY: 0.5 });
+    const bar = this.add.graphics();
+    const zone = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
+    const tile = { active: false, hover: false, ratio: null };
+    const draw = () => {
+      drawTile(g, x, y, w, h, tile);
+      name.setColor(tile.active ? '#ffe7ae' : '#e8dcc0');
+      if (tile.ratio == null) name.setY(y + h / 2);
+      bar.clear();
+      if (tile.ratio != null) {
+        const bx = x + 70;
+        const bw = w - 86;
+        const by = y + h - 17;
+        bar.fillStyle(0x05080c, 0.95).fillRoundedRect(bx, by, bw, 7, 3);
+        if (tile.ratio > 0) bar.fillStyle(0xffc94a, 1).fillRoundedRect(bx, by, Math.max(7, bw * Math.min(1, tile.ratio)), 7, 3);
+      }
+    };
+    zone.on('pointerover', () => { tile.hover = true; draw(); });
+    zone.on('pointerout', () => { tile.hover = false; draw(); });
+    zone.on('pointerdown', onClick);
+    tile.setActive = (value) => { tile.active = value; draw(); };
+    tile.setInfo = (value, ratio) => { level.setText(value); tile.ratio = ratio; name.setY(y + h / 2 - 6); draw(); };
+    draw();
+    return tile;
   }
 
   icon(itemId, x, y, size) {
@@ -352,11 +411,14 @@ export default class ProfessionsScene extends Phaser.Scene {
     return image;
   }
 
-  // Klikací řádek seznamu (nevybraný = tlačítko nové sady, vybraný = zlatý).
+  // Klikací řádek seznamu: tmavý, pod myší světlejší se zlatavým okrajem, vybraný zlatý.
   listRow(x, y, w, h, selected, onClick) {
-    const bg = selected ? uiSelectedRow(this, x, y, w, h) : nineImage(this, 'nu-btn', x, y, w, h, 0.4);
-    if (bg) this.content.add(bg);
+    const g = this.add.graphics();
+    drawTile(g, x, y, w, h, { active: selected, radius: 8 });
+    this.content.add(g);
     const zone = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => drawTile(g, x, y, w, h, { active: selected, hover: true, radius: 8 }));
+    zone.on('pointerout', () => drawTile(g, x, y, w, h, { active: selected, radius: 8 }));
     zone.on('pointerdown', onClick);
     this.content.add(zone);
   }
@@ -413,25 +475,43 @@ export default class ProfessionsScene extends Phaser.Scene {
 
     const data = this.state.professions[prof.id];
     const cls = this.classOf(prof);
-    this.text(x, y, `${prof.label} – úroveň ${data.level}`, { size: 30, bold: true, color: '#ffe7ae' });
-    this.text(x + 620, y + 6, `Třída ${cls.id} – ${cls.name}`, { size: 22, color: '#ffd76a' });
-    y += 54;
-    const bar = uiProgressBar(this, x, y + 6, 560, 20, 0xffc94a);
+    const w = C.w - 60;
+    // Hlavička: velká ikona v rámečku, název, třída a pruh XP.
+    const head = this.add.graphics();
+    roundBox(head, x, y, 92, 92, 0x05080c, 0.85, LOOK.gold, 0.9, 2, 14);
+    this.content.add(head);
+    const key = `nu-icon-${prof.icon}`;
+    if (this.textures.exists(key)) {
+      const img = this.add.image(x + 46, y + 46, key);
+      img.setScale(66 / Math.max(img.width, img.height));
+      this.content.add(img);
+    }
+    this.text(x + 116, y + 2, `${prof.label}`, { size: 32, bold: true, color: '#ffe7ae' });
+    this.text(x + w, y + 8, `Třída ${cls.id} – ${cls.name}`, { size: 22, bold: true, color: '#ffd76a', originX: 1 });
+    this.text(x + 116, y + 48, `Úroveň ${data.level}`, { size: 22, bold: true, color: '#f3e4bd' });
+    const bar = uiProgressBar(this, x + 260, y + 56, 560, 18, 0xffc94a);
     bar.set(data.level >= 100 ? 1 : data.exp / Math.max(1, data.next));
     this.content.add(bar.objects);
-    this.text(x + 580, y, data.level >= 100 ? 'Maximální úroveň' : `${data.exp} / ${data.next} XP`, { size: 20, color: '#cfe2f5' });
-    y += 50;
+    this.text(x + 840, y + 50, data.level >= 100 ? 'Maximální úroveň' : `${data.exp} / ${data.next} XP`, { size: 20, color: '#cfe2f5' });
+    y += 116;
 
-    // Shrnutí podle profese.
-    const lines = this.summaryLines(prof);
-    for (const line of lines) {
-      this.text(x, y, line, { size: 20, color: '#dbe6f3', wrap: 1240 });
-      y += 32;
+    // Shrnutí jako „štítky“ (číslo + popis).
+    let cx = x;
+    for (const line of this.summaryLines(prof)) {
+      for (const part of line.split(' · ')) {
+        const label = cardText(this, 0, 0, part, { size: 19, color: '#dbe6f3' });
+        const cw = label.width + 32;
+        if (cx + cw > x + w) { cx = x; y += 54; }
+        const chip = this.add.graphics();
+        roundBox(chip, cx, y, cw, 44, LOOK.fill, 0.9, LOOK.line, 0.9, 1.5, 22);
+        label.setPosition(cx + 16, y + 22).setOrigin(0, 0.5);
+        this.content.add([chip, label]);
+        cx += cw + 12;
+      }
     }
-    y += 12;
+    y += 70;
 
-    this.text(x, y, 'Kde se profese dělá', { size: 22, bold: true, color: '#ffe7ae' });
-    y += 36;
+    y += this.heading(x, y, w, 'Kde se profese dělá') + 12;
     for (const line of WHERE[prof.id] ?? []) {
       this.text(x + 16, y, `• ${line}`, { size: 19, color: '#dbe6f3', wrap: 1220 });
       y += 30;
@@ -443,8 +523,8 @@ export default class ProfessionsScene extends Phaser.Scene {
       y = this.renderSpecializations(prof, x, y);
     } else if (prof.id === 'smithing' || prof.id === 'crafting') {
       const craftsman = this.state.talentProgress?.specialization === 'crafting';
-      this.text(x, y, 'Specializace', { size: 22, bold: true, color: '#ffe7ae' });
-      this.text(x + 16, y + 36, craftsman
+      this.heading(x, y, C.w - 60, 'Specializace');
+      this.text(x + 16, y + 40, craftsman
         ? 'Řemeslník (talenty): výbava z Kovářství a Řemeslnictví dává o 20 % vyšší bonusy.'
         : 'Talentová specializace Řemeslník zvýší bonusy vyrobené výbavy o 20 %.', { size: 19, color: craftsman ? '#7fd67a' : '#9fb3c8', wrap: 1220 });
       y += 80;
@@ -453,7 +533,7 @@ export default class ProfessionsScene extends Phaser.Scene {
     // Aktivní účinky (lektvary, cestovní předměty).
     const effects = Object.values(this.state.alchemyEffects ?? {}).filter((e) => e && (e.until > Date.now() || e.battlesLeft > 0));
     if (effects.length && y < C.y + C.h - 70) {
-      this.text(x, y, 'Aktivní účinky', { size: 22, bold: true, color: '#ffe7ae' });
+      this.heading(x, y, C.w - 60, 'Aktivní účinky');
       const list = effects.map((e) => `${e.name ?? 'Účinek'} (${e.until > Date.now() ? `${Math.ceil((e.until - Date.now()) / 60000)} min` : `${e.battlesLeft} soubojů`})`).join(' · ');
       this.text(x + 16, y + 36, list, { size: 19, color: '#7fd67a', wrap: 1220 });
     }
@@ -504,9 +584,7 @@ export default class ProfessionsScene extends Phaser.Scene {
     const rules = mining ? MINING_RULES : HERB_RULES;
     const current = mining ? this.state.mining.specialization : this.state.herbalism.specialization;
     const unlocked = this.level(prof.id) >= rules.specializationLevel;
-    this.text(x, y, `Specializace${unlocked ? (current ? ` (změna stojí ${rules.specializationChangeCost} zl)` : ' – zvol jednu') : ` – odemkne se na úrovni ${rules.specializationLevel}`}`,
-      { size: 22, bold: true, color: '#ffe7ae' });
-    y += 40;
+    y += this.heading(x, y, C.w - 60, `Specializace${unlocked ? (current ? ` (změna stojí ${rules.specializationChangeCost} zl)` : ' – zvol jednu') : ` – odemkne se na úrovni ${rules.specializationLevel}`}`) + 14;
     for (const spec of specs) {
       const chosen = spec.id === current;
       this.text(x + 16, y, `${spec.name}${chosen ? '  ✓' : ''}`, { size: 20, bold: true, color: chosen ? '#7fd67a' : '#f3e4bd' });
@@ -561,18 +639,22 @@ export default class ProfessionsScene extends Phaser.Scene {
         this.view.recipeFilter = f.id;
         this.view.recipePage = 0;
         this.render();
-      }, { size: 20 });
+      }, { size: 19 });
       b.setActive(this.view.recipeFilter === f.id);
     });
 
     book.categories.forEach((cat, i) => {
-      const b = this.button(C.x, C.y + i * 58, 250, 54, cat.label, () => {
+      const y = C.y + i * 62;
+      const active = cat.id === category;
+      this.listRow(C.x, y, 250, 56, active, () => {
+        if (active) return;
         this.view.category[prof] = cat.id;
         this.view.recipePage = 0;
         this.view.recipeId = null;
         this.render();
-      }, { size: 19 });
-      b.setActive(cat.id === category);
+      });
+      const label = this.text(C.x + 22, y + 28, cat.label, { size: 19, bold: true, color: active ? '#ffe7ae' : '#e8dcc0', originY: 0.5 });
+      if (label.width > 214) label.setScale(214 / label.width);
     });
 
     const list = this.recipeList();
@@ -591,8 +673,11 @@ export default class ProfessionsScene extends Phaser.Scene {
       const label = { can: 'lze vyrobit', missing: 'chybí suroviny', locked: `úr. ${recipe.level}`, unknown: 'neznámý' }[st];
       this.listRow(lx, y, lw, ROW, recipe.id === this.view.recipeId, () => { if (recipe.id === this.view.recipeId) return; this.push(); this.view.recipeId = recipe.id; this.render(); });
       const tag = this.text(lx + lw - 16, y + ROW / 2, label, { size: 17, bold: true, color, originX: 1, originY: 0.5 });
-      const name = this.text(lx + 16, y + ROW / 2, `${recipe.level}  ${recipe.name}`, { size: 19, bold: true, color, originY: 0.5 });
-      const room = lw - 48 - tag.width;
+      const output = recipeOutput(prof, recipe);
+      const icon = output ? this.icon(output.id, lx + 34, y + ROW / 2, 36) : null;
+      if (icon && (st === 'locked' || st === 'unknown')) icon.setAlpha(0.45);
+      const name = this.text(lx + 62, y + ROW / 2, `${recipe.level}  ${recipe.name}`, { size: 19, bold: true, color, originY: 0.5 });
+      const room = lw - 94 - tag.width;
       if (name.width > room) name.setScale(room / name.width);
     });
     this.pager(lx, C.y + PAGE * (ROW + 6) + 8, lw, 'recipePage', list.length, PAGE);
@@ -607,11 +692,11 @@ export default class ProfessionsScene extends Phaser.Scene {
   renderRecipeDetail(prof, recipe, x, y, w) {
     const book = RECIPE_BOOKS[prof];
     const output = recipeOutput(prof, recipe);
-    if (output) this.icon(output.id, x + 30, y + 30, 56);
+    if (output) this.iconFrame(output.id, x + 36, y + 36, 52);
     const title = output
-      ? this.link(x + 72, y + 8, recipe.name, () => this.openItem(output.id), { size: 26, bold: true, color: '#ffe7ae', wrap: w - 80 })
-      : this.text(x + 72, y + 8, recipe.name, { size: 26, bold: true, color: '#ffe7ae', wrap: w - 80 });
-    y += Math.max(70, title.height + 24);
+      ? this.link(x + 88, y + 8, recipe.name, () => this.openItem(output.id), { size: 26, bold: true, color: '#ffe7ae', wrap: w - 96 })
+      : this.text(x + 88, y + 8, recipe.name, { size: 26, bold: true, color: '#ffe7ae', wrap: w - 96 });
+    y += Math.max(90, title.height + 24);
     const add = (value, options = {}) => {
       const t = this.text(x, y, value, { size: 19, color: '#dbe6f3', wrap: w, ...options });
       y += t.height + 10;
@@ -619,7 +704,8 @@ export default class ProfessionsScene extends Phaser.Scene {
     };
     add(`${recipe.category === 'M' ? 'Mezivýrobek' : recipe.id} · ${book.title} ${recipe.level} · ${book.stations[recipe.station]?.name ?? ''} · ${recipe.qty} ks`, { size: 18, color: '#9fc4e6' });
     add(book.describe(recipe.effect) || '—', { size: 19 });
-    add('Suroviny (klikni pro databázi):', { size: 20, bold: true, color: '#ffe7ae' });
+    y += 6;
+    y += this.heading(x, y, w, 'Suroviny (klik = databáze)') + 12;
     for (const [key, qty] of Object.entries(recipe.ingredients ?? {})) {
       const have = book.count(this.state, key);
       const ok = have >= qty;
@@ -693,8 +779,7 @@ export default class ProfessionsScene extends Phaser.Scene {
       this.text(x, y, times ? `Vytěženo: ${times}×` : 'Zatím jsi tu netěžil.', { size: 18, color: '#9fb3c8' });
       y += 32;
     }
-    this.text(x, y, prof === 'fishing' ? 'Možné úlovky (bez návnady):' : 'Co se tu dá získat:', { size: 21, bold: true, color: '#ffe7ae' });
-    y += 38;
+    y += this.heading(x, y, w, prof === 'fishing' ? 'Možné úlovky (bez návnady)' : 'Co se tu dá získat') + 14;
 
     const rows = this.siteRows(site);
     const total = rows.reduce((s, r) => s + (r.weight ?? 0), 0);
@@ -741,9 +826,10 @@ export default class ProfessionsScene extends Phaser.Scene {
   renderDatabase() {
     const v = this.view;
     // Hledání: píše se rovnou na klávesnici.
-    const box = nineImage(this, 'nu-slot', R.x, R.y, 520, 56, 0.4);
-    if (box) this.content.add(box);
-    this.text(R.x + 18, R.y + 28, v.query ? `${v.query}|` : 'Hledat: piš na klávesnici…', { size: 20, color: v.query ? '#fff4d6' : '#8f9aa6', originY: 0.5 });
+    const box = this.add.graphics();
+    roundBox(box, R.x, R.y, 520, 56, 0x05080c, 0.9, v.query ? LOOK.gold : 0x8a6a30, 0.9, 2, 28);
+    this.content.add(box);
+    this.text(R.x + 24, R.y + 28, v.query ? `${v.query}|` : 'Hledat: piš na klávesnici…', { size: 20, color: v.query ? '#fff4d6' : '#8f9aa6', originY: 0.5 });
     if (v.query) this.button(R.x + 530, R.y, 120, 56, 'Smazat', () => { v.query = ''; v.dbPage = 0; this.render(); }, { size: 19 });
     DATABASE_FILTERS.forEach((f, i) => {
       const b = this.button(R.x + 660 + i * 140, R.y, 134, 56, f.label, () => { v.dbFilter = f.id; v.dbPage = 0; this.render(); }, { size: 20 });
@@ -776,17 +862,16 @@ export default class ProfessionsScene extends Phaser.Scene {
   }
 
   renderItemDetail(item, x, y, w) {
-    this.icon(item.id, x + 34, y + 34, 64);
-    this.text(x + 84, y + 4, item.name, { size: 28, bold: true, color: rarityColor(item), wrap: w - 90 });
-    this.text(x + 84, y + 44, `${(RARITY[item.rarity] ?? RARITY.common).label}${item.price ? ` · cena ${item.price} zl` : ''} · máš ${this.countOf(item.id)}`, { size: 18, color: '#9fc4e6' });
-    y += 86;
+    this.iconFrame(item.id, x + 40, y + 40, 60);
+    this.text(x + 100, y + 4, item.name, { size: 28, bold: true, color: rarityColor(item), wrap: w - 106 });
+    this.text(x + 100, y + 46, `${(RARITY[item.rarity] ?? RARITY.common).label}${item.price ? ` · cena ${item.price} zl` : ''} · máš ${this.countOf(item.id)}`, { size: 18, color: '#9fc4e6' });
+    y += 100;
     const desc = this.text(x, y, item.description ?? '', { size: 18, color: '#dbe6f3', wrap: w });
     y += desc.height + 16;
 
     // Odkud.
     const sources = itemSources(item.id);
-    this.text(x, y, 'Kde získat', { size: 21, bold: true, color: '#ffe7ae' });
-    y += 34;
+    y += this.heading(x, y, w, 'Kde získat') + 10;
     if (!sources.length) {
       this.text(x + 16, y, 'Zatím ve hře nezískatelné (příběh, úkol nebo připravovaný obsah).', { size: 18, color: '#9fb3c8', wrap: w - 16 });
       y += 30;
@@ -805,8 +890,7 @@ export default class ProfessionsScene extends Phaser.Scene {
 
     // Použití v receptech (stránkované).
     const uses = itemUses(item.id);
-    this.text(x, y, `Používá se v receptech (${uses.length})`, { size: 21, bold: true, color: '#ffe7ae' });
-    y += 36;
+    y += this.heading(x, y, w, `Používá se v receptech (${uses.length})`) + 12;
     if (!uses.length) {
       this.text(x + 16, y, 'V žádném receptu.', { size: 18, color: '#9fb3c8' });
       return;

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import WorldHero from '../entities/WorldHero.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { TILE_SIZE, TILE_TYPES } from '../data/tiles.js';
-import { QUEST_STATUS, getQuestStatus, trackedQuest, questTarget } from '../systems/QuestSystem.js';
+import { QUEST_STATUS, getQuestStatus, trackedQuest, questTarget, worldQuestMarks, questEndBuildings } from '../systems/QuestSystem.js';
 import { canTravelToRegion, isRegionUnlocked } from '../systems/RegionSystem.js';
 import { loadWorldMap } from '../data/maps/index.js';
 import { locationById, normalizeFishing } from '../systems/FishingSystem.js';
@@ -84,6 +84,14 @@ export default class WorldScene extends Phaser.Scene {
     this.mapObjects = []; // objekty mapy pro editor terénu (scéna se znovu používá)
     // Phaser instanci scény znovu používá (návrat ze souboje) – vynulovat stav.
     this.startingBattle = false;
+    // Tečky a značky úkolů: objekty minulého běhu scény jsou zničené (po souboji tečky mizely).
+    this.questTrail = null;
+    this.meadowTarget = null; // cíl úvodního úkolu (pole louky) – instance scény se používá znovu
+    this.trailPath = null;
+    this.trailKey = null;
+    this.questMarkTexts = null;
+    this.questMarksAt = null;
+    this.doorRings = null;
     this.lastEncounterTile = null;
     this.encounterSteps = 0;
     this.encounterThreshold = null;
@@ -652,7 +660,7 @@ export default class WorldScene extends Phaser.Scene {
     for (let y = 0; y < this.map.height; y++) {
       for (let x = 0; x < this.map.width; x++) {
         if (this.map.tiles[y][x].id !== 'cave') continue;
-        // Vchod do jeskyně (úkol Jeskynní sliz).
+        // Vchod do jeskyně (úkol Orčí hrozba).
         this.caveSpots.push({ x: (x + 0.5) * TILE_SIZE, y: (y + 0.5) * TILE_SIZE });
         if (!this.textures.exists(key)) continue;
 
@@ -676,13 +684,146 @@ export default class WorldScene extends Phaser.Scene {
     );
 
     if (!tile || tile.collides) return true;
+    if (this.occlusionBlocked?.has(`${Math.floor(worldX / TILE_SIZE)},${Math.floor(worldY / TILE_SIZE)}`)) return true;
 
-    return this.map.buildings.some((building) =>
-      worldX >= building.x * TILE_SIZE &&
-      worldX < (building.x + building.width) * TILE_SIZE &&
-      worldY >= building.y * TILE_SIZE &&
-      worldY < (building.y + building.height) * TILE_SIZE
+    return this.collisionRects().some((r) =>
+      worldX >= r.x * TILE_SIZE &&
+      worldX < (r.x + r.w) * TILE_SIZE &&
+      worldY >= r.y * TILE_SIZE &&
+      worldY < (r.y + r.h) * TILE_SIZE
     );
+  }
+
+  // Pole za budovou (sever / západ), na kterých by hrdinu skoro celého zakryl obrázek budovy
+  // (stěny, střecha). Ta jsou neprůchozí – hrdina se nemůže „schovat“ do domu a nevypadá to,
+  // že prochází zdí. Počítá se z průhlednosti obrázku v místech těla hrdiny.
+  // Je bod obrazovky (sx, sy) na neprůhledném pixelu obrázku budovy?
+  imageOpaqueAt(image, sx, sy) {
+    const profile = this.alphaCache?.get(image.texture.key);
+    if (!profile?.alpha) return false;
+    const scale = image.scaleX;
+    let lx = Math.floor((sx - (image.x - (profile.w * scale) / 2)) / scale);
+    const ly = Math.floor((sy - (image.y - profile.h * scale)) / scale);
+    if (image.flipX) lx = profile.w - 1 - lx;
+    if (lx < 0 || ly < 0 || lx >= profile.w || ly >= profile.h) return false;
+    return profile.alpha[ly * profile.w + lx] > 140;
+  }
+
+  // Budova, za kterou hrdina zrovna stojí (jen po cestách – jinde je pole za budovou zablokované),
+  // zprůsvitní, aby byl hrdina vidět.
+  updateBuildingFade() {
+    if (!this.buildingImages) return;
+    const hx = this.player.view.x;
+    const hy = this.player.view.y;
+    for (const image of this.buildingImages.values()) {
+      const near = Math.abs(image.x - hx) < image.displayWidth && hy < image.y && hy > image.y - image.displayHeight;
+      const hidden = near && hy < image.depth && [[0, -20], [0, -60]].some(([dx, dy]) => this.imageOpaqueAt(image, hx + dx, hy + dy));
+      const alpha = hidden ? 0.45 : 1;
+      if (image.alpha !== alpha) image.setAlpha(alpha);
+    }
+  }
+
+  occludedTiles(image, building, rect) {
+    const profile = this.alphaCache?.get(image.texture.key);
+    if (!profile?.alpha) return [];
+    const opaque = (sx, sy) => this.imageOpaqueAt(image, sx, sy);
+    const ROAD = new Set(['path', 'plaza', 'bridge', 'dock']);
+    const tiles = [];
+    const door = building.door;
+    for (let ty = Math.floor(rect.y) - 5; ty <= Math.ceil(rect.y + rect.h); ty++) {
+      for (let tx = Math.floor(rect.x) - 5; tx <= Math.ceil(rect.x + rect.w); tx++) {
+        if (door && door.x === tx && door.y === ty) continue;
+        const tile = this.tileAt(tx, ty);
+        if (!tile || tile.collides || ROAD.has(tile.id)) continue; // cesty zůstávají průchozí
+        const cx = tx + 0.5;
+        const cy = ty + 0.5;
+        if (cx > rect.x && cx < rect.x + rect.w && cy > rect.y && cy < rect.y + rect.h) continue;
+        const p = this.iso.toScreen(cx * TILE_SIZE, cy * TILE_SIZE);
+        if (p.y >= image.depth) continue; // před budovou se hrdina kreslí přes ni
+        const samples = [[0, -14], [0, -50], [0, -90], [-16, -40], [16, -40]];
+        const covered = samples.filter(([dx, dy]) => opaque(p.x + dx, p.y + dy)).length;
+        if (covered >= 4) tiles.push({ x: tx, y: ty });
+      }
+    }
+    return tiles;
+  }
+
+  // Kolizní obdélníky budov (v polích, mohou být desetinné).
+  collisionRects() {
+    return this.map.buildings.map((b) => this.buildingCollision?.get(b.id) ?? { x: b.x, y: b.y, w: b.width, h: b.height });
+  }
+
+  // Kolize podle obrázku: v dolní třetině neprůhledných pixelů (stěny, ne střecha) se najde
+  // nejlevější a nejpravější bod a nejnižší bod = západní, východní a jižní roh základny.
+  // Z nich se spočítá kosočtverec ve stejném poměru stran jako půdorys v mapě, mírně zmenšený,
+  // aby šlo dojít až ke zdi. Pole dveří zůstává vždy mimo kolizi.
+  fitBuildingCollision(image, building) {
+    this.alphaCache ??= new Map();
+    const key = image.texture.key;
+    let profile = this.alphaCache.get(key);
+    if (!profile) {
+      const src = image.texture.getSourceImage();
+      const w = src.width;
+      const h = src.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(src, 0, 0);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      const rows = [];
+      for (let y = 0; y < h; y++) {
+        let min = -1;
+        let max = -1;
+        for (let x = 0; x < w; x++) {
+          if (data[(y * w + x) * 4 + 3] > 140) { if (min < 0) min = x; max = x; }
+        }
+        rows.push(min < 0 ? null : [min, max]);
+      }
+      const top = rows.findIndex(Boolean);
+      let bottom = rows.length - 1;
+      while (bottom > 0 && !rows[bottom]) bottom--;
+      const from = Math.round(bottom - (bottom - top) * 0.33);
+      let minX = Infinity;
+      let maxX = -Infinity;
+      for (let y = from; y <= bottom; y++) if (rows[y]) { minX = Math.min(minX, rows[y][0]); maxX = Math.max(maxX, rows[y][1]); }
+      const alpha = new Uint8Array(w * h);
+      for (let i = 0; i < w * h; i++) alpha[i] = data[i * 4 + 3];
+      profile = { w, h, minX, maxX, bottom, alpha };
+      this.alphaCache.set(key, profile);
+    }
+    if (!Number.isFinite(profile.minX)) return null;
+    const scale = image.scaleX;
+    const left = image.x - (profile.w * scale) / 2;
+    const top = image.y - profile.h * scale;
+    const minX = image.flipX ? profile.w - 1 - profile.maxX : profile.minX;
+    const maxX = image.flipX ? profile.w - 1 - profile.minX : profile.maxX;
+    const west = left + minX * scale;
+    const east = left + maxX * scale;
+    const southY = top + profile.bottom * scale;
+    // Šířka základny na obrazovce = (w + h) × 64 px; poměr stran podle mapy.
+    const span = (east - west) / (ISO_TILE_WIDTH / 2);
+    const ratio = building.width / (building.width + building.height);
+    const wTiles = span * ratio;
+    const hTiles = span - wTiles;
+    const southX = west + hTiles * (ISO_TILE_WIDTH / 2);
+    const corner = this.iso.toLogical(southX, southY);
+    const inset = 0.2;
+    const rect = {
+      x: corner.x / TILE_SIZE - wTiles + inset,
+      y: corner.y / TILE_SIZE - hTiles + inset,
+      w: Math.max(0.6, wTiles - inset * 2),
+      h: Math.max(0.6, hTiles - inset * 2)
+    };
+    // Dveře mimo kolizi: zkrátit stranu, na které dveře jsou.
+    const door = building.door;
+    if (door && door.x + 1 > rect.x && door.x < rect.x + rect.w && door.y + 1 > rect.y && door.y < rect.y + rect.h) {
+      const east = rect.x + rect.w - door.x; // jak hluboko dveře zasahují od východní stěny
+      const south = rect.y + rect.h - door.y; // a od jižní
+      if (east <= south) rect.w = Math.max(0.6, door.x - rect.x);
+      else rect.h = Math.max(0.6, door.y - rect.y);
+    }
+    return rect;
   }
 
   // ----------------------------------------------------------------- budovy
@@ -692,6 +833,9 @@ export default class WorldScene extends Phaser.Scene {
   // budovou je vidět a za ní se schová.
   createBuildings() {
     this.buildingBodies = this.physics.add.staticGroup();
+    this.buildingCollision = new Map();
+    this.occlusionBlocked = new Set();
+    this.buildingImages = new Map();
     this.doors = [];
 
     for (const building of this.map.buildings) {
@@ -707,10 +851,12 @@ export default class WorldScene extends Phaser.Scene {
       const sprite = BUILDING_SPRITES[building.id];
       const key = buildingTextureKey(building.id);
 
+      let image = null;
       if (sprite && this.textures.exists(key)) {
-        const image = this.add.image(centerX, south.y + sprite.offsetY, key).setOrigin(0.5, 1);
+        image = this.add.image(centerX + (sprite.offsetX ?? 0), south.y + sprite.offsetY, key).setOrigin(0.5, 1);
         image.setScale(sprite.pixelScale ?? (footprintWidth * sprite.scale) / image.width).setDepth(center.y);
         if (sprite.flipX) image.setFlipX(true);
+        this.buildingImages.set(building.id, image);
         this.trackMapObject(image, `building-${building.id}`, building.name);
       } else {
         // Budova bez grafiky: kosodélník s názvem.
@@ -731,19 +877,31 @@ export default class WorldScene extends Phaser.Scene {
           .setDepth(center.y + 1);
       }
 
-      // Kolize na logické mřížce.
-      const width = building.width * TILE_SIZE;
-      const height = building.height * TILE_SIZE;
+      // Kolize: podle spodní části obrázku budovy (stěny), ne jen podle půdorysu v mapě –
+      // obrázky bývají větší / posunuté. Bez obrázku zůstává půdorys.
+      const rect = (image && this.fitBuildingCollision(image, building)) ?? { x: building.x, y: building.y, w: building.width, h: building.height };
+      this.buildingCollision.set(building.id, rect);
+      if (image) {
+        for (const tile of this.occludedTiles(image, building, rect)) {
+          const key = `${tile.x},${tile.y}`;
+          if (this.occlusionBlocked.has(key)) continue;
+          this.occlusionBlocked.add(key);
+          this.buildingBodies.add(this.add.zone((tile.x + 0.5) * TILE_SIZE, (tile.y + 0.5) * TILE_SIZE, TILE_SIZE * 0.9, TILE_SIZE * 0.9));
+        }
+      }
       const body = this.add.zone(
-        building.x * TILE_SIZE + width / 2,
-        building.y * TILE_SIZE + height / 2,
-        width,
-        height
+        (rect.x + rect.w / 2) * TILE_SIZE,
+        (rect.y + rect.h / 2) * TILE_SIZE,
+        rect.w * TILE_SIZE,
+        rect.h * TILE_SIZE
       );
       this.buildingBodies.add(body);
 
       // Budovy bez interiéru (kostel, mlýn, kašna…) nemají dveře.
       if (!building.door) continue;
+      // Hrdina u dveří se kreslí před budovou (dveře radnice leží „nad“ středem budovy).
+      const doorScreen = this.iso.toScreen((building.door.x + 0.5) * TILE_SIZE, (building.door.y + 0.5) * TILE_SIZE);
+      if (image && doorScreen.y - 40 < image.depth) image.setDepth(doorScreen.y - 40);
       this.doors.push({
         building,
         x: (building.door.x + 0.5) * TILE_SIZE,
@@ -811,7 +969,7 @@ export default class WorldScene extends Phaser.Scene {
 
   cavePrompt() {
     const status = getQuestStatus(this.state, CAVE_QUEST);
-    if (status === QUEST_STATUS.active) return 'E: vstoupit do jeskyně – Jeskynní sliz';
+    if (status === QUEST_STATUS.active) return 'E: vstoupit do jeskyně – Orčí hrozba';
     return 'E: prohlédnout jeskyni';
   }
 
@@ -829,8 +987,8 @@ export default class WorldScene extends Phaser.Scene {
     }
     this.showWorldMessage(
       status === QUEST_STATUS.notStarted
-        ? 'Z jeskyně je cítit vlhko a slyšíš mlaskání. Starosta Edric na radnici o ní něco ví.'
-        : 'Jeskyně je tichá. Jeskynní sliz je mrtvý.'
+        ? 'Z jeskyně je cítit kouř a slyšíš drsný orčí hlas. Starosta Edric na radnici o ní něco ví.'
+        : 'Jeskyně je tichá. Orčí válečník je poražen.'
     );
   }
 
@@ -967,6 +1125,16 @@ export default class WorldScene extends Phaser.Scene {
     // Setkání jen na louce v Greenvale (ostatní regiony zatím bez náhodných setkání).
     if ((this.state.region || 'Greenvale') !== 'Greenvale') return false;
     if (!this.tileAt(tileX, tileY)?.encounter) return false;
+
+    // Úvodní úkol Krotitelova zkouška: na první poli louky vždy Air Elemental (tutoriál souboje).
+    if (getQuestStatus(this.state, 'greenvale_mage_intro') === QUEST_STATUS.active) {
+      if (!(this.state.party ?? []).some((monster) => monster.currentHp > 0)) {
+        this.showWorldMessage('Tvůj vlk je vyčerpaný. Nech ho vyléčit u Liory v hostinci.');
+        return false;
+      }
+      this.startBattle({ type: 'tutorial_air', backdrop: 'greenvale_meadow' });
+      return true;
+    }
 
     // Alchymie: odpuzovač / lákadlo / neviditelnost mění četnost setkání.
     const encounterBonus = exploreBonus(this.state, 'encounters');
@@ -1185,6 +1353,25 @@ export default class WorldScene extends Phaser.Scene {
       const cell = building?.door ?? (building ? { x: building.x + Math.floor(building.width / 2), y: building.y + building.height } : null);
       return cell ? { key: `${questId}:${target.id}`, x: cell.x, y: cell.y } : null;
     }
+    if (target.type === 'herbSite') {
+      const spot = (this.map.herbSpots ?? []).find((s) => s.site === target.site);
+      return spot ? { key: `${questId}:${target.site}`, x: spot.x, y: spot.y } : null;
+    }
+    if (target.type === 'meadow') {
+      // Nejbližší pole louky (zóna setkání) k hrdinovi – spočítá se jednou za úkol.
+      if (!this.meadowTarget || this.meadowTarget.quest !== questId) {
+        const px = Math.floor(this.player.x / TILE_SIZE);
+        const py = Math.floor(this.player.y / TILE_SIZE);
+        let best = null;
+        for (let y = 0; y < this.map.height; y++) for (let x = 0; x < this.map.width; x++) {
+          if (!this.tileAt(x, y)?.encounter || this.isBlocked((x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE)) continue;
+          const d = (x - px) ** 2 + (y - py) ** 2;
+          if (!best || d < best.d) best = { x, y, d };
+        }
+        this.meadowTarget = best ? { quest: questId, x: best.x, y: best.y } : null;
+      }
+      return this.meadowTarget ? { key: `${questId}:meadow`, x: this.meadowTarget.x, y: this.meadowTarget.y } : null;
+    }
     if (target.type === 'cave') {
       const cave = this.caveSpots?.[0];
       return cave ? { key: `${questId}:cave`, x: Math.floor(cave.x / TILE_SIZE), y: Math.floor(cave.y / TILE_SIZE) } : null;
@@ -1196,7 +1383,10 @@ export default class WorldScene extends Phaser.Scene {
   trailWalkable(x, y) {
     const tile = this.tileAt(x, y);
     if (!tile || tile.collides) return false;
-    return !this.map.buildings.some((b) => x >= b.x && x < b.x + b.width && y >= b.y && y < b.y + b.height);
+    if (this.occlusionBlocked?.has(`${x},${y}`)) return false;
+    const cx = x + 0.5;
+    const cy = y + 0.5;
+    return !this.collisionRects().some((r) => cx > r.x && cx < r.x + r.w && cy > r.y && cy < r.y + r.h);
   }
 
   // A* po mřížce mapy; cesty, dlažba, mosty a molo jsou levnější, takže tečky vedou po cestách.
@@ -1277,26 +1467,101 @@ export default class WorldScene extends Phaser.Scene {
       this.trailKey = null;
       return;
     }
-    const key = `${target.key}@${px},${py}`;
-    if (key !== this.trailKey) {
-      this.trailKey = key;
-      this.trailPath = Math.hypot(px - target.x, py - target.y) < 1.5 ? [] : this.findTrailPath({ x: px, y: py }, target);
+    // Trasa drží pole: tečky leží pevně na polích mapy (jedna tečka = jedno pole) a při chůzi
+    // po trase se jen odmazávají prošlá pole. Celá cesta se přepočítá jen při změně cíle nebo
+    // když hrdina z trasy sejde (víc než 1 pole od ní).
+    if (Math.hypot(px - target.x, py - target.y) < 1.5) {
+      this.trailPath = [];
+    } else if (this.trailKey !== target.key || !this.trailPath) {
+      this.trailKey = target.key;
+      this.trailPath = this.findTrailPath({ x: px, y: py }, target);
+    } else {
+      const path = this.trailPath;
+      const at = path.findIndex((c) => c.x === px && c.y === py);
+      if (at >= 0) {
+        this.trailPath = path.slice(at + 1); // hrdina stojí na poli trasy – prošlá pole zmizí
+      } else if (!path.length || Math.min(...path.slice(0, 4).map((c) => Math.max(Math.abs(c.x - px), Math.abs(c.y - py)))) > 1) {
+        this.trailPath = this.findTrailPath({ x: px, y: py }, target);
+      }
     }
     const g = this.questTrail.clear();
     const path = this.trailPath ?? [];
-    const phase = (this.time.now / 450) % 2;
-    for (let i = 1; i < path.length; i += 2) {
+    // Tyrkysové magické tečky (dobře vidět na trávě i dlažbě), vlna běží směrem k cíli.
+    const phase = this.time.now / 160;
+    for (let i = 0; i < path.length - 1; i++) {
       const cell = path[i];
       const p = this.iso.toScreen((cell.x + 0.5) * TILE_SIZE, (cell.y + 0.5) * TILE_SIZE);
-      const wave = 0.55 + 0.45 * Math.max(0, Math.cos(((i / 2 - phase) % 6) * (Math.PI / 3)));
-      g.fillStyle(0x2a1a05, 0.6).fillEllipse(p.x, p.y + 3, 34, 18);
-      g.fillStyle(0xffd76a, wave).fillEllipse(p.x, p.y, 28, 15);
-      g.fillStyle(0xfff6d0, wave * 0.8).fillEllipse(p.x - 4, p.y - 2, 10, 5);
+      const wave = 0.5 + 0.5 * Math.max(0, Math.cos((i - phase) * 0.6));
+      g.fillStyle(0x062a33, 0.65).fillEllipse(p.x, p.y + 3, 30, 16);
+      g.fillStyle(0x3fe0ff, 0.55 + 0.45 * wave).fillEllipse(p.x, p.y, 24, 13);
+      g.fillStyle(0xe6fcff, 0.4 + 0.5 * wave).fillEllipse(p.x - 3, p.y - 2, 9, 5);
     }
     // Cíl: zlatý kroužek.
     if (path.length) {
       const end = this.iso.toScreen((target.x + 0.5) * TILE_SIZE, (target.y + 0.5) * TILE_SIZE);
-      g.lineStyle(6, 0xffd76a, 0.6 + 0.4 * Math.sin(this.time.now / 250)).strokeEllipse(end.x, end.y, 90, 48);
+      g.lineStyle(6, 0x3fe0ff, 0.6 + 0.4 * Math.sin(this.time.now / 250)).strokeEllipse(end.x, end.y, 90, 48);
+    }
+  }
+
+  // Značky úkolů nad budovami („!“ / „?“ zlatě u zadavatele, modré „?“ u cíle s rozhovorem).
+  // Obnoví se jednou za chvíli (stav úkolu se mění v interiérech).
+  updateQuestMarks() {
+    if (this.time.now - (this.questMarksAt ?? -9999) < 500) return;
+    this.questMarksAt = this.time.now;
+    this.questMarkTexts ??= new Map();
+    const marks = worldQuestMarks(this.state, this.state.region || 'Greenvale');
+    const wanted = new Set(marks.map((m) => m.buildingId));
+    for (const [id, text] of this.questMarkTexts) {
+      if (!wanted.has(id)) { text.destroy(); this.questMarkTexts.delete(id); }
+    }
+    this.drawDoorRings();
+    for (const mark of marks) {
+      let text = this.questMarkTexts.get(mark.buildingId);
+      if (!text) {
+        const building = this.map.buildings.find((b) => b.id === mark.buildingId);
+        const image = this.buildingImages?.get(mark.buildingId);
+        if (!building) continue;
+        const base = this.iso.toScreen((building.x + building.width / 2) * TILE_SIZE, (building.y + building.height / 2) * TILE_SIZE);
+        const top = image ? image.y - image.displayHeight - 10 : base.y - 220;
+        text = this.add.text(image ? image.x : base.x, top, '', {
+          fontFamily: 'Lora, Georgia, serif', fontSize: '96px', fontStyle: 'bold', color: mark.color, stroke: '#1a0f05', strokeThickness: 12
+        }).setOrigin(0.5, 1).setDepth(DEPTH.debug - 200);
+        this.uiCamera?.ignore(text);
+        this.tweens.add({ targets: text, y: top - 22, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        this.questMarkTexts.set(mark.buildingId, text);
+      }
+      text.setText(mark.char).setColor(mark.color);
+    }
+  }
+
+  // Trvalé kruhy před vstupy do budov s interiérem: žluté, modré tam, kde má hráč dokončit krok
+  // úkolu (rozhovor u cíle, návrat k zadavateli).
+  drawDoorRings() {
+    // Každý kruh je samostatný objekt na poli vstupu před budovou (mimo její obrázek). Kreslí se
+    // pod hrdinou i pod budovami – nikdy přes jejich texturu (u natěsno postavených domů ho
+    // případně kousek zakryje sousední budova).
+    this.doorRings ??= new Map();
+    const blue = questEndBuildings(this.state, this.state.region || 'Greenvale');
+    for (const door of this.doors ?? []) {
+      const id = door.building.id;
+      const color = blue.has(id) ? 0x5ab8ff : 0xffd23a;
+      let ring = this.doorRings.get(id);
+      if (ring && ring.color === color) continue;
+      if (!ring) {
+        const p = this.iso.toScreen(door.x, door.y);
+        const own = this.buildingImages?.get(id)?.depth ?? Infinity;
+        const g = this.add.graphics().setPosition(p.x, p.y).setDepth(Math.min(p.y - 6, own - 1));
+        this.uiCamera?.ignore(g);
+        this.tweens.add({ targets: g, alpha: 0.78, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        ring = { g, color: null };
+        this.doorRings.set(id, ring);
+      }
+      ring.color = color;
+      ring.g.clear()
+        .fillStyle(color, 0.38).fillEllipse(0, 0, 104, 52)
+        .lineStyle(12, color, 0.3).strokeEllipse(0, 0, 104, 52)
+        .lineStyle(7, color, 1).strokeEllipse(0, 0, 104, 52)
+        .lineStyle(2, 0xffffff, 0.7).strokeEllipse(0, -1, 94, 45);
     }
   }
 
@@ -1336,6 +1601,8 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     this.updateQuestTrail();
+    this.updateQuestMarks();
+    this.updateBuildingFade();
     if (this.cardOpen()) {
       this.updateUnderCard();
       return;

@@ -85,7 +85,9 @@ export default class WorldHero {
 
       // Rychlost hrdiny (a pasivní bonus monster v partě) zrychluje chůzi.
       const speed = SCREEN_SPEED * getMovementMultiplier(this.state);
-      const screen = new Phaser.Math.Vector2(x, y).normalize().scale(speed);
+      // Dvě klávesy (W+A, W+D, S+A, S+D) = podél hrany izometrické mřížky: na obrazovce
+      // poměr 2 : 1 (ne 45°), takže hrdina jde přesně po řadě / sloupci polí.
+      const screen = new Phaser.Math.Vector2(x !== 0 && y !== 0 ? x * 2 : x, y).normalize().scale(speed);
       const logical = this.projection.screenVectorToLogical(screen.x, screen.y);
       this.mover.body.setVelocity(logical.x, logical.y);
     } else {

@@ -93,7 +93,8 @@ export const ALCHEMY_RECIPES = [
   R('L025', 'Astrální lektvar many', 'A', 92, 4, 1, { am_astral_fish: 1, astral_orchid: 1, am_astral_concentrate: 1 }, { mana: 230, manaTurn: 28, turns: 3 }, 'quest'),
 
   // B Protijedy a ochranné přípravky
-  R('L026', 'Protijed', 'B', 3, 1, 2, { cleansing_herbs: 2, clean_water: 1 }, { cure: ['poison'] }, 'game'),
+  // Protijed na úrovni 1 (dřív 3) – vyrábí se v úkolu Byliny od řeky.
+  R('L026', 'Protijed', 'B', 1, 1, 2, { cleansing_herbs: 2, clean_water: 1 }, { cure: ['poison'] }, 'game'),
   R('L027', 'Obvaz s hořkým kořenem', 'B', 6, 1, 2, { bitter_root: 1, cleansing_herbs: 1 }, { cure: ['bleed'] }),
   R('L028', 'Probouzecí sůl', 'B', 9, 1, 2, { storm_fern: 1, cleansing_herbs: 1 }, { cure: ['sleep', 'stun'] }),
   R('L029', 'Hřejivá mast', 'B', 14, 1, 2, { fire_sage: 1, clean_water: 1 }, { cure: ['freeze'] }),

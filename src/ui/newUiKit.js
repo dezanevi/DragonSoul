@@ -275,7 +275,7 @@ function buildHeroCard(scene, key, gender) {
 const TREE_ICONS = { combat: 'crossed_swords', crafting: 'gear', wizard: 'magic_star' };
 const FINAL_ICONS = { combat: 'dragon_gold', crafting: 'crown', wizard: 'dragon_purple' };
 
-function buildTalentCard(scene) {
+function buildTalentCard(scene, names = {}) {
   const { c, ctx } = cardBase(scene);
   icon(scene, ctx, 'book', 56, 70, 64);
   text(ctx, 'Talenty', 128, 102, { size: 40, italic: true, color: '#ffe7ae' });
@@ -299,7 +299,7 @@ function buildTalentCard(scene) {
         nine(scene, ctx, 'btn', r.x, r.y, r.w, r.h, 12);
         const size = r.h - 10;
         fit(ctx, img(scene, legacyKey(`talent_${tree.id}_${i + 1}_${s}`)), r.x + 8, r.y + 5, size, size);
-        text(ctx, talent.name, r.x + size + 16, r.y + 21, { size: 18, color: '#f3e4bd', bold: false, strokeWidth: 2, maxWidth: r.w - size - 26 });
+        text(ctx, names[talent.id] ?? talent.name, r.x + size + 16, r.y + 21, { size: 18, color: '#f3e4bd', bold: false, strokeWidth: 2, maxWidth: r.w - size - 26 });
       });
     });
 
@@ -564,6 +564,11 @@ function buildStateTextures(scene) {
 }
 
 // Sestaví celé nové UI (volá BootScene.create po načtení dílů).
+// Karta Talenty s názvy podle stavu hry (např. „Ohnivé soustředění“ po volbě školy).
+export function rebuildTalentCard(scene, names = {}) {
+  buildTalentCard(scene, names);
+}
+
 export function buildNewUi(scene) {
   if (!scene.textures.exists(pieceKey('card'))) return false;
   buildStateTextures(scene);

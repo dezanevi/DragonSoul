@@ -10,6 +10,8 @@ import {
 } from '../systems/HerbalismSystem.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
 import { cardText, cardButton, uiWindow, uiTitle, uiSection } from '../ui/fantasyCard.js';
+import { questBuyMark } from '../ui/craftLook.js';
+import { questShoppingList } from '../systems/QuestSystem.js';
 
 // Obchod Bylinkářky v Greenvale: omezená denní zásoba běžných bylin (vzácné se neprodávají),
 // Zahradnický srp, výkup bylin a vzácných nálezů za polovinu ceny (hledaná bylina dne ×2)
@@ -80,8 +82,12 @@ export default class HerbalistShopScene extends Phaser.Scene {
       ...herbalistStock(this.state).map((s) => ({ id: s.id, price: s.price, left: s.left, note: `zbývá dnes ${s.left} ks` })),
       { id: sickle.id, price: sickle.price, left: Infinity, note: `Sběr bylin ${sickle.level}+ · máš ${getItemCount(this.state, sickle.id)}` }
     ];
+    // Předměty pro úkol (např. Léčivé byliny pro Čistou vodu) nahoře a označené.
+    const shopping = questShoppingList(this.state);
+    goods.sort((a, b) => Number(Boolean(shopping[b.id])) - Number(Boolean(shopping[a.id])));
     goods.forEach((good, index) => {
       const y = Y + 140 + index * 58;
+      if (shopping[good.id]) this.layer.add(questBuyMark(this, X + 26, y - 2, 598, 58, shopping[good.id], cardText, X + 458));
       this.icon(good.id, X + 60, y + 26);
       this.layer.add(cardText(this, X + 92, y + 4, getItem(good.id).name, { size: 21, bold: true }));
       this.layer.add(cardText(this, X + 92, y + 32, `${good.price} zl · ${good.note}`, { size: 17, color: '#b8a890' }));
