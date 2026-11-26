@@ -3,7 +3,7 @@
 // Starší uložené hry měly jen počty (state.inventory.basic_crystal) – převedou se do slotů.
 // ======================================================================
 
-import { ITEMS, getItem, SPECIES_DROPS, RENAMED_ITEMS } from '../data/items.js';
+import { ITEMS, getItem, SPECIES_DROPS, RENAMED_ITEMS, ITEM_CATEGORIES } from '../data/items.js';
 import { equipItem, unequipItem, normalizeEquipment } from './EquipmentSystem.js';
 import { MEATS, MEAT_DROP_CHANCE, WOOD_DROP } from '../data/cooking.js';
 import { eatMeal } from './CookingSystem.js';
@@ -78,6 +78,42 @@ export function addItem(state, id, qty = 1) {
 }
 
 // Odebere kusy odkudkoli (od posledních hromádek). Vrací true, když jich bylo dost.
+// Seřadí inventář v pořadí filtrů (Zbroj, Materiály, Potiony, Doplňky, Klíče, Ostatní),
+// v kategorii od nejvzácnějšího a pak podle názvu. Neúplné hromádky stejného předmětu
+// se slijí. Prázdná políčka zůstanou na konci, počet políček se nemění.
+const RARITY_ORDER = ['legendary', 'epic', 'rare', 'uncommon', 'common'];
+export function sortInventory(state) {
+  const slots = state.inventory.slots;
+  const totals = new Map();
+  for (const slot of slots) if (slot) totals.set(slot.id, (totals.get(slot.id) ?? 0) + slot.qty);
+  const categoryIndex = (item) => {
+    const i = ITEM_CATEGORIES.findIndex((c) => c.id === item?.category);
+    return i < 0 ? ITEM_CATEGORIES.length : i;
+  };
+  const rarityIndex = (item) => {
+    const i = RARITY_ORDER.indexOf(item?.rarity ?? 'common');
+    return i < 0 ? RARITY_ORDER.length : i;
+  };
+  const ids = [...totals.keys()].sort((a, b) => {
+    const ia = getItem(a);
+    const ib = getItem(b);
+    return categoryIndex(ia) - categoryIndex(ib) || rarityIndex(ia) - rarityIndex(ib)
+      || String(ia?.name ?? a).localeCompare(String(ib?.name ?? b), 'cs');
+  });
+  const sorted = [];
+  for (const id of ids) {
+    const stack = Math.max(1, getItem(id)?.stack ?? 1);
+    let left = totals.get(id);
+    while (left > 0) {
+      const qty = Math.min(stack, left);
+      sorted.push({ id, qty });
+      left -= qty;
+    }
+  }
+  for (let i = 0; i < slots.length; i++) slots[i] = sorted[i] ?? null;
+  return sorted.length;
+}
+
 export function removeItem(state, id, qty = 1) {
   if (getItemCount(state, id) < qty) return false;
   const slots = slotsOf(state);

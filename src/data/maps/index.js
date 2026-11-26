@@ -4,8 +4,8 @@ import { generateRegionMap } from './auria.js';
 
 // Brány z ručně navržených map do sousedních regionů.
 const HAND_MAP_EXITS = {
-  // Konec cesty od mostu na jižním pobřeží Greenvale.
-  Greenvale: [{ x: 93, y: 97, to: 'Verdant Forest' }]
+  // Konec dlážděné cesty na jihovýchodním okraji Greenvale (nové rozložení oblasti).
+  Greenvale: [{ x: 98, y: 121, to: 'Verdant Forest' }]
 };
 
 const MAPS = {
@@ -71,5 +71,36 @@ export function loadWorldMap(regionId) {
     if (tiles[exit.y]?.[exit.x]) tiles[exit.y][exit.x] = gate;
   }
 
-  return { ...definition, width, height, tiles };
+  // Náhodná vzácná naleziště ve skrytých mýtinách: aktivní se přidají k běžným nalezištím.
+  const rare = activeRareSpots(definition);
+  const pick = (kind, key) => rare.filter((s) => s.kind === kind).map((s) => ({ [key]: s[key], x: s.x, y: s.y, rare: true }));
+  return {
+    ...definition, width, height, tiles,
+    herbSpots: [...(definition.herbSpots ?? []), ...pick('herb', 'site')],
+    miningSpots: [...(definition.miningSpots ?? []), ...pick('mining', 'deposit')],
+    fishingSpots: [...(definition.fishingSpots ?? []), ...pick('fishing', 'location')]
+  };
+}
+
+// Vzácná naleziště: z mýtin (map.rareSpots) jsou aktivní vždy RARE_ACTIVE, výběr se mění
+// každých RARE_PERIOD_MS (stejný pro všechny načtení v tomto okně).
+const RARE_ACTIVE = 2;
+const RARE_PERIOD_MS = 3 * 3600000;
+export function activeRareSpots(map, now = Date.now()) {
+  const list = map.rareSpots ?? [];
+  if (list.length <= RARE_ACTIVE) return list;
+  let seed = Math.floor(now / RARE_PERIOD_MS) * 2654435761 + list.length;
+  const rand = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const pool = [...list];
+  const chosen = [];
+  while (chosen.length < RARE_ACTIVE) chosen.push(...pool.splice(Math.floor(rand() * pool.length), 1));
+  return chosen;
+}
+
+// Louka setkání na poli (x, y): první zóna mapy, jejíž obdélník pole obsahuje.
+export function encounterZoneAt(map, x, y) {
+  return (map.encounterZones ?? []).find((z) => x >= z.x0 && x <= z.x1 && y >= z.y0 && y <= z.y1) ?? null;
 }

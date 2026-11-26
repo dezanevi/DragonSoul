@@ -104,7 +104,7 @@ export function slideCardOut(scene, done, { duration = 300, hide = [] } = {}) {
 }
 
 // Karta, kterou otevře záložka. Záložky bez vlastní karty ukáže karta hrdiny.
-export const CARD_FOR_TAB = { hero: 'Hero', talents: 'Talents', party: 'Party', inventory: 'Inventory', crafting: 'Professions', map: 'WorldMap', quests: 'Quests' };
+export const CARD_FOR_TAB = { hero: 'Hero', talents: 'Talents', party: 'Party', inventory: 'Inventory', crafting: 'Professions', bestiary: 'Bestiary', map: 'WorldMap', quests: 'Quests' };
 
 // context.onSelect(tabId) = vlastní obsluha kliknutí (svět a interiér místo nápovědy otevřou kartu);
 // bez ní lišta zavře aktuální kartu a otevře jinou. activeId null = žádná karta není zobrazená.

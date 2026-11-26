@@ -9,9 +9,14 @@ const MAGIC_CARD = { y: 437, h: 136, spriteW: 104, spriteH: 122, barY: 547, barW
 import { getHeroSpeed, getHeroLuck, getHeroCharisma } from '../../systems/HeroStatsSystem.js';
 import { getEffectiveSpellPower, getTalentBonuses } from '../../systems/TalentSystem.js';
 import { getMovementMultiplier } from '../../systems/HeroStatsSystem.js';
+import { gearBonus, gearBreakdown } from '../../systems/SmithingSystem.js';
 
 // Panely záložky Hrdina, které jen zobrazují data ze stavu hry.
 // Nic nepočítají – hodnoty berou tak, jak je uložily herní systémy.
+
+// Bonus výbavy (% z SmithingSystem) k řádkům: hrdina (jen Rychlost) a velitelské statistiky.
+const HERO_GEAR = [null, null, 'speed', null, null];
+const COMMANDER_GEAR = ['attack', 'aether', 'defense', 'resolve'];
 
 const number = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -81,6 +86,23 @@ export class HeroStats {
     this.commanderValues = FIELDS.commanderStats.rows.map((y) =>
       cardText(scene, parent, FIELDS.commanderStats.x, y, '', style)
     );
+    // Zelené „+N“ z výbavy vpravo od hodnoty (hodnota se posune doleva).
+    const bonusStyle = { size: 24, originX: 1, color: '#7fe08a' };
+    this.heroBonus = FIELDS.heroStats.rows.map((y) => cardText(scene, parent, FIELDS.heroStats.x, y, '', bonusStyle));
+    this.commanderBonus = FIELDS.commanderStats.rows.map((y) => cardText(scene, parent, FIELDS.commanderStats.x, y, '', bonusStyle));
+  }
+
+  // Bonus z výbavy: % a z toho číslo (hodnota × %).
+  gearPart(stat, value) {
+    const pctValue = gearBonus(this.state, stat);
+    return { pct: pctValue, plus: Math.round((Math.max(0, value) * pctValue) / 100), rows: gearBreakdown(this.state, stat) };
+  }
+
+  gearLines(stat, value) {
+    const g = this.gearPart(stat, value);
+    if (!g.pct) return ['Výbava: žádný bonus.'];
+    const fmt = (v) => `${v}`.replace('.', ',');
+    return [`Výbava: +${fmt(g.pct)} % → +${g.plus} (zelené číslo).`, ...g.rows.map((r) => `  • ${r.name}: +${fmt(r.value)} %`)];
   }
 
   // Tooltip statistiky: aktuální účinek v boji / ve hře, účinek po zlepšení o 1 bod a strop.
@@ -128,7 +150,8 @@ export class HeroStats {
         ]]
       ];
       const [title, lines] = tips[index];
-      this.tooltip.show(area, title, lines);
+      const value = [number(state.intellect), sp, getHeroSpeed(state), luck, charisma][index];
+      this.tooltip.show(area, title, HERO_GEAR[index] ? [...lines, ...this.gearLines(HERO_GEAR[index], value)] : lines);
       return;
     }
     const talents = getTalentBonuses(state);
@@ -147,7 +170,8 @@ export class HeroStats {
       `Teď: +${base + talent} k ${stat} každého monstra v boji (posílí ${what}).`,
       after > base
         ? `Po +1 bodu: +${after + talent} k ${stat}.`
-        : `Po +1 bodu: beze změny – další +1 přidá až hodnota ${nextAt}. Bez stropu.`
+        : `Po +1 bodu: beze změny – další +1 přidá až hodnota ${nextAt}. Bez stropu.`,
+      ...this.gearLines(COMMANDER_GEAR[index], value)
     ]);
   }
 
@@ -167,8 +191,14 @@ export class HeroStats {
       number(state.magicResistance)
     ];
 
-    hero.forEach((value, index) => this.heroValues[index].setText(value));
-    commander.forEach((value, index) => this.commanderValues[index].setText(value));
+    // Hodnota + zelené „+N“ z výbavy (rychlost a velitelské statistiky).
+    const show = (valueText, bonusText, value, stat, x) => {
+      const plus = stat ? this.gearPart(stat, value).plus : 0;
+      bonusText.setText(plus ? `+${plus}` : '');
+      valueText.setText(value).setX(plus ? x - bonusText.width - 8 : x);
+    };
+    hero.forEach((value, index) => show(this.heroValues[index], this.heroBonus[index], value, HERO_GEAR[index], FIELDS.heroStats.x));
+    commander.forEach((value, index) => show(this.commanderValues[index], this.commanderBonus[index], value, COMMANDER_GEAR[index], FIELDS.commanderStats.x));
   }
 }
 

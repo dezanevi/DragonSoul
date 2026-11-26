@@ -10,7 +10,7 @@ import { itemSources } from './ProfessionDatabase.js';
 //   2. nejnižší cena za kus u obchodníků,
 //   3. výrobek: hodnota surovin nejlevnějšího receptu × 1,3 / počet kusů z výroby,
 //   4. jinak podle vzácnosti.
-// Výkupní cena = polovina hodnoty (aspoň 1 zl).
+// Výkupní cena = polovina hodnoty (aspoň 1 zlata).
 
 const RARITY_VALUE = { common: 2, uncommon: 6, rare: 15, epic: 40, legendary: 100 };
 const CRAFT_MARKUP = 1.3;

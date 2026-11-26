@@ -1,7 +1,7 @@
 // Kovářství podle schváleného dokumentu „Kovářství – návrh systému“.
 //
 //   SMITHING_INTERMEDIATES  tavení a mezivýrobky (M01–M19, do 112 receptů se nepočítají)
-//   SMITHING_RECIPES        112 receptů: A zbraně 28, B zbroje 28, C nástroje 20, D výztuhy 16, E vzácné 20
+//   SMITHING_RECIPES        A zbraně 28, B zbroje = 11 sad podle kovu × 5 kusů (55), C nástroje, D výztuhy 16, E vzácné 20
 //
 // Účinek receptu (effect):
 //   gear:      { slot, bonus: { attack, aether, defense, resolve, speed, maxHp }, resist: { element: % }, elementDamage: { element: % } }
@@ -29,9 +29,10 @@ export const SMITHING_CATEGORIES = [
   { id: 'A', label: 'Zbraně' },
   { id: 'B', label: 'Zbroje a štíty' },
   { id: 'C', label: 'Nástroje' },
-  { id: 'D', label: 'Výztuhy' },
-  { id: 'E', label: 'Vzácné a kalené' }
+  { id: 'D', label: 'Výztuhy' }
 ];
+// Vzácné a kalené kusy (E01–E20) nemají vlastní kategorii: zbraně patří do Zbraní, ostatní
+// do Zbrojí a štítů pod podfiltr „Vzácné a kalené“.
 
 export const SMITHING_ORIGINS = {
   base: 'Odemkne se úrovní Kovářství',
@@ -113,8 +114,52 @@ const WEAPONS = [
   W('A28', 'Dvojbřitá sekera z dračího železa', 95, { [I.dragon]: 6, mat_obri_kost: 1 }, { attack: 15, defense: 3 }, {}, 'quest')
 ];
 
-// ------------------------------------------------------- B. Zbroje a ochranné pláty (28)
-const ARMORS = [
+// ------------------------------------------------------- B. Zbroje – kompletní sady podle kovu
+// Každý kov má sadu 5 kusů: přilba, zbroj, holenice, boty, štít (úroveň L až L+4).
+// Síla roste se stupněm kovu (p); některé kovy mají navíc vlastní zaměření.
+const METAL_SETS = [
+  { key: 'cu', ingot: I.cu, level: 2, p: 1, adj: ['Měděná', 'Měděné', 'Měděný'] },
+  { key: 'bz', ingot: I.bronze, level: 7, p: 1.5, adj: ['Bronzová', 'Bronzové', 'Bronzový'] },
+  { key: 'fe', ingot: I.fe, level: 10, p: 2, adj: ['Železná', 'Železné', 'Železný'] },
+  { key: 'st', ingot: I.steel, level: 21, p: 3, adj: ['Ocelová', 'Ocelové', 'Ocelový'] },
+  { key: 'ms', ingot: I.msteel, level: 34, p: 4, gen: 'z horské oceli', extra: { maxHp: 0.3 } },
+  { key: 'bs', ingot: I.bsteel, level: 46, p: 5, gen: 'z černé oceli', extra: { defense: 0.15 } },
+  { key: 'mi', ingot: I.mith, level: 53, p: 6, adj: ['Mithrilová', 'Mithrilové', 'Mithrilový'], extra: { speed: 0.35 } },
+  { key: 'ad', ingot: I.adam, level: 72, p: 8, adj: ['Adamantitová', 'Adamantitové', 'Adamantitový'], extra: { maxHp: 0.4 } },
+  { key: 'or', ingot: I.ori, level: 81, p: 9, adj: ['Orichalková', 'Orichalkové', 'Orichalkový'], extra: { aether: 0.4 } },
+  { key: 'sm', ingot: I.star, level: 86, p: 9.5, gen: 'z hvězdného kovu', extra: { resolve: 0.4 }, resist: 'light' },
+  { key: 'dr', ingot: I.dragon, level: 93, p: 11, gen: 'z dračího železa', extra: { maxHp: 0.4 }, resist: 'fire' }
+];
+// Kusy sady: rod názvu (f / pl / m), slot, posun úrovně, množství ingotů a další suroviny, bonusy (× p).
+const SET_PIECES = [
+  { slot: 'helmet', noun: 'přilba', g: 0, dl: 0, ingots: 3, more: { [I.leather]: 1 }, stats: { defense: 0.6, resolve: 0.6 } },
+  { slot: 'boots', noun: 'boty', g: 1, dl: 1, ingots: 2, more: { [I.leather]: 2 }, stats: { speed: 0.5, defense: 0.4 } },
+  { slot: 'legs', noun: 'holenice', g: 1, dl: 2, ingots: 4, more: { [I.leather]: 1 }, stats: { defense: 0.9 } },
+  { slot: 'shield', noun: 'štít', g: 2, dl: 3, ingots: 4, more: { [I.wood]: 2 }, stats: { defense: 1.1, resolve: 0.5 } },
+  { slot: 'armor', noun: 'zbroj', g: 0, dl: 4, ingots: 6, more: { [I.strap]: 1, [I.leather]: 1 }, stats: { defense: 1.6 } }
+];
+const setName = (metal, piece) => (metal.adj
+  ? `${metal.adj[piece.g]} ${piece.noun}`
+  : `${piece.noun.charAt(0).toUpperCase()}${piece.noun.slice(1)} ${metal.gen}`);
+const ARMORS = METAL_SETS.flatMap((metal, mi) => SET_PIECES.map((piece, pi) => {
+  const bonus = {};
+  for (const [stat, k] of Object.entries(piece.stats)) bonus[stat] = Math.max(1, Math.round(k * metal.p));
+  for (const [stat, k] of Object.entries(metal.extra ?? {})) bonus[stat] = (bonus[stat] ?? 0) + Math.max(1, Math.round(k * metal.p * (piece.slot === 'armor' ? 1.5 : 1)));
+  const extra = metal.resist && (piece.slot === 'armor' || piece.slot === 'shield') ? { resist: { [metal.resist]: piece.slot === 'armor' ? 15 : 10 } } : {};
+  const level = Math.min(100, metal.level + piece.dl);
+  const recipe = A(`BS${String(mi * 5 + pi + 1).padStart(2, '0')}`, setName(metal, piece), piece.slot, level,
+    { [metal.ingot]: piece.ingots, ...piece.more }, bonus, extra, level <= 12 ? 'base' : 'smith');
+  return { ...recipe, set: metal.key, setTier: mi };
+}));
+export const SMITHING_SET_TIERS = METAL_SETS.length;
+// Podfiltry kategorie Zbroje a štíty (okno výroby): sady podle kovu + vzácné a kalené.
+const SET_LABELS = { cu: 'Měď', bz: 'Bronz', fe: 'Železo', st: 'Ocel', ms: 'Horská ocel', bs: 'Černá ocel', mi: 'Mithril', ad: 'Adamantit', or: 'Orichalk', sm: 'Hvězdný kov', dr: 'Dračí železo' };
+export const SMITHING_SUBFILTERS = {
+  B: [...METAL_SETS.map((m) => ({ id: m.key, label: SET_LABELS[m.key] })), { id: 'rare', label: 'Vzácné a kalené' }]
+};
+
+// Původní jednotlivé zbroje (B01–B28) jsou nahrazené sadami – ponechány jen pro přehled, ve hře se nepoužívají.
+const OLD_ARMORS = [
   A('B01', 'Měděná přilba', 'helmet', 2, { [I.cu]: 2, [I.leather]: 1 }, { defense: 1, resolve: 1 }),
   A('B02', 'Železná přilba', 'helmet', 9, { [I.fe]: 3, [I.leather]: 1 }, { defense: 2, resolve: 1 }),
   A('B03', 'Železný kruhový štít', 'shield', 10, { [I.fe]: 4, [I.wood]: 2 }, { defense: 3, resolve: 1 }),
@@ -144,6 +189,7 @@ const ARMORS = [
   A('B27', 'Adamantitový plátový kyrys', 'armor', 74, { [I.adam]: 8, [I.clasp]: 2 }, { defense: 15, maxHp: 4 }),
   A('B28', 'Adamantitový věžový štít', 'shield', 78, { [I.adam]: 6, gem_diamond: 1 }, { defense: 10, resolve: 5 })
 ];
+void OLD_ARMORS;
 
 // ------------------------------------------------------- C. Nástroje a výbava pro průzkum (20)
 // Výstup = stejné předměty jako u Těžby a Rybolovu (krumpáče, nástroje, kovové části).
@@ -200,8 +246,10 @@ const REINFORCEMENTS = [
 ];
 
 // ------------------------------------------------------- E. Vzácné a elementálně kalené (20)
-const E = (id, name, slot, level, ingredients, bonus, extra, origin = 'found') =>
-  R(id, name, 'E', level, st(level), 1, ingredients, g(slot, bonus, extra), origin);
+const E = (id, name, slot, level, ingredients, bonus, extra, origin = 'found') => ({
+  ...R(id, name, slot === 'weapon' ? 'A' : 'B', level, st(level), 1, ingredients, g(slot, bonus, extra), origin),
+  ...(slot === 'weapon' ? {} : { set: 'rare' })
+});
 const RARE = [
   E('E01', 'Plamenná čepel', 'weapon', 44, { [I.steel]: 4, al_fire_concentrate: 1, mat_zhava_supina: 1 }, { attack: 7 }, { elementDamage: { fire: 15 } }),
   E('E02', 'Mrazivé kopí', 'weapon', 52, { [I.msteel]: 4, al_water_concentrate: 1, mat_krystal_namrazy: 1 }, { attack: 8 }, { elementDamage: { water: 15 } }),

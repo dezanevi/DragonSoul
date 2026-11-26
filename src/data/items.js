@@ -11,7 +11,7 @@
 import { FISH, WATER_MATERIALS, BAITS, RODS, METAL_PARTS, RARITY } from './fishing.js';
 import { NEW_HERBS, STAPLES, MEATS, INTERMEDIATES, RECIPES, outputItemId, describeEffect } from './cooking.js';
 import { ALCHEMY_INTERMEDIATES, ALCHEMY_RECIPES, alchemyOutputId, describeAlchemy, alchemyUseContext, GAME_ITEM_RECIPES } from './alchemy.js';
-import { SMITHING_INTERMEDIATES, SMITHING_RECIPES, smithingOutputId, describeSmithing } from './smithing.js';
+import { SMITHING_INTERMEDIATES, SMITHING_RECIPES, SMITHING_SET_TIERS, smithingOutputId, describeSmithing } from './smithing.js';
 import { MINING_MATERIALS, MINING_RARITY, PICKAXES, MINING_TOOLS, RARE_FINDS, TIER_LABEL } from './mining.js';
 import { HERB_CATALOG, HERB_RARITY, HERB_SITES, SICKLES, SICKLE_EFFECTS, HERB_RARE_FINDS, HERB_TIER_LABEL, ITEM_RARITY, BIOMES } from './herbalism.js';
 import { CRAFTING_INTERMEDIATES, CRAFTING_RECIPES, ALL_CRAFTING, craftingOutputId, describeCrafting } from './crafting.js';
@@ -504,6 +504,32 @@ export const ITEMS = Object.fromEntries(
     ...MINING_ITEMS.filter((it) => !EXISTING_BEFORE_MINING[it.id]), ...SMITHING_ITEMS, ...HERBALISM_ITEMS, ...CRAFTING_ITEMS].map((it) => [it.id, it])
 );
 
+// Vlastní ikony z listu „Fantasy RPG ikony surovin a výbavy“ (icons11, nástroj
+// tools/split-icons-grid.ps1 po řádcích) místo společných zástupných ikon.
+const ICONS11 = {
+  // byliny
+  healing_herbs: 1, forest_sage: 3, bitter_root: 4, fire_sage: 5, ice_mint: 6, storm_fern: 7, shadow_lily: 8,
+  astral_orchid: 9, sun_thistle: 10, moon_flower: 11, mountain_root: 12, wayfarer_thyme: 13,
+  // kovy a kovářské suroviny
+  sm_copper_ingot: 14, sm_iron_ingot: 15, sm_tin_ingot: 16, sm_bronze_ingot: 17, sm_silver_ingot: 18, sm_gold_ingot: 19,
+  sm_mithril_ingot: 20, sm_orichalcum_ingot: 21, sm_steel: 22, sm_mountain_steel: 23, sm_black_steel: 24, sm_star_metal: 25,
+  sm_dragon_iron: 26, sm_copper_wire: 27, sm_fish_scale_plate: 28, sm_coral_brace: 29, sm_deep_scale_layer: 30,
+  // zbraně (dřív sdílely ikonu s jinou zbraní)
+  smith_A01: 31, smith_E13: 32, smith_A27: 33, smith_A03: 34, smith_A09: 35, smith_A17: 36, smith_A23: 37, smith_A28: 38,
+  smith_E05: 39, smith_A07: 40, smith_A05: 41, smith_A11: 42, smith_A13: 43, smith_A19: 44, smith_E02: 46,
+  smith_A12: 47, smith_A20: 48, smith_E03: 49, smith_A06: 50, smith_E12: 51,
+  // výztuhy a srpy
+  smith_D01: 52, smith_D02: 53, smith_D05: 54, smith_D09: 55, smith_D13: 56, smith_D14: 57, smith_D03: 60, smith_D12: 61,
+  herb_sickle: 58, silver_herb_sickle: 59,
+  // kuchyňské suroviny a maso
+  salt: 63, flour: 64, vegetables: 65,
+  meat_boar: 66, meat_beast: 67, meat_wolf: 68, meat_bird: 69, meat_venison: 70, meat_bear: 71, meat_reptile: 72,
+  meat_aquatic: 73, meat_rare_flyer: 74, meat_wyvern: 75, kraken_tentacle: 76, meat_moon_venison: 77, behemoth_shoulder: 78,
+  // mezivýrobky Vaření
+  cm_fish_stock: 79, cm_meat_stock: 80, cm_dried_spice: 81, cm_preserved_fish: 82, cm_fire_extract: 83,
+  cm_coral_salt: 84, cm_aroma_powder: 85, cm_demon_spice: 86, cm_star_spice: 87
+};
+
 // Existující předměty, které vyrábí Řemeslnictví (amulety, prsteny, Soul Crystaly): účinek a popis receptu.
 for (const r of CRAFTING_RECIPES.filter((x) => x.output)) {
   const target = ITEMS[r.output];
@@ -586,7 +612,10 @@ const gearIcon = (slot, col) => sheetKey('icons10', GEAR_ROW[slot] * 16 + col + 
 const GEAR_ICON_COLUMN = {
   smith_E01: 8, smith_E02: 7, smith_E13: 12, smith_E15: 14, smith_E20: 15,
   smith_E04: 8, smith_E06: 11, smith_E14: 13, smith_E17: 14, smith_E18: 15,
-  smith_E07: 10, smith_E19: 15, smith_E16: 15, smith_E09: 15
+  smith_E07: 10, smith_E19: 15, smith_E16: 15, smith_E09: 15,
+  // Sady podle kovu: všech 5 kusů jedné sady má stejný sloupec (stejný vzhled stupně).
+  ...Object.fromEntries(SMITHING_RECIPES.filter((r) => r.setTier !== undefined).map((r) =>
+    [smithingOutputId(r), Math.round((r.setTier * 15) / Math.max(1, SMITHING_SET_TIERS - 1))]))
 };
 {
   const smithLevel = Object.fromEntries([
@@ -613,6 +642,76 @@ for (const [id, icon] of Object.entries(ICON_OVERRIDES)) {
   if (!target) continue;
   target.icon = icon;
   if (target.iconFit) target.iconFit = 'exact';
+}
+// Vlastní ikony výrobků z listů (tools/split-icons-grid.ps1, po řádcích):
+// icons12 „Atlas fantasy alchymistických ikon“, icons13 „Atlas fantasy ikon předmětů RPG“,
+// icons14 „Fantazijní mřížka jídelních ikon“, icons15 „Ikonová sada fantasy vybavení a surovin“.
+// Bez ikony zatím: meal_V033, meal_V034, alch_L061 (dokument Chybějící ikony).
+const RECIPE_ICONS = {
+  icons12: {
+    minor_healing_tonic: 1, alch_L002: 2, alch_L003: 3, alch_L004: 4, alch_L006: 5, alch_L007: 6,
+    alch_L008: 7, alch_L009: 8, alch_L010: 9, alch_L011: 10, alch_L012: 11, alch_L013: 12,
+    alch_L014: 13, mana_potion: 14, alch_L016: 15, strong_mana_tonic: 16, alch_L018: 17, alch_L019: 18,
+    alch_L020: 19, alch_L021: 20, alch_L022: 21, alch_L023: 22, alch_L024: 23, alch_L025: 24,
+    antidote: 25, alch_L027: 26, alch_L028: 27, alch_L029: 28, alch_L030: 29, alch_L031: 30,
+    alch_L032: 31, alch_L033: 32, alch_L034: 33, alch_L035: 34, alch_L036: 35, alch_L037: 36,
+    alch_L038: 37, alch_L039: 38, alch_L040: 39, alch_L041: 40, alch_L042: 41, alch_L043: 42,
+    alch_L044: 43, alch_L045: 44, alch_L046: 45, alch_L047: 46, alch_L048: 47, alch_L049: 48,
+    alch_L050: 49, alch_L051: 50, alch_L052: 51, alch_L053: 52, alch_L054: 53, alch_L055: 54,
+    alch_L056: 55, alch_L057: 56, alch_L058: 57, alch_L059: 58, alch_L060: 59, alch_L062: 60,
+    alch_L063: 61, alch_L064: 62, alch_L065: 63, alch_L066: 64, al_fire_concentrate: 65, al_water_concentrate: 66,
+    al_stone_concentrate: 67, al_air_concentrate: 68, alch_L071: 69, alch_L072: 70, alch_L073: 71, al_shadow_concentrate: 72,
+    alch_L075: 73, alch_L076: 74, al_storm_concentrate: 75, alch_L078: 76, alch_L079: 77, alch_L080: 78,
+    alch_L081: 79, al_crystal_reagent: 80, alch_L083: 81, al_deep_catalyst: 82, alch_L085: 83, alch_L086: 84,
+    al_astral_catalyst: 85, alch_L088: 86, alch_L089: 87, alch_L090: 88, alch_L091: 89, alch_L092: 90,
+    alch_L093: 91, alch_L094: 92, alch_L095: 93, alch_L096: 94, alch_L097: 95, alch_L098: 96,
+    alch_L099: 97, alch_L100: 98, alch_L101: 99, alch_L102: 100, alch_L103: 101, alch_L104: 102,
+    alch_L105: 103, alch_L106: 104, alch_L107: 105, alch_L108: 106
+  },
+  icons13: {
+    cr_cut_ruby: 1, cr_cut_sapphire: 2, cr_cut_emerald: 3, cr_cut_amethyst: 4, cr_cut_topaz: 5, cr_cut_diamond: 6,
+    cr_cut_black_diamond: 7, cr_tanned_leather: 8, cr_strong_cord: 9, cr_focus_core: 10, cr_a04: 11, cr_a05: 12,
+    cr_a06: 13, cr_a07: 14, cr_a08: 15, cr_a09: 16, cr_a10: 17, cr_a13: 18,
+    cr_a14: 19, cr_a16: 20, cr_a17: 21, cr_b20: 22, cr_b21: 23, cr_b22: 24,
+    cr_c01: 25, cr_c02: 26, cr_c03: 27, cr_c04: 28, cr_c05: 29, cr_c06: 30,
+    cr_c07: 31, cr_c08: 32, cr_c09: 33, cr_c10: 34, cr_c11: 35, cr_c12: 36,
+    cr_c13: 37, cr_c15: 38, cr_c16: 39, cr_c17: 40, cr_c18: 41, cr_c20: 42,
+    cr_d01: 43, cr_d02: 44, cr_d03: 45, cr_d04: 46, cr_d05: 47, cr_d06: 48,
+    cr_d07: 49, cr_d08: 50, cr_d09: 51, cr_d10: 52, cr_d11: 53, cr_d12: 54,
+    cr_d13: 55, cr_d14: 56, cr_d15: 57, cr_d16: 58, cr_d17: 59, cr_d18: 60,
+    cr_d19: 61, cr_f07: 62, cr_f08: 63, cr_f09: 64, cr_f10: 65, cr_f11: 66,
+    cr_f12: 67, cr_f13: 68, cr_f14: 69, cr_f15: 70, cr_f16: 71, cr_f17: 72,
+    cr_f19: 73, cr_f20: 74
+  },
+  icons14: {
+    ...Object.fromEntries(Array.from({ length: 32 }, (_, i) => [`meal_V${String(i + 1).padStart(3, '0')}`, i + 1])),
+    ...Object.fromEntries(Array.from({ length: 70 }, (_, i) => [`meal_V${String(i + 35).padStart(3, '0')}`, i + 33])),
+    travel_ration: 73
+  },
+  icons15: {
+    iron_clasp: 1, sm_adamantite_ingot: 2,
+    smith_A14: 3, smith_A15: 4, smith_A18: 5, smith_A22: 6, smith_A26: 7, smith_E01: 8, smith_E11: 9, smith_E15: 10,
+    smith_BS04: 11, smith_BS09: 12, smith_BS14: 13, smith_BS19: 14, smith_BS21: 15, smith_BS24: 16, smith_BS25: 17,
+    smith_BS29: 18, smith_BS30: 19, smith_BS32: 20, smith_BS34: 21, smith_BS35: 22, smith_BS40: 23, smith_BS41: 24,
+    smith_BS44: 25, smith_BS49: 26, smith_BS50: 27, smith_BS51: 28, smith_BS52: 29, smith_BS54: 30, smith_BS55: 31,
+    smith_E04: 32, smith_E06: 33, smith_E07: 34, smith_E09: 35, smith_E14: 36, smith_E16: 37, smith_E17: 38,
+    smith_E18: 39, smith_E19: 40,
+    brass_herb_gatherer: 41, mithril_sickle: 42, star_sickle: 43,
+    smith_D04: 44, smith_D06: 45, smith_D07: 46, smith_D08: 47, smith_D10: 48, smith_D11: 49, smith_D15: 50, smith_D16: 51
+  }
+};
+for (const [sheet, map] of Object.entries(RECIPE_ICONS)) {
+  for (const [id, n] of Object.entries(map)) {
+    if (!ITEMS[id]) continue;
+    ITEMS[id].icon = `${sheet}_${String(n).padStart(3, '0')}`;
+    if (ITEMS[id].iconFit) ITEMS[id].iconFit = 'exact';
+  }
+}
+// Ikony icons11 mají přednost i před ikonami výbavy výše (ICONS11 je definované dřív).
+for (const [id, n] of Object.entries(ICONS11)) {
+  if (!ITEMS[id]) continue;
+  ITEMS[id].icon = `icons11_${String(n).padStart(3, '0')}`;
+  if (ITEMS[id].iconFit) ITEMS[id].iconFit = 'exact';
 }
 
 // Ceny kovářských výrobků = součet cen surovin × 1,3 (mezivýrobky postupně od nejnižší úrovně).

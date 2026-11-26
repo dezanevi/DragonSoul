@@ -101,12 +101,12 @@ function buildIndex() {
   addSource(WOOD_DROP.id, { kind: 'drop', text: `Drop: ${WOOD_DROP.from.map(speciesName).join(', ')}` });
 
   // Obchody.
-  for (const good of [...FISHER_GOODS, ...FISHER_EXTRA_GOODS]) addSource(good.id, { kind: 'shop', text: `Obchod: Rybář v Rybářské chatě (${good.price} zl${good.qty > 1 ? ` / ${good.qty} ks` : ''})` });
-  for (const good of MINER_GOODS) addSource(good.id, { kind: 'shop', text: `Obchod: Hornický mistr v kovárně (${good.price} zl)` });
+  for (const good of [...FISHER_GOODS, ...FISHER_EXTRA_GOODS]) addSource(good.id, { kind: 'shop', text: `Obchod: Rybář v Rybářské chatě (${good.price} zlata${good.qty > 1 ? ` / ${good.qty} ks` : ''})` });
+  for (const good of MINER_GOODS) addSource(good.id, { kind: 'shop', text: `Obchod: Hornický mistr v kovárně (${good.price} zlata)` });
   for (const merchant of Object.values(MERCHANTS)) {
-    for (const good of merchant.goods) addSource(good.id, { kind: 'shop', text: `Obchod: ${merchant.name} (${merchant.title}, ${good.price} zl${good.qty > 1 ? ` / ${good.qty} ks` : ''})` });
+    for (const good of merchant.goods) addSource(good.id, { kind: 'shop', text: `Obchod: ${merchant.name} (${merchant.title}, ${good.price} zlata${good.qty > 1 ? ` / ${good.qty} ks` : ''})` });
   }
-  for (const good of HERBALIST_STOCK) addSource(good.id, { kind: 'shop', text: `Obchod: Bylinkářka (${good.price} zl, ${good.daily} ks denně)` });
+  for (const good of HERBALIST_STOCK) addSource(good.id, { kind: 'shop', text: `Obchod: Bylinkářka (${good.price} zlata, ${good.daily} ks denně)` });
 
   index = { uses, sources };
   return index;

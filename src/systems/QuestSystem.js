@@ -3,6 +3,7 @@ import { getItemCount, removeItem, addItem } from './InventorySystem.js';
 
 const AIR_SONG_MAGIC_XP = 100;
 import { addAlchemyXp, normalizeAlchemy } from './AlchemySystem.js';
+import { grantQuestXp } from './DiplomacySystem.js';
 import { addSmithingXp, normalizeSmithing } from './SmithingSystem.js';
 import { addHerbXp, normalizeHerbalism } from './HerbalismSystem.js';
 
@@ -34,14 +35,14 @@ export const QUESTS = {
     title: 'Krotitelova zkouška',
     giver: 'Mág v Hvězdárně',
     description:
-      'Jsi lovec a Dire Wolf je tvůj věrný lovecký pes. Mág v Hvězdárně ti probudil magii Vzduchu a naučí tě krotit divoké bytosti: na louce u vesnice krouží Air Elemental.',
-    objective: 'Jdi na louku u vesnice. Dire Wolf musí Air Elementala zasáhnout, vyzkoušej kouzlo Vzduchu a pak ho ochoč Soul Crystalem.',
+      'Jsi lovec a Dire Wolf je tvůj věrný lovecký pes. Mág v Hvězdárně ti probudil magii Vzduchu a naučí tě krotit divoké bytosti: na louce za Loveckou chatou krouží Air Elemental.',
+    objective: 'Jdi na louku za Loveckou chatou (zlaté tečky). Dire Wolf musí Air Elementala zasáhnout, vyzkoušej kouzlo Vzduchu a pak ho ochoč Soul Crystalem.',
     returnTo: 'Vrať se za Mágem do Hvězdárny.',
-    reward: '5× Basic Soul Crystal, 20 zl a Air Elemental v partě (magie Vzduchu je odemčená už od zadání).',
+    reward: '5× Basic Soul Crystal, 20 zlata a Air Elemental v partě (magie Vzduchu je odemčená už od zadání).',
     region: 'Greenvale',
     rewardGold: 20,
     giverTarget: { type: 'building', id: 'greenvale_observatory', label: 'Hvězdárna' },
-    objectiveTarget: { type: 'meadow', label: 'Louka u vesnice' },
+    objectiveTarget: { type: 'meadow', label: 'Louka za Loveckou chatou' },
     flags: { accepted: 'mageIntroAccepted', objective: 'mageIntroCaught', completed: 'mageIntroDone' }
   },
   greenvale_cave_slime: {
@@ -92,7 +93,7 @@ export const QUESTS = {
     giver: 'Alchymista',
     description: 'Alchymista tě naučí první lektvar. Potřebuješ čistou vodu od Trhovkyně a léčivé byliny od Bylinkářky.',
     returnTo: 'Odevzdej Menší léčivý tonik Alchymistovi v Alchymistickém obchodě.',
-    reward: '25 zl a zkušenosti v Alchymii.',
+    reward: '25 zlata a zkušenosti v Alchymii.',
     region: 'Greenvale',
     steps: [
       { kind: 'buy', item: 'clean_water', qty: 3, text: 'Kup 3× Čistou vodu u Trhovkyně (Tržiště – potraviny).',
@@ -120,7 +121,7 @@ export const QUESTS = {
     giver: 'Učednice v kovárně',
     description: 'Učednice potřebuje kožený řemínek na rukojeť. Kůži prodává Obchodník s látkami, řemínek si z ní vyrobíš na Koželužském stole v Řemeslné dílně.',
     returnTo: 'Odevzdej Kožený řemínek Učednici v kovárně.',
-    reward: '20 zl a zkušenosti v Kovářství.',
+    reward: '20 zlata a zkušenosti v Kovářství.',
     region: 'Greenvale',
     steps: [
       { kind: 'buy', item: 'leather', qty: 1, text: 'Kup 1× Kůži u Obchodníka s látkami (Tržiště – zboží).',
@@ -146,7 +147,7 @@ export const QUESTS = {
     giver: 'Bylinkářka',
     description: 'Bylinkářka tě naučí sbírat byliny. Z čisticích bylin od řeky a čisté vody uvaříš protijed.',
     returnTo: 'Odevzdej Protijed Bylinkářce (Dům Bylinkářky).',
-    reward: '20 zl a zkušenosti ve Sběru bylin.',
+    reward: '20 zlata a zkušenosti ve Sběru bylin.',
     region: 'Greenvale',
     steps: [
       { kind: 'gather', item: 'cleansing_herbs', qty: 2, text: 'Nasbírej 2× Čisticí byliny na nalezišti Břeh řeky (zelený kruh, E).',
@@ -248,6 +249,8 @@ export function completeQuest(state, questId) {
   if (questId === 'greenvale_mage_intro') addItem(state, 'basic_crystal', 5);
   if (quest.rewardGold) state.gold = (Number(state.gold) || 0) + quest.rewardGold;
   if (quest.rewardXp) XP_REWARD[quest.rewardXp.prof]?.(state, quest.rewardXp.amount);
+  // Diplomacie: jednorázové XP za každý splněný úkol.
+  grantQuestXp(state, questId);
   if (questId === 'greenvale_cave_slime') {
     state.flags.talentTreesUnlocked = true;
     // Klíčový předmět: Lovecké povolení Greenvale.

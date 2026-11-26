@@ -207,7 +207,7 @@ export const RARE_FINDS = [
   { id: 'ancient_mine_map', name: 'Starodávná důlní mapa', rarity: 'rare', price: 60,
     description: 'Použij: odhalí Skrytou žílu v tomto regionu na 30 min (otevře ji Důlní podpěra).' },
   { id: 'miner_chest', name: 'Zapomenutá truhla horníka', rarity: 'rare', price: 0,
-    description: 'Použij: otevře truhlu – rudy podle tvé úrovně Těžby a 20–60 zl.' },
+    description: 'Použij: otevře truhlu – rudy podle tvé úrovně Těžby a 20–60 zlata.' },
   { id: 'ancient_rune_fragment', name: 'Prastarý runový úlomek', rarity: 'epic', price: 150,
     description: 'Runová ložiska. Magické recepty Kovářství a Řemeslnictví.' },
   { id: 'uncut_gem', name: 'Neopracovaný drahokam', rarity: 'rare', price: 80,

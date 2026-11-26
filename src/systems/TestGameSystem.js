@@ -5,6 +5,7 @@
 // na úrovni 100 s 510 volnými tréninkovými body. Spouští se z obrazovky tvorby postavy.
 // ======================================================================
 
+import speciesRows from '../data/monsters.json';
 import spellRows from '../data/spells.json';
 import { SaveSystem } from './SaveSystem.js';
 import { applyHeroLevelUp } from './HeroProgressionSystem.js';
@@ -79,5 +80,11 @@ export function createTestGame(playerName = 'Tester', gender = 'male') {
   addItem(state, 'dragon_seal', 1);
   for (const id of ['greater_crystal', 'elemental_crystal', 'ancient_crystal', 'dragon_crystal']) addItem(state, id, 5);
   state.flags = { ...state.flags, starterManaPotions: true, fishingStarterGiven: true, miningStarterGiven: true, herbStarterGiven: true };
+  // Kompletní Bestiář: všechny druhy pozorované (obrázek, schopnosti, kořist).
+  state.bestiary ??= {};
+  for (const species of speciesRows) {
+    const record = state.bestiary[species.id] ?? { seen: 0, caught: 0, defeated: 0 };
+    state.bestiary[species.id] = { ...record, seen: Math.max(1, Number(record.seen) || 0) };
+  }
   return state;
 }

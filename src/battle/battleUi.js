@@ -1,13 +1,17 @@
-// Prvky rozhraní souboje: skleněné panely, tlačítka, plovoucí čísla, tooltip.
+// Prvky rozhraní souboje ve stylu zbytku hry (karty, Řemesla): tmavé panely se zlatavým
+// okrajem, dlaždicová tlačítka se zlatým výběrem, písmo karet. Plovoucí čísla, tooltip.
 
-export const UI_FONT = '"Segoe UI", "Trebuchet MS", system-ui, sans-serif';
+import { CARD_FONT } from '../ui/fantasyCard.js';
+import { LOOK } from '../ui/craftLook.js';
+
+export const UI_FONT = CARD_FONT;
 
 export const UI_COLORS = {
-  panel: 0x0b1620,
-  panelEdge: 0x9fd3ff,
-  text: '#eef6ff',
-  muted: '#9fb3c4',
-  gold: '#ffd98a',
+  panel: 0x08111d,
+  panelEdge: 0x8a6a30,
+  text: '#f3e4bd',
+  muted: '#b8a890',
+  gold: '#ffd76a',
   player: 0x52e0ff,
   enemy: 0xff5468,
   move: 0x3fe0c5,
@@ -31,21 +35,24 @@ export function uiText(scene, x, y, text, options = {}) {
       align: options.align ?? 'left',
       wordWrap: options.wrap ? { width: options.wrap } : undefined,
       lineSpacing: options.lineSpacing ?? 2,
-      stroke: options.stroke ?? undefined,
-      strokeThickness: options.stroke ? options.strokeThickness ?? 4 : 0
+      // Tmavý obrys jako u textů karet (čitelné i přes bojiště).
+      stroke: options.stroke ?? '#0a0603',
+      strokeThickness: options.strokeThickness ?? (options.stroke ? 4 : 3)
     })
     .setOrigin(options.originX ?? 0, options.originY ?? 0)
     .setResolution(2);
 }
 
-// Skleněný panel: tmavá průsvitná plocha, jemný světlý okraj a horní odlesk.
+// Panel: tmavá plocha, zlatavý okraj a jemná vnitřní zlatá linka (jako darkPanel v kartách).
+// options.edge = barevný akcent (popover, tooltip) – tenká linka uvnitř zlatého okraje.
 export function drawGlass(g, x, y, w, h, options = {}) {
-  const radius = options.radius ?? 14;
-  const edge = options.edge ?? UI_COLORS.panelEdge;
-  g.fillStyle(0x000000, 0.28).fillRoundedRect(x + 3, y + 6, w, h, radius);
-  g.fillStyle(options.fill ?? UI_COLORS.panel, options.alpha ?? 0.78).fillRoundedRect(x, y, w, h, radius);
-  g.fillStyle(0xffffff, 0.05).fillRoundedRect(x + 2, y + 2, w - 4, Math.min(h * 0.45, 40), { tl: radius, tr: radius, bl: 4, br: 4 });
-  g.lineStyle(options.edgeWidth ?? 1.5, edge, options.edgeAlpha ?? 0.35).strokeRoundedRect(x, y, w, h, radius);
+  const radius = options.radius ?? 12;
+  g.fillStyle(0x000000, 0.3).fillRoundedRect(x + 3, y + 5, w, h, radius);
+  g.fillStyle(options.fill ?? UI_COLORS.panel, Math.max(0.86, options.alpha ?? 0.9)).fillRoundedRect(x, y, w, h, radius);
+  g.lineStyle(options.edgeWidth ?? 2, UI_COLORS.panelEdge, 0.95).strokeRoundedRect(x, y, w, h, radius);
+  const inner = options.edge && options.edge !== UI_COLORS.panelEdge ? options.edge : LOOK.gold;
+  const innerAlpha = options.edge && options.edge !== UI_COLORS.panelEdge ? Math.min(0.75, (options.edgeAlpha ?? 0.6) + 0.1) : 0.16;
+  if (w > 16 && h > 16) g.lineStyle(1, inner, innerAlpha).strokeRoundedRect(x + 5, y + 5, w - 10, h - 10, Math.max(4, radius - 3));
 }
 
 export function glassPanel(scene, x, y, w, h, options) {
@@ -54,13 +61,14 @@ export function glassPanel(scene, x, y, w, h, options) {
   return g;
 }
 
-// Tlačítko s akcentním proužkem vlevo, titulkem, podtitulkem a klávesou.
+// Tlačítko jako dlaždice v kartách: tmavé, pod myší zlatavý okraj, vybrané zlaté;
+// barevný proužek vlevo = druh (schopnost, kouzlo, akce), titulek, podtitulek a klávesa.
 export class BattleButton {
   constructor(scene, x, y, w, h, options = {}) {
     this.scene = scene;
     this.w = w;
     this.h = h;
-    this.accent = options.accent ?? 0x9fd3ff;
+    this.accent = options.accent ?? LOOK.gold;
     this.onClick = options.onClick ?? (() => {});
     this.onHover = options.onHover ?? null;
     this.onOut = options.onOut ?? null;
@@ -70,13 +78,13 @@ export class BattleButton {
 
     this.container = scene.add.container(x, y);
     this.bg = scene.add.graphics();
-    this.title = uiText(scene, 18, options.sub ? 12 : h / 2, options.label ?? '', {
+    this.title = uiText(scene, 20, options.sub ? 9 : h / 2, options.label ?? '', {
       size: options.titleSize ?? 19,
       bold: true,
       originY: options.sub ? 0 : 0.5
     });
-    this.sub = uiText(scene, 18, h - 12, options.sub ?? '', { size: 14, color: UI_COLORS.muted, originY: 1 });
-    this.key = uiText(scene, w - 10, 8, options.hotkey ?? '', { size: 13, color: UI_COLORS.muted, originX: 1 });
+    this.sub = uiText(scene, 20, h - 9, options.sub ?? '', { size: 14, color: UI_COLORS.muted, originY: 1 });
+    this.key = uiText(scene, w - 9, 6, options.hotkey ?? '', { size: 13, color: UI_COLORS.muted, originX: 1 });
 
     this.hit = scene.add.zone(0, 0, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
     this.container.add([this.bg, this.title, this.sub, this.key, this.hit]);
@@ -88,14 +96,25 @@ export class BattleButton {
       if (!this.disabled) this.onClick(this);
     });
 
+    this.fitText();
     this.redraw();
+  }
+
+  // Písmo karet je širší – dlouhý text se zmenší, aby se vešel do tlačítka.
+  fitText() {
+    const room = this.w - 30 - (this.key.text ? this.key.width + 4 : 0);
+    this.title.setScale(1);
+    if (this.title.width > room) this.title.setScale(room / this.title.width);
+    this.sub.setScale(1);
+    if (this.sub.width > this.w - 28) this.sub.setScale((this.w - 28) / this.sub.width);
   }
 
   setContent(label, sub = '', hotkey = null) {
     this.title.setText(label);
     this.sub.setText(sub);
     if (hotkey !== null) this.key.setText(hotkey);
-    this.title.setY(sub ? 12 : this.h / 2).setOrigin(0, sub ? 0 : 0.5);
+    this.title.setY(sub ? 9 : this.h / 2).setOrigin(0, sub ? 0 : 0.5);
+    this.fitText();
     return this;
   }
 
@@ -113,23 +132,17 @@ export class BattleButton {
     const g = this.bg;
     const { w, h } = this;
     g.clear();
+    const active = this.selected && !this.disabled;
+    const hover = this.hovered && !this.disabled;
+    const fill = this.disabled ? 0x121820 : active ? LOOK.activeFill : hover ? LOOK.hoverFill : LOOK.fill;
+    g.fillStyle(0x000000, 0.3).fillRoundedRect(2, 4, w, h, 10);
+    g.fillStyle(fill, this.disabled ? 0.8 : 0.94).fillRoundedRect(0, 0, w, h, 10);
+    g.lineStyle(active ? 2.5 : 1.5, active ? LOOK.gold : hover ? LOOK.hoverLine : LOOK.line, this.disabled ? 0.5 : 1).strokeRoundedRect(0, 0, w, h, 10);
+    if (active) g.lineStyle(6, LOOK.gold, 0.14).strokeRoundedRect(-3, -3, w + 6, h + 6, 12);
+    // Proužek druhu vlevo.
+    g.fillStyle(this.accent, this.disabled ? 0.25 : 1).fillRoundedRect(6, 9, 5, h - 18, 2);
 
-    const base = this.disabled ? 0x1a2028 : this.selected ? 0x15324a : this.hovered ? 0x15283a : 0x0e1b27;
-    g.fillStyle(0x000000, 0.3).fillRoundedRect(2, 5, w, h, 12);
-    g.fillStyle(base, 0.92).fillRoundedRect(0, 0, w, h, 12);
-    g.fillStyle(0xffffff, this.hovered && !this.disabled ? 0.08 : 0.04).fillRoundedRect(2, 2, w - 4, h * 0.42, { tl: 11, tr: 11, bl: 3, br: 3 });
-
-    const accentAlpha = this.disabled ? 0.25 : 1;
-    g.fillStyle(this.accent, accentAlpha).fillRoundedRect(6, 10, 5, h - 20, 3);
-
-    if (this.selected && !this.disabled) {
-      g.lineStyle(2.5, this.accent, 1).strokeRoundedRect(0, 0, w, h, 12);
-      g.lineStyle(8, this.accent, 0.12).strokeRoundedRect(-3, -3, w + 6, h + 6, 14);
-    } else {
-      g.lineStyle(1.5, this.hovered && !this.disabled ? this.accent : 0x9fd3ff, this.hovered ? 0.8 : 0.22).strokeRoundedRect(0, 0, w, h, 12);
-    }
-
-    this.title.setAlpha(this.disabled ? 0.4 : 1);
+    this.title.setAlpha(this.disabled ? 0.4 : 1).setColor(active ? '#ffe7ae' : UI_COLORS.text);
     this.sub.setAlpha(this.disabled ? 0.4 : 1);
   }
 }
@@ -158,27 +171,40 @@ export function floatingText(scene, x, y, text, color = '#ffffff', size = 34) {
   });
 }
 
-// Plovoucí karta s informacemi (jednotka, schopnost).
+// Plovoucí karta s informacemi (jednotka, schopnost) – menší písmo a užší sloupec.
 export class Tooltip {
   constructor(scene) {
     this.scene = scene;
     this.container = scene.add.container(0, 0).setDepth(9500).setVisible(false);
     this.bg = scene.add.graphics();
-    this.title = uiText(scene, 16, 12, '', { size: 20, bold: true, color: UI_COLORS.gold });
-    this.body = uiText(scene, 16, 42, '', { size: 16, color: UI_COLORS.text, wrap: 320, lineSpacing: 4 });
+    this.title = uiText(scene, 14, 10, '', { size: 17, bold: true, color: UI_COLORS.gold });
+    this.body = uiText(scene, 14, 36, '', { size: 14, color: UI_COLORS.text, wrap: 270, lineSpacing: 3 });
     this.container.add([this.bg, this.title, this.body]);
   }
 
-  show(x, y, title, lines, accent = UI_COLORS.panelEdge) {
+  layout(title, lines, accent) {
     this.title.setText(title);
     this.body.setText(lines.join('\n'));
-    const w = Math.max(this.title.width, this.body.width) + 32;
-    const h = 42 + this.body.height + 14;
+    const w = Math.max(this.title.width, this.body.width) + 28;
+    const h = 36 + this.body.height + 12;
     this.bg.clear();
-    drawGlass(this.bg, 0, 0, w, h, { edge: accent, edgeAlpha: 0.7, alpha: 0.92, radius: 12 });
+    drawGlass(this.bg, 0, 0, w, h, { edge: accent, edgeAlpha: 0.6, radius: 10 });
+    return { w, h };
+  }
 
+  // Nad bodem (x = střed, y = horní okraj prvku).
+  show(x, y, title, lines, accent = UI_COLORS.panelEdge) {
+    const { w, h } = this.layout(title, lines, accent);
     const px = Math.min(Math.max(12, x - w / 2), 1920 - w - 12);
     const py = Math.max(12, y - h - 12);
+    this.container.setPosition(px, py).setVisible(true);
+  }
+
+  // Vedle prvku (vpravo od něj, jinak vlevo) – nezakryje sousední tlačítka v nabídce.
+  showBeside(left, top, right, title, lines, accent = UI_COLORS.panelEdge) {
+    const { w, h } = this.layout(title, lines, accent);
+    const px = right + 12 + w <= 1908 ? right + 12 : Math.max(12, left - w - 12);
+    const py = Math.min(Math.max(12, top), 1080 - h - 12);
     this.container.setPosition(px, py).setVisible(true);
   }
 

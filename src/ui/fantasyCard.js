@@ -27,6 +27,39 @@ export function cardText(scene, x, y, value, options = {}) {
     .setResolution(2);
 }
 
+// Částka zlata s ikonou mince místo zkratky: [prefix] 120 (mince) [rest].
+// style jako cardText; originX 0 = od x doprava, 1 = končí v x. originY jako cardText.
+// Vrací pole objektů (přidat do vrstvy / kontejneru).
+export const COIN_KEY = 'nu-icon-coins';
+export function coinAmount(scene, x, y, amount, style = {}, { prefix = '', rest = '' } = {}) {
+  const size = style.size ?? 20;
+  const base = { ...style, originX: 0 };
+  const parts = [];
+  if (prefix) parts.push(cardText(scene, 0, y, prefix, base));
+  const num = cardText(scene, 0, y, String(amount), base);
+  parts.push(num);
+  const coinSize = Math.round(size * 1.2);
+  let coin = null;
+  if (scene.textures.exists(COIN_KEY)) {
+    const cy = y + num.height * (0.5 - (style.originY ?? 0));
+    coin = scene.add.image(0, cy, COIN_KEY).setOrigin(0, 0.5);
+    coin.setScale(coinSize / Math.max(coin.width, coin.height));
+    parts.push(coin);
+  } else {
+    parts.push(cardText(scene, 0, y, 'zlata', base));
+  }
+  if (rest) parts.push(cardText(scene, 0, y, rest, base));
+  const gap = 4;
+  const widthOf = (o) => (o === coin ? coinSize : o.width);
+  const total = parts.reduce((sum, o) => sum + widthOf(o), 0) + gap * (parts.length - 1);
+  let cx = (style.originX ?? 0) === 1 ? x - total : (style.originX ?? 0) === 0.5 ? x - total / 2 : x;
+  for (const o of parts) {
+    o.setX(cx);
+    cx += widthOf(o) + gap;
+  }
+  return parts;
+}
+
 // Díl nové sady UI natažený přes 9-slice (ui/newUiKit.js). Jen ve WebGL a když je textura
 // načtená – jinak null a volající kreslí náhradní grafiku. scale < 1 = jemnější okraje.
 // Okraje dílů ve zdroji (px): tlačítka 44, panel 36, rám karty 124.

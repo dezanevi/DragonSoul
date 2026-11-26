@@ -1,5 +1,9 @@
 import FantasyButton from './FantasyButton.js';
-import { SKILLS, SKILL_BAR } from './cardLayout.js';
+import { SKILLS } from './cardLayout.js';
+
+// Ukazatel úrovně v tlačítku dovednosti (relativně k tlačítku) – větší než namalovaný
+// rámeček v podkladu, který překryje: od ikony po pravý okraj, s úrovní a procenty.
+const SKILL_BAR = { x: 58, y: 46, w: 116, h: 21 };
 import { cardText, drawBarFill } from './cardText.js';
 import { skillStateKey, spriteState } from './heroButtonSprites.js';
 import { miningClass, MINING_SPECIALIZATIONS } from '../../data/mining.js';
@@ -59,7 +63,7 @@ export default class SkillsPanel {
         skill.area.x + SKILL_BAR.x + SKILL_BAR.w / 2,
         skill.area.y + SKILL_BAR.y + SKILL_BAR.h / 2,
         '',
-        { size: 15, originX: 0.5, strokeThickness: 4, color: '#ffffff' }
+        { size: 16, bold: true, originX: 0.5, strokeThickness: 4, color: '#ffffff' }
       )
     );
   }
@@ -105,7 +109,7 @@ export default class SkillsPanel {
         : skill.id === 'herbalism'
           ? `Třída ${herbClass(level).id} – ${herbClass(level).name}. Herbář: ${Object.keys(this.state?.herbalism?.log ?? {}).length} / ${HERB_CATALOG.length} rostlin. Naleziště: zelený kruh, E. Bylinkářka bydlí v Greenvale.${this.state?.herbalism?.specialization ? ` Specializace: ${HERB_SPECIALIZATIONS.find((s) => s.id === this.state.herbalism.specialization)?.name}.` : ''}`
         : skill.id === 'crafting'
-          ? `Třída ${craftingClass(level).id} – ${craftingClass(level).name}. Vyrobeno receptů: ${Object.keys(this.state?.crafting?.made ?? {}).length} / 108. Řemeslná dílna je u radnice, Soul Crystaly v Hvězdárně.`
+          ? `Třída ${craftingClass(level).id} – ${craftingClass(level).name}. Vyrobeno receptů: ${Object.keys(this.state?.crafting?.made ?? {}).length} / 107. Řemeslná dílna je u radnice, Soul Crystaly v Hvězdárně.`
         : skill.id === 'smithing'
           ? `Vykováno receptů: ${Object.keys(this.state?.smithing?.made ?? {}).length}. Výheň je v kovárně Greenvale.${this.state?.reinforcement ? ` Výztuha: ${this.state.reinforcement.name} (${this.state.reinforcement.battlesLeft} soubojů).` : ''}`
         : skill.id === 'alchemy'
@@ -124,8 +128,12 @@ export default class SkillsPanel {
       const { level, exp, next } = this.skillData(skill.id);
       this.updateSprite(index, this.buttons[index]);
 
-      this.levels[index].setText(this.isLocked(skill.id) ? '' : `Úr. ${level}`);
+      this.levels[index].setText(this.isLocked(skill.id) ? "" : level >= 100 ? `Úr. ${level} · max.` : `Úr. ${level} · ${Math.floor((exp / next) * 100)} %`);
       if (this.isLocked(skill.id)) return;
+      const bx = skill.area.x + SKILL_BAR.x;
+      const by = skill.area.y + SKILL_BAR.y;
+      this.bars.fillStyle(0x05080c, 0.95).fillRoundedRect(bx - 2, by - 2, SKILL_BAR.w + 4, SKILL_BAR.h + 4, 7);
+      this.bars.lineStyle(1.5, 0xd6a23a, 0.95).strokeRoundedRect(bx - 2, by - 2, SKILL_BAR.w + 4, SKILL_BAR.h + 4, 7);
       drawBarFill(
         this.bars,
         {

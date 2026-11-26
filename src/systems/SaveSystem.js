@@ -15,6 +15,7 @@ import {
   normalizeTalentProgress
 } from './TalentSystem.js';
 import { INVENTORY_SIZE, normalizeInventory } from './InventorySystem.js';
+import { getItem } from '../data/items.js';
 import { normalizeFishing } from './FishingSystem.js';
 import { normalizeCooking } from './CookingSystem.js';
 import { normalizeAlchemy } from './AlchemySystem.js';
@@ -153,6 +154,10 @@ talentProgress: createInitialTalentProgress(1),
       data.monsterStorage ??= [];
       data.bestiary ??= {};
       normalizeInventory(data);
+      // Nasazená výbava, která ve hře už není (např. staré kovářské zbroje B01–B28), se sundá.
+      for (const [slot, equipped] of Object.entries(data.equipment ?? {})) {
+        if (equipped && !getItem(equipped.id)) data.equipment[slot] = null;
+      }
       normalizeFishing(data);
       normalizeCooking(data);
       normalizeAlchemy(data);

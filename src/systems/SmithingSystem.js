@@ -157,6 +157,20 @@ export const gearResist = (state, element) => sumGear(state, 'resist', element);
 // Zvýšení poškození útoků daného elementu v %.
 export const gearElementDamage = (state, element) => sumGear(state, 'elementDamage', element);
 
+// Z čeho bonus statistiky je (karta hrdiny – tooltip): [{ name, value }] v %.
+export function gearBreakdown(state, stat) {
+  const mult = isCraftsman(state) ? CRAFTSMAN_MULTIPLIER : 1;
+  const rows = [];
+  for (const equipped of Object.values(state?.equipment ?? {})) {
+    const item = getItem(equipped?.id);
+    const value = Number(item?.gear?.bonus?.[stat]) || 0;
+    if (value) rows.push({ name: item.name, value: (item.smithed || item.crafted) ? value * mult : value });
+  }
+  const r = activeReinforcement(state);
+  if (Number(r?.bonus?.[stat])) rows.push({ name: `${r.name} (výztuha, ${r.battlesLeft} soubojů)`, value: r.bonus[stat] * mult });
+  return rows.map((x) => ({ ...x, value: Math.round(x.value * 10) / 10 }));
+}
+
 // Souhrn pro kartu hrdiny a souboj.
 export function gearSummary(state) {
   const stats = ['attack', 'aether', 'defense', 'resolve', 'speed', 'maxHp'];

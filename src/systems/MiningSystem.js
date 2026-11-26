@@ -337,7 +337,7 @@ export function useMiningMap(state, now = Date.now()) {
   return { ok: true, message: `Mapa odhalila Skrytou žílu (${depositById(hidden.deposit).name}) v regionu ${hidden.region} na 30 min. Otevře ji Důlní podpěra.` };
 }
 
-// Zapomenutá truhla horníka: rudy podle úrovně Těžby a 20–60 zl (přímo do inventáře).
+// Zapomenutá truhla horníka: rudy podle úrovně Těžby a 20–60 zlata (přímo do inventáře).
 export function openMinerChest(state, random = Math.random) {
   normalizeMining(state);
   const level = miningLevel(state);
@@ -348,7 +348,7 @@ export function openMinerChest(state, random = Math.random) {
   const gold = roll(random, 20, 60);
   state.gold = (Math.floor(Number(state.gold) || 0)) + gold;
   const name = MINING_MATERIAL_BY_ID[ore]?.name ?? ore;
-  return { ok: true, message: `Truhla horníka: ${name} ×${qty - left}, ${gold} zl${left ? ` (${left} ks se nevešlo)` : ''}.` };
+  return { ok: true, message: `Truhla horníka: ${name} ×${qty - left}, ${gold} zlata${left ? ` (${left} ks se nevešlo)` : ''}.` };
 }
 
 // ------------------------------------------------------------ specializace
@@ -361,11 +361,11 @@ export function chooseSpecialization(state, id) {
   if (state.mining.specialization === id) return { ok: false, message: `${spec.name} už je tvoje specializace.` };
   const cost = state.mining.specialization ? MINING_RULES.specializationChangeCost : 0;
   const gold = Math.floor(Number(state.gold) || 0);
-  if (gold < cost) return { ok: false, message: `Změna specializace stojí ${cost} zl.` };
+  if (gold < cost) return { ok: false, message: `Změna specializace stojí ${cost} zlata.` };
   state.gold = gold - cost;
   state.mining.specialization = id;
   state.mining.specChanges += cost ? 1 : 0;
-  return { ok: true, message: `Specializace Těžby: ${spec.name}${cost ? ` (−${cost} zl)` : ''}.` };
+  return { ok: true, message: `Specializace Těžby: ${spec.name}${cost ? ` (−${cost} zlata)` : ''}.` };
 }
 
 export const allDeposits = () => DEPOSITS;

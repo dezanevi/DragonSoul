@@ -4,7 +4,7 @@
 //
 //   CRAFTING_INTERMEDIATES  M01–M10: broušení drahokamů, vyčiněná kůže, pevná šňůra, krystalové jádro
 //                           (do 108 receptů se nepočítají)
-//   CRAFTING_RECIPES        108 receptů: A amulety 22, B prsteny 22, C fokusy a talismany 20,
+//   CRAFTING_RECIPES        107 receptů (F18 Zrcadlo duše odstraněno): A amulety 22, B prsteny 22, C fokusy a talismany 20,
 //                           D brašny a cestovní vybavení 19, E Soul Crystaly 5, F ostatní 20
 //
 // Účinek receptu (effect):
@@ -13,7 +13,7 @@
 //   bag:    { bag: počet stránek inventáře }       – použití rozšíří inventář (trvale)
 //   travel: { explore: { klíč: hodnota }, minutes | battles } – dočasný průzkumný bonus
 //           (stejné klíče jako průzkumné přípravky Alchymie)
-//   use:    { use: 'training' | 'skills' }          – jednorázové použití mimo souboj
+//   use:    { use: 'training' }                     – jednorázové použití mimo souboj
 //   tool:   { tool: 'popis' }                       – nástroj Řemeslnictví (z inventáře)
 //   crystal:{ crystal: 'basic' … 'dragonSoul' }     – Soul Crystal pro ochočení
 //   null    mezivýrobek
@@ -222,7 +222,7 @@ const OTHER = [
   R(103, 'F15', 'Koželužské nože', 'F', 8, LEATHER, 1, { [K.clasp]: 1, wood: 1, granite: 1 }, { tool: 'Vyčiněná kůže: +1 kus.' }),
   R(104, 'F16', 'Výcvikové závaží', 'F', 40, LEATHER, 1, { [K.leather]: 2, granite: 3, mat_tezka_kost: 1 }, { use: 'training' }),
   R(105, 'F17', 'Rybářský talisman', 'F', 46, JEWELER, 1, { [K.cord]: 1, mat_morska_perla: 1, mat_supina_leviathana: 1 }, travel({ fishRare: 1.5 }, { minutes: 30 })),
-  R(106, 'F18', 'Zrcadlo duše', 'F', 64, JEWELER, 1, { [K.ag]: 1, mat_strasidelne_sklo: 2, mat_duchovni_esence: 1 }, { use: 'skills' }),
+  // F18 Zrcadlo duše (obnova použití technik) odstraněno – počet použití schopností se už neomezuje.
   R(107, 'F19', 'Lovecké chrániče předloktí', 'F', 30, LEATHER, 1, { [K.leather]: 3, mat_jeskynni_chitin: 2 }, g('shield', { attack: 3, defense: 3 })),
   R(108, 'F20', 'Plášť z dračí kůže', 'F', 96, LEATHER, 1, { [DRAGON_SCALE]: 1, [K.leather]: 4, [K.ori]: 1 }, g('armor', { defense: 8, resolve: 8, maxHp: 8 }), 'quest',
     { story: { item: DRAGON_CRYSTAL_STORY_ITEM, text: 'Jen s Dračí pečetí (příběh).' } })
@@ -271,7 +271,6 @@ export function describeCrafting(e) {
   }
   if (e.crystal) return `Soul Crystal pro ochočení – násobitel šance ${CRYSTAL[e.crystal]}. V souboji se použije nejlepší krystal.`;
   if (e.use === 'training') return 'Použij: monstrum v partě s nejméně volnými body dostane +3 tréninkové body.';
-  if (e.use === 'skills') return 'Použij: obnoví všem monstrům v partě použití technik.';
   if (e.tool) return `Nástroj (z inventáře): ${e.tool}`;
   return '';
 }

@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import WorldHero from '../entities/WorldHero.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
+import { bindBusinessState, onDiplomacyXp, diplomacyLevel, getShop, PROPERTIES, PROPERTY_TYPES } from '../systems/DiplomacySystem.js';
 import { TILE_SIZE, TILE_TYPES } from '../data/tiles.js';
+import { createPartyHud } from '../ui/partyHud.js';
 import { QUEST_STATUS, getQuestStatus, trackedQuest, questTarget, worldQuestMarks, questEndBuildings } from '../systems/QuestSystem.js';
 import { canTravelToRegion, isRegionUnlocked } from '../systems/RegionSystem.js';
-import { loadWorldMap } from '../data/maps/index.js';
+import { loadWorldMap, encounterZoneAt } from '../data/maps/index.js';
 import { locationById, normalizeFishing } from '../systems/FishingSystem.js';
 import { createCardTabBar, CARD_FOR_TAB } from '../ui/cardTabBar.js';
 
@@ -41,6 +43,9 @@ const TILESET_KEY = 'world-tileset';
 const ENCOUNTER_STEPS = { min: 8, max: 18 };
 const DOOR_REACH = TILE_SIZE * 0.9;
 const CAVE_REACH = TILE_SIZE * 1.6;
+// Body elipsy (značky nalezišť, kruhy vstupů): výchozích 32 je zbytečně moc – grafika se
+// přepočítává každý snímek.
+const ELLIPSE_POINTS = 20;
 const FISHING_REACH = TILE_SIZE * 0.9;
 const MINING_REACH = TILE_SIZE * 0.75;
 const HERB_REACH = TILE_SIZE * 0.75;
@@ -48,6 +53,10 @@ const CAVE_QUEST = 'greenvale_cave_slime';
 
 // Kolik místa nad horním rohem mapy nechat kameře (hlavy postav, střechy).
 const CAMERA_TOP_MARGIN = 360;
+
+// Bod úvodního úkolu: louka za Loveckou chatou (Greenvale), tam čeká Air Elemental.
+const INTRO_MEADOW = { x: 32, y: 56 };
+const QUARRY_DEPTH = 40; // o kolik px je dno lomu níž
 
 const DEPTH = {
   ground: -100,
@@ -72,6 +81,8 @@ export default class WorldScene extends Phaser.Scene {
 
   init(data) {
     this.state = data?.state ?? SaveSystem.load() ?? SaveSystem.createNew();
+    // Diplomacie: vlastní obchody prodávají během hraní (main.js → tickBusiness).
+    bindBusinessState(this.state);
     normalizeFishing(this.state);
     normalizeMining(this.state);
     normalizeHerbalism(this.state);
@@ -122,14 +133,35 @@ export default class WorldScene extends Phaser.Scene {
     this.setupCamera();
     this.setupInput();
     this.createHud();
-    this.createDebugOverlay();
+    this.debugObjects = []; // ladicí mřížka (G) se postaví až při prvním zapnutí
+    this.debugVisible = false;
     this.setupUiCamera();
+    // Panel party dole (miniatury, HP, útoky) – jen na kameře rozhraní.
+    // Klik: hrdina → karta Hrdina, volné body talentů → Talenty, monstrum → Party s ním.
+    this.partyHud = createPartyHud(this, this.state, {
+      depth: DEPTH.hud,
+      onHero: () => this.openCard('Hero'),
+      onTalents: () => this.openCard('Talents'),
+      onMonster: (monster) => {
+        this.registry.set('partySelection', monster.instanceId);
+        this.openCard('Party');
+      }
+    });
+    this.cameras.main.ignore(this.partyHud.container);
+    this.time.addEvent({ delay: 300, loop: true, callback: () => {
+      // Pod otevřenou kartou (nebo interiérem) panel schovat – vykukoval by pod ní.
+      this.partyHud?.setVisible(!this.cardOpen() && !this.scene.isActive('Interior'));
+      this.partyHud?.refresh();
+    } });
     this.setupTerrainEditor();
 
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
       // Po návratu z interiéru by mohly zůstat "držené" klávesy.
       this.input.keyboard.resetKeys();
       this.tabBar?.resetHover();
+      this.questMarksAt = -9999; // značky úkolů hned podle stavu z interiéru / karty
+      this.partyHud?.refresh();
+      this.partyHud?.setVisible(!this.cardOpen() && !this.scene.isActive('Interior'));
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -245,6 +277,7 @@ export default class WorldScene extends Phaser.Scene {
     };
 
     const overlay = this.add.graphics().setDepth(DEPTH.ground);
+    const overlayBounds = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
 
     for (let y = 0; y < this.map.height; y++) {
       for (let x = 0; x < this.map.width; x++) {
@@ -254,7 +287,7 @@ export default class WorldScene extends Phaser.Scene {
         const center = this.iso.toScreen((x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE);
         const chunk = chunkFor(type === 'water' ? 'water' : 'land', Math.floor(x / CHUNK), Math.floor(y / CHUNK));
 
-        const image = this.add.image(center.x, center.y, placement.key)
+        const image = this.add.image(center.x, center.y + this.groundLift(x, y), placement.key)
           .setOrigin(placement.originX, placement.originY)
           .setScale(placement.scale)
           .setDepth(x + y + x * 0.001);
@@ -268,13 +301,21 @@ export default class WorldScene extends Phaser.Scene {
 
         // Most, molo, vodopád a základní terény ostatních regionů (písek, sníh, láva…)
         // zatím jako plochá pole přes terén; jemné stínování podle pole.
-        const flat = tile.flat || (this.map.generated && tile.id === 'cliff');
+        // Suť lomu v ručně kreslené mapě (Greenvale): hliněná textura místo ploché barvy.
+        const quarry = tile.id === 'gravel' && !this.map.generated;
+        const flat = (tile.flat && !quarry) || (this.map.generated && tile.id === 'cliff');
         if (['bridge', 'dock', 'waterfall'].includes(tile.id) || flat) {
           this.drawFlatTile(overlay, x, y, tile, flat ? 0.9 + tileHash(x * 7 + 3, y * 11 + 5) * 0.14 : 1);
+          overlayBounds.x0 = Math.min(overlayBounds.x0, center.x - 80);
+          overlayBounds.y0 = Math.min(overlayBounds.y0, center.y - 60);
+          overlayBounds.x1 = Math.max(overlayBounds.x1, center.x + 80);
+          overlayBounds.y1 = Math.max(overlayBounds.y1, center.y + 60);
         }
       }
     }
 
+    if (overlayBounds.x1 > overlayBounds.x0) this.cullRect(overlay, overlayBounds.x0, overlayBounds.y0, overlayBounds.x1, overlayBounds.y1);
+    this.drawQuarryWalls();
     this.groundChunks = [...chunks.values()];
   }
 
@@ -283,6 +324,7 @@ export default class WorldScene extends Phaser.Scene {
   groundTypeAt(x, y) {
     const id = this.tileAt(x, y)?.id;
 
+    if (id === 'rock' && this.isQuarry(x, y)) return 'gravel';
     if (id === 'tree' || id === 'spruce' || id === 'rock') {
       let meadow = 0;
       for (let dy = -1; dy <= 1; dy++) {
@@ -292,10 +334,82 @@ export default class WorldScene extends Phaser.Scene {
     }
 
     if (id === 'bridge' || id === 'dock' || id === 'waterfall') return 'water';
+    // Dno lomu: štěrk, u zadní (severní / západní) stěny ve stínu.
+    if (this.isQuarry(x, y)) {
+      const wall = (dx, dy) => !this.isQuarry(x + dx, y + dy);
+      return wall(0, -1) || wall(-1, 0) || wall(-1, -1) ? 'gravelShade' : 'gravel';
+    }
     if (id === 'cave') return 'cliff';
     // Generované regiony: základní terény i útesy jako ploché pole (podklad hlína).
     if (this.tileAt(x, y)?.flat || (this.map.generated && id === 'cliff')) return 'plot';
     return ['grass', 'meadow', 'plot', 'path', 'plaza', 'water', 'cliff'].includes(id) ? id : 'grass';
+  }
+
+  // Skalní stěny lomu: na zadních hranách dna (sever = y−1, západ = x−1) svislá stěna z okraje
+  // terénu dolů na dno, vrstvená skála se stínem.
+  drawQuarryWalls() {
+    if (this.map.generated) return;
+    const g = this.add.graphics().setDepth(DEPTH.ground - 10); // nad terénem, pod objekty
+    const T = TILE_SIZE;
+    const D = QUARRY_DEPTH;
+    const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }; // obdélník stěn (skrývání mimo záběr)
+    const wall = (a, b2, base, light) => {
+      const pts = [a, b2, { x: b2.x, y: b2.y + D }, { x: a.x, y: a.y + D }];
+      g.fillStyle(base, 1).fillPoints(pts, true);
+      for (let i = 1; i < 4; i++) {
+        const t = i / 4;
+        g.lineStyle(2, light, 0.35).lineBetween(a.x, a.y + D * t, b2.x, b2.y + D * t);
+      }
+      g.lineStyle(2, 0x3a332c, 0.6).lineBetween(a.x, a.y + D, b2.x, b2.y + D);
+    };
+    for (let y = 0; y < this.map.height; y++) {
+      for (let x = 0; x < this.map.width; x++) {
+        if (!this.isQuarry(x, y)) continue;
+        const n = this.iso.toScreen(x * T, y * T);
+        const e = this.iso.toScreen((x + 1) * T, y * T);
+        const w = this.iso.toScreen(x * T, (y + 1) * T);
+        b.x0 = Math.min(b.x0, w.x); b.x1 = Math.max(b.x1, e.x); b.y0 = Math.min(b.y0, n.y); b.y1 = Math.max(b.y1, w.y + D);
+        if (!this.isQuarry(x, y - 1) && !this.isQuarryRamp(x, y - 1)) wall(n, e, 0x857563, 0xb3a28a);
+        if (!this.isQuarry(x - 1, y) && !this.isQuarryRamp(x - 1, y)) wall(w, n, 0x6c5f51, 0x9c8b75);
+      }
+    }
+    if (b.x1 > b.x0) this.cullRect(g, b.x0, b.y0, b.x1, b.y1);
+  }
+
+  // Zahloubení terénu v px (dno lomu leží níž, okolní terén tvoří stěnu).
+  groundLift(x, y) {
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    if (this.isQuarry(tx, ty)) return QUARRY_DEPTH;
+    return this.isQuarryRamp(tx, ty) ? QUARRY_DEPTH / 2 : 0;
+  }
+
+  // Sjezd do lomu: pole cesty hned vedle dna.
+  isQuarryRamp(x, y) {
+    if (this.map.generated || this.tileAt(x, y)?.id !== 'path') return false;
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => this.isQuarry(x + dx, y + dy));
+  }
+
+  // Pole dna lomu: štěrk, nebo balvan obklopený štěrkem (ručně kreslená mapa).
+  isQuarry(x, y) {
+    if (this.map.generated) return false;
+    const id = this.tileAt(x, y)?.id;
+    if (id === 'gravel') return true;
+    if (id !== 'rock') return false;
+    let n = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (this.tileAt(x + dx, y + dy)?.id === 'gravel') n++;
+    return n >= 2;
+  }
+
+  // Grafika, která se mimo záběr nekreslí (značky nalezišť, kruhy vstupů, ploché dlaždice…):
+  // Phaser grafiku neořezává a každý snímek ji přepočítává, i daleko mimo obrazovku.
+  cullRect(obj, x0, y0, x1, y1) {
+    (this.cullMarks ??= []).push({ obj, x0, y0, x1, y1 });
+    return obj;
+  }
+
+  cullPoint(obj, x, y, r = 90) {
+    return this.cullRect(obj, x - r, y - r, x + r, y + r);
   }
 
   // Skryje bloky terénu mimo záběr kamery.
@@ -312,6 +426,28 @@ export default class WorldScene extends Phaser.Scene {
         chunk.maxY >= view.y - margin &&
         chunk.minY <= view.bottom + margin
       );
+    }
+
+    // Stromy a skály mimo záběr se nekreslí (les má tisíce objektů). Obrázek stojí na patě
+    // (počátek dole uprostřed), proto větší rezerva nahoru a do stran.
+    if (this.cullMarks) {
+      const left = view.x - 60;
+      const right = view.right + 60;
+      const top = view.y - 60;
+      const bottom = view.bottom + 60;
+      for (const m of this.cullMarks) {
+        m.obj.visible = m.x1 >= left && m.x0 <= right && m.y1 >= top && m.y0 <= bottom;
+      }
+    }
+
+    if (this.cullObjects) {
+      const left = view.x - 260;
+      const right = view.right + 260;
+      const top = view.y - 40;
+      const bottom = view.bottom + 420;
+      for (const image of this.cullObjects) {
+        image.visible = image.x >= left && image.x <= right && image.y >= top && image.y <= bottom;
+      }
     }
   }
 
@@ -357,7 +493,7 @@ export default class WorldScene extends Phaser.Scene {
         if (!this.textures.exists(key)) continue;
 
         const center = this.iso.toScreen((x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE);
-        const baseY = center.y + 14;
+        const baseY = center.y + 14 + this.groundLift(x, y);
         const jitter = (tileHash(y, x) - 0.5) * 16;
         const size = tileHash(x + 7, y + 3);
 
@@ -365,11 +501,13 @@ export default class WorldScene extends Phaser.Scene {
         if (tile.object === 'tree') scale = 0.7 + size * 0.65; // 0,7× až 1,35×
         if (tile.object === 'spruce') scale = (index >= 2 ? 1.3 : 0.95) + size * 0.55;
 
-        this.trackMapObject(this.add.image(center.x + jitter, baseY, key)
+        const image = this.add.image(center.x + jitter, baseY, key)
           .setOrigin(0.5, 1)
           .setScale(SHEET_SCALE * scale * OBJECT_SCALE)
           .setFlipX(tile.object !== 'rock' && roll < 0.5)
-          .setDepth(baseY), `obj-${x},${y}`, `${OBJECT_LABELS[tile.object] ?? tile.object} (${x}, ${y})`);
+          .setDepth(baseY);
+        (this.cullObjects ??= []).push(image);
+        this.trackMapObject(image, `obj-${x},${y}`, `${OBJECT_LABELS[tile.object] ?? tile.object} (${x}, ${y})`);
       }
     }
   }
@@ -430,9 +568,10 @@ export default class WorldScene extends Phaser.Scene {
       .filter((spot) => spot.info);
     for (const spot of this.fishingSpots) {
       const p = this.iso.toScreen((spot.x + 0.5) * TILE_SIZE, (spot.y + 0.5) * TILE_SIZE);
-      const g = this.add.graphics().setDepth(p.y - 1);
-      g.lineStyle(3, 0x7fd0ff, 0.95).strokeEllipse(p.x, p.y, 54, 26);
-      g.fillStyle(0x7fd0ff, 0.22).fillEllipse(p.x, p.y, 54, 26);
+      p.y += this.groundLift(spot.x, spot.y);
+      const g = this.cullPoint(this.add.graphics().setDepth(p.y - 1), p.x, p.y);
+      g.lineStyle(3, 0x7fd0ff, 0.95).strokeEllipse(p.x, p.y, 54, 26, ELLIPSE_POINTS);
+      g.fillStyle(0x7fd0ff, 0.22).fillEllipse(p.x, p.y, 54, 26, ELLIPSE_POINTS);
     }
   }
 
@@ -455,8 +594,9 @@ export default class WorldScene extends Phaser.Scene {
     const region = this.state.region || 'Greenvale';
     const makeSpot = (spot, extra = {}) => {
       const p = this.iso.toScreen((spot.x + 0.5) * TILE_SIZE, (spot.y + 0.5) * TILE_SIZE);
+      p.y += this.groundLift(spot.x, spot.y);
       // Nad korunami stromů z jižních polí, aby značka nezmizela v lese.
-      return { ...spot, ...extra, screen: p, graphics: this.add.graphics().setDepth(p.y + 150) };
+      return { ...spot, ...extra, screen: p, graphics: this.cullPoint(this.add.graphics().setDepth(p.y + 150), p.x, p.y) };
     };
     this.miningSpots = (this.map.miningSpots ?? [])
       .map((spot) => ({ ...spot, info: depositById(spot.deposit) }))
@@ -494,14 +634,14 @@ export default class WorldScene extends Phaser.Scene {
       const { x, y } = spot.screen;
       const color = st.hidden || spot.kind === 'meteor' ? 0xffd76a : st.info.special ? 0xc48bff : 0xffa94d;
       if (!st.ready) {
-        g.lineStyle(2, 0x6b6258, 0.8).strokeEllipse(x, y, 46, 22);
-        g.fillStyle(0x3a332c, 0.35).fillEllipse(x, y, 46, 22);
+        g.lineStyle(2, 0x6b6258, 0.8).strokeEllipse(x, y, 46, 22, ELLIPSE_POINTS);
+        g.fillStyle(0x3a332c, 0.35).fillEllipse(x, y, 46, 22, ELLIPSE_POINTS);
         continue;
       }
-      if (dowsing || st.hidden || spot.kind === 'meteor') g.fillStyle(color, 0.25).fillEllipse(x, y, 72, 34);
-      g.lineStyle(4, 0x2a1d13, 0.6).strokeEllipse(x, y, 54, 27);
-      g.lineStyle(3, color, 1).strokeEllipse(x, y, 50, 24);
-      g.fillStyle(color, 0.45).fillEllipse(x, y, 50, 24);
+      if (dowsing || st.hidden || spot.kind === 'meteor') g.fillStyle(color, 0.25).fillEllipse(x, y, 72, 34, ELLIPSE_POINTS);
+      g.lineStyle(4, 0x2a1d13, 0.6).strokeEllipse(x, y, 54, 27, ELLIPSE_POINTS);
+      g.lineStyle(3, color, 1).strokeEllipse(x, y, 50, 24, ELLIPSE_POINTS);
+      g.fillStyle(color, 0.45).fillEllipse(x, y, 50, 24, ELLIPSE_POINTS);
       g.lineStyle(3, 0x2a1d13, 0.9).lineBetween(x - 8, y + 5, x + 8, y - 7); // násada krumpáče
       g.lineStyle(3, 0xe8e0cc, 0.9).lineBetween(x + 1, y - 10, x + 13, y - 3);
     }
@@ -544,7 +684,8 @@ export default class WorldScene extends Phaser.Scene {
       .filter((spot) => spot.info)
       .map((spot) => {
         const p = this.iso.toScreen((spot.x + 0.5) * TILE_SIZE, (spot.y + 0.5) * TILE_SIZE);
-        return { ...spot, screen: p, graphics: this.add.graphics().setDepth(p.y + 150) };
+        p.y += this.groundLift(spot.x, spot.y);
+        return { ...spot, screen: p, graphics: this.cullPoint(this.add.graphics().setDepth(p.y + 150), p.x, p.y) };
       });
     this.refreshHerbMarkers();
   }
@@ -563,17 +704,17 @@ export default class WorldScene extends Phaser.Scene {
       if (!st) continue;
       const { x, y } = spot.screen;
       if (!st.ready) {
-        g.lineStyle(2, 0x5f6b58, 0.8).strokeEllipse(x, y, 46, 22);
-        g.fillStyle(0x2e3a2a, 0.35).fillEllipse(x, y, 46, 22);
+        g.lineStyle(2, 0x5f6b58, 0.8).strokeEllipse(x, y, 46, 22, ELLIPSE_POINTS);
+        g.fillStyle(0x2e3a2a, 0.35).fillEllipse(x, y, 46, 22, ELLIPSE_POINTS);
         continue;
       }
       // Sytá barva a tmavý okraj, aby kruh na světlé trávě nesplýval.
       const color = st.info.special ? 0xa86bff : st.info.cultivated ? 0xe0c23a : 0x2fb84a;
-      g.lineStyle(5, 0x0d1f0a, 0.85).strokeEllipse(x, y, 56, 28);
-      g.fillStyle(color, 0.6).fillEllipse(x, y, 52, 25);
-      g.lineStyle(2, 0xf2ffe0, 0.9).strokeEllipse(x, y, 50, 24);
+      g.lineStyle(5, 0x0d1f0a, 0.85).strokeEllipse(x, y, 56, 28, ELLIPSE_POINTS);
+      g.fillStyle(color, 0.6).fillEllipse(x, y, 52, 25, ELLIPSE_POINTS);
+      g.lineStyle(2, 0xf2ffe0, 0.9).strokeEllipse(x, y, 50, 24, ELLIPSE_POINTS);
       // Lístek s žilkou.
-      g.fillStyle(0x0f4a12, 1).fillEllipse(x + 1, y - 3, 22, 11);
+      g.fillStyle(0x0f4a12, 1).fillEllipse(x + 1, y - 3, 22, 11, ELLIPSE_POINTS);
       g.lineStyle(2, 0xd8f5b0, 1).lineBetween(x - 10, y + 2, x + 11, y - 7);
     }
   }
@@ -643,9 +784,9 @@ export default class WorldScene extends Phaser.Scene {
   createNpcMarkers() {
     for (const npc of this.map.npcs ?? []) {
       const p = this.iso.toScreen((npc.x + 0.5) * TILE_SIZE, (npc.y + 0.5) * TILE_SIZE);
-      const g = this.add.graphics().setDepth(p.y);
-      g.lineStyle(3, 0xffd76a, 0.9).strokeEllipse(p.x, p.y, 70, 34);
-      g.fillStyle(0xffd76a, 0.18).fillEllipse(p.x, p.y, 70, 34);
+      const g = this.cullPoint(this.add.graphics().setDepth(p.y), p.x, p.y);
+      g.lineStyle(3, 0xffd76a, 0.9).strokeEllipse(p.x, p.y, 70, 34, ELLIPSE_POINTS);
+      g.fillStyle(0xffd76a, 0.18).fillEllipse(p.x, p.y, 70, 34, ELLIPSE_POINTS);
       this.add.text(p.x, p.y - 30, `NPC: ${npc.label}`, {
         fontSize: '18px', color: '#fff1c6', backgroundColor: '#2a1a10cc', padding: { x: 6, y: 3 }
       }).setOrigin(0.5, 1).setDepth(p.y + 1);
@@ -694,9 +835,6 @@ export default class WorldScene extends Phaser.Scene {
     );
   }
 
-  // Pole za budovou (sever / západ), na kterých by hrdinu skoro celého zakryl obrázek budovy
-  // (stěny, střecha). Ta jsou neprůchozí – hrdina se nemůže „schovat“ do domu a nevypadá to,
-  // že prochází zdí. Počítá se z průhlednosti obrázku v místech těla hrdiny.
   // Je bod obrazovky (sx, sy) na neprůhledném pixelu obrázku budovy?
   imageOpaqueAt(image, sx, sy) {
     const profile = this.alphaCache?.get(image.texture.key);
@@ -709,8 +847,7 @@ export default class WorldScene extends Phaser.Scene {
     return profile.alpha[ly * profile.w + lx] > 140;
   }
 
-  // Budova, za kterou hrdina zrovna stojí (jen po cestách – jinde je pole za budovou zablokované),
-  // zprůsvitní, aby byl hrdina vidět.
+  // Budova, za kterou hrdina zrovna stojí, zprůsvitní, aby byl hrdina vidět.
   updateBuildingFade() {
     if (!this.buildingImages) return;
     const hx = this.player.view.x;
@@ -723,6 +860,8 @@ export default class WorldScene extends Phaser.Scene {
     }
   }
 
+  // Pole za budovou (sever / západ), na kterých by hrdinu skoro celého zakryl obrázek budovy.
+  // Dřív se blokovala; teď jsou průchozí (budova zprůsvitní). Ponecháno pro ladění.
   occludedTiles(image, building, rect) {
     const profile = this.alphaCache?.get(image.texture.key);
     if (!profile?.alpha) return [];
@@ -803,7 +942,9 @@ export default class WorldScene extends Phaser.Scene {
     const southY = top + profile.bottom * scale;
     // Šířka základny na obrazovce = (w + h) × 64 px; poměr stran podle mapy.
     const span = (east - west) / (ISO_TILE_WIDTH / 2);
-    const ratio = building.width / (building.width + building.height);
+    // collisionAspect [š, v]: obrázek protáhlý jinak než půdorys v mapě (radnice).
+    const [aw, ah] = building.collisionAspect ?? [building.width, building.height];
+    const ratio = aw / (aw + ah);
     const wTiles = span * ratio;
     const hTiles = span - wTiles;
     const southX = west + hTiles * (ISO_TILE_WIDTH / 2);
@@ -815,6 +956,15 @@ export default class WorldScene extends Phaser.Scene {
       w: Math.max(0.6, wTiles - inset * 2),
       h: Math.max(0.6, hTiles - inset * 2)
     };
+    // Zadní strany (sever / západ) až po půdorys z mapy: spodní třetina obrázku vidí jen přední
+    // stěny, takže kolize byla mělká a hrdina „za budovou“ stál uprostřed domu. Přední strana
+    // (dveře) zůstává podle obrázku.
+    const backX = Math.min(rect.x, building.x + inset);
+    const backY = Math.min(rect.y, building.y + inset);
+    rect.w += rect.x - backX;
+    rect.h += rect.y - backY;
+    rect.x = backX;
+    rect.y = backY;
     // Dveře mimo kolizi: zkrátit stranu, na které dveře jsou.
     const door = building.door;
     if (door && door.x + 1 > rect.x && door.x < rect.x + rect.w && door.y + 1 > rect.y && door.y < rect.y + rect.h) {
@@ -881,14 +1031,8 @@ export default class WorldScene extends Phaser.Scene {
       // obrázky bývají větší / posunuté. Bez obrázku zůstává půdorys.
       const rect = (image && this.fitBuildingCollision(image, building)) ?? { x: building.x, y: building.y, w: building.width, h: building.height };
       this.buildingCollision.set(building.id, rect);
-      if (image) {
-        for (const tile of this.occludedTiles(image, building, rect)) {
-          const key = `${tile.x},${tile.y}`;
-          if (this.occlusionBlocked.has(key)) continue;
-          this.occlusionBlocked.add(key);
-          this.buildingBodies.add(this.add.zone((tile.x + 0.5) * TILE_SIZE, (tile.y + 0.5) * TILE_SIZE, TILE_SIZE * 0.9, TILE_SIZE * 0.9));
-        }
-      }
+      // Pole za budovou se už neblokují (occludedTiles): hrdina za ni dojde a budova
+      // zprůsvitní (updateBuildingFade). Kolize je jen půdorys stěn.
       const body = this.add.zone(
         (rect.x + rect.w / 2) * TILE_SIZE,
         (rect.y + rect.h / 2) * TILE_SIZE,
@@ -979,7 +1123,7 @@ export default class WorldScene extends Phaser.Scene {
     if (status === QUEST_STATUS.active) {
       const ready = (this.state.party ?? []).some((monster) => monster.currentHp > 0);
       if (!ready) {
-        this.showWorldMessage('Tvoje monstra jsou vyčerpaná. Nech je vyléčit u Liory v hostinci.');
+        this.showWorldMessage('Tvoje monstra jsou vyčerpaná. Nech je vyléčit u Liory v domě léčitelky (nebo si odpočiň v hostinci).');
         return;
       }
       this.startBattle({ type: 'greenvale_cave_boss', backdrop: 'greenvale_meadow' });
@@ -1001,6 +1145,7 @@ export default class WorldScene extends Phaser.Scene {
     this.player.stop();
     this.savePosition();
 
+    this.partyHud?.setVisible(false);
     this.scene.pause();
     this.scene.launch('Interior', {
       state: this.state,
@@ -1124,12 +1269,23 @@ export default class WorldScene extends Phaser.Scene {
 
     // Setkání jen na louce v Greenvale (ostatní regiony zatím bez náhodných setkání).
     if ((this.state.region || 'Greenvale') !== 'Greenvale') return false;
-    if (!this.tileAt(tileX, tileY)?.encounter) return false;
+    if (!this.tileAt(tileX, tileY)?.encounter) {
+      this.currentZoneId = null;
+      return false;
+    }
+    // Vstup na louku: název a úrovně monster (jako cedule u cesty).
+    const enteredZone = encounterZoneAt(this.map, tileX, tileY);
+    if (enteredZone && enteredZone.id !== this.currentZoneId) {
+      this.showWorldMessage(`${enteredZone.name} – monstra úr. ${enteredZone.level[0]}–${enteredZone.level[1]}${enteredZone.rare ? ' (vzácná louka)' : ''}`);
+    }
+    this.currentZoneId = enteredZone?.id ?? null;
 
-    // Úvodní úkol Krotitelova zkouška: na první poli louky vždy Air Elemental (tutoriál souboje).
+    // Úvodní úkol Krotitelova zkouška: Air Elemental čeká na louce za Loveckou chatou (bod úkolu).
+    // Do té doby na louce žádná náhodná setkání.
     if (getQuestStatus(this.state, 'greenvale_mage_intro') === QUEST_STATUS.active) {
+      if (Math.max(Math.abs(tileX - INTRO_MEADOW.x), Math.abs(tileY - INTRO_MEADOW.y)) > 1) return false;
       if (!(this.state.party ?? []).some((monster) => monster.currentHp > 0)) {
-        this.showWorldMessage('Tvůj vlk je vyčerpaný. Nech ho vyléčit u Liory v hostinci.');
+        this.showWorldMessage('Tvůj vlk je vyčerpaný. Nech ho vyléčit u Liory v domě léčitelky (nebo si odpočiň v hostinci).');
         return false;
       }
       this.startBattle({ type: 'tutorial_air', backdrop: 'greenvale_meadow' });
@@ -1146,7 +1302,9 @@ export default class WorldScene extends Phaser.Scene {
     const ready = (this.state.party ?? []).some((monster) => monster.currentHp > 0);
     if (!ready) return false;
 
-    this.startBattle({ type: 'wild', backdrop: 'greenvale_meadow' });
+    // Louka setkání: konkrétní monstra a úrovně (map.encounterZones).
+    const zone = encounterZoneAt(this.map, tileX, tileY);
+    this.startBattle({ type: 'wild', backdrop: 'greenvale_meadow', zone: zone ? { id: zone.id, name: zone.name, level: zone.level, species: zone.species } : null });
     return true;
   }
 
@@ -1177,6 +1335,7 @@ export default class WorldScene extends Phaser.Scene {
     this.player.stop();
     this.prompt.setVisible(false);
     this.savePosition();
+    this.partyHud?.setVisible(false);
     // animateIn: první karta ze světa vyjede zpod lišty (přepínání mezi kartami bez animace).
     this.scene.launch(sceneKey, { state: this.state, returnScene: this.scene.key, initialTab, animateIn: true, ...extra });
     this.scene.bringToTop(sceneKey);
@@ -1184,7 +1343,7 @@ export default class WorldScene extends Phaser.Scene {
 
   // Rozhraní má vlastní kameru, aby se nezoomovalo se světem.
   setupUiCamera() {
-    const hud = [...(this.tabBar?.objects ?? []), this.debugInfo];
+    const hud = [...(this.tabBar?.objects ?? []), this.debugInfo].filter(Boolean);
 
     this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     this.uiCamera.ignore(this.children.list.filter((object) => !hud.includes(object)));
@@ -1261,7 +1420,7 @@ export default class WorldScene extends Phaser.Scene {
 
     for (const point of this.map.points ?? []) {
       const center = this.iso.toScreen((point.x + 0.5) * TILE_SIZE, (point.y + 0.5) * TILE_SIZE);
-      g.lineStyle(4, 0xff40ff, 0.9).strokeEllipse(center.x, center.y, 70, 35);
+      g.lineStyle(4, 0xff40ff, 0.9).strokeEllipse(center.x, center.y, 70, 35, ELLIPSE_POINTS);
     }
 
     // Popisky souřadnic po 5 polích.
@@ -1293,10 +1452,16 @@ export default class WorldScene extends Phaser.Scene {
       .setDepth(DEPTH.hud);
 
     this.debugObjects = [g, this.hoverOutline, this.debugInfo, ...labels];
-    this.setDebugVisible(false);
+    // Vzniká až po nastavení kamer: svět jen na hlavní kameře, panel jen na kameře rozhraní.
+    this.uiCamera?.ignore([g, this.hoverOutline, ...labels]);
+    this.cameras.main.ignore(this.debugInfo);
   }
 
   setDebugVisible(visible) {
+    if (visible && !this.debugBuilt) {
+      this.debugBuilt = true;
+      this.createDebugOverlay();
+    }
     this.debugVisible = visible;
     this.debugObjects.forEach((object) => object.setVisible(visible));
   }
@@ -1356,6 +1521,9 @@ export default class WorldScene extends Phaser.Scene {
     if (target.type === 'herbSite') {
       const spot = (this.map.herbSpots ?? []).find((s) => s.site === target.site);
       return spot ? { key: `${questId}:${target.site}`, x: spot.x, y: spot.y } : null;
+    }
+    if (target.type === 'meadow' && questId === 'greenvale_mage_intro') {
+      return { key: `${questId}:meadow`, x: INTRO_MEADOW.x, y: INTRO_MEADOW.y };
     }
     if (target.type === 'meadow') {
       // Nejbližší pole louky (zóna setkání) k hrdinovi – spočítá se jednou za úkol.
@@ -1492,14 +1660,14 @@ export default class WorldScene extends Phaser.Scene {
       const cell = path[i];
       const p = this.iso.toScreen((cell.x + 0.5) * TILE_SIZE, (cell.y + 0.5) * TILE_SIZE);
       const wave = 0.5 + 0.5 * Math.max(0, Math.cos((i - phase) * 0.6));
-      g.fillStyle(0x062a33, 0.65).fillEllipse(p.x, p.y + 3, 30, 16);
-      g.fillStyle(0x3fe0ff, 0.55 + 0.45 * wave).fillEllipse(p.x, p.y, 24, 13);
-      g.fillStyle(0xe6fcff, 0.4 + 0.5 * wave).fillEllipse(p.x - 3, p.y - 2, 9, 5);
+      g.fillStyle(0x062a33, 0.65).fillEllipse(p.x, p.y + 3, 30, 16, ELLIPSE_POINTS);
+      g.fillStyle(0x3fe0ff, 0.55 + 0.45 * wave).fillEllipse(p.x, p.y, 24, 13, ELLIPSE_POINTS);
+      g.fillStyle(0xe6fcff, 0.4 + 0.5 * wave).fillEllipse(p.x - 3, p.y - 2, 9, 5, ELLIPSE_POINTS);
     }
     // Cíl: zlatý kroužek.
     if (path.length) {
       const end = this.iso.toScreen((target.x + 0.5) * TILE_SIZE, (target.y + 0.5) * TILE_SIZE);
-      g.lineStyle(6, 0x3fe0ff, 0.6 + 0.4 * Math.sin(this.time.now / 250)).strokeEllipse(end.x, end.y, 90, 48);
+      g.lineStyle(6, 0x3fe0ff, 0.6 + 0.4 * Math.sin(this.time.now / 250)).strokeEllipse(end.x, end.y, 90, 48, ELLIPSE_POINTS);
     }
   }
 
@@ -1544,13 +1712,15 @@ export default class WorldScene extends Phaser.Scene {
     const blue = questEndBuildings(this.state, this.state.region || 'Greenvale');
     for (const door of this.doors ?? []) {
       const id = door.building.id;
-      const color = blue.has(id) ? 0x5ab8ff : 0xffd23a;
+      // Nemovitost na prodej / vlastní obchod (Diplomacie): fialový kruh, pod potřebnou úrovní šedý.
+      const property = this.propertyDoorState(id);
+      const color = property ? (property.locked ? 0x8a8a8a : 0xb57cff) : blue.has(id) ? 0x5ab8ff : 0xffd23a;
       let ring = this.doorRings.get(id);
       if (ring && ring.color === color) continue;
       if (!ring) {
         const p = this.iso.toScreen(door.x, door.y);
         const own = this.buildingImages?.get(id)?.depth ?? Infinity;
-        const g = this.add.graphics().setPosition(p.x, p.y).setDepth(Math.min(p.y - 6, own - 1));
+        const g = this.cullPoint(this.add.graphics().setPosition(p.x, p.y).setDepth(Math.min(p.y - 6, own - 1)), p.x, p.y);
         this.uiCamera?.ignore(g);
         this.tweens.add({ targets: g, alpha: 0.78, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         ring = { g, color: null };
@@ -1558,11 +1728,27 @@ export default class WorldScene extends Phaser.Scene {
       }
       ring.color = color;
       ring.g.clear()
-        .fillStyle(color, 0.38).fillEllipse(0, 0, 104, 52)
-        .lineStyle(12, color, 0.3).strokeEllipse(0, 0, 104, 52)
-        .lineStyle(7, color, 1).strokeEllipse(0, 0, 104, 52)
-        .lineStyle(2, 0xffffff, 0.7).strokeEllipse(0, -1, 94, 45);
+        .fillStyle(color, 0.38).fillEllipse(0, 0, 104, 52, ELLIPSE_POINTS)
+        .lineStyle(12, color, 0.3).strokeEllipse(0, 0, 104, 52, ELLIPSE_POINTS)
+        .lineStyle(7, color, 1).strokeEllipse(0, 0, 104, 52, ELLIPSE_POINTS)
+        .lineStyle(2, 0xffffff, 0.7).strokeEllipse(0, -1, 94, 45, ELLIPSE_POINTS);
     }
+  }
+
+  // Vstup do nemovitosti z Diplomacie: { owned, locked, prompt } nebo null (běžná budova).
+  propertyDoorState(buildingId) {
+    const prop = PROPERTIES[buildingId];
+    if (!prop) return null;
+    const shop = getShop(this.state, buildingId);
+    const owned = Boolean(shop);
+    const needed = PROPERTY_TYPES[prop.type].level;
+    const level = diplomacyLevel(this.state);
+    const locked = !owned && level < needed;
+    let prompt;
+    if (owned) prompt = `E: vstoupit – ${shop.name}`;
+    else if (locked) prompt = `${prop.name} – na prodej (odemkne se na Diplomacii ${needed}, máš ${level})`;
+    else prompt = `${prop.name} – na prodej · kup ho u starosty na radnici`;
+    return { owned, locked, prompt };
   }
 
   // Nástěnka na náměstí (budova bez interiéru): E otevře Nástěnku úkolů.
@@ -1616,16 +1802,17 @@ export default class WorldScene extends Phaser.Scene {
 
     const door = this.findNearbyDoor();
 
+    const property = door ? this.propertyDoorState(door.building.id) : null;
     if (door) {
       this.prompt
-        .setText(`E: vstoupit – ${door.building.name}`)
+        .setText(property ? property.prompt : `E: vstoupit – ${door.building.name}`)
         .setPosition(this.player.view.x, this.player.view.y - 125)
         .setVisible(true);
     } else {
       this.prompt.setVisible(false);
     }
 
-    if (door && Phaser.Input.Keyboard.JustDown(this.keys.interact)) {
+    if (door && Phaser.Input.Keyboard.JustDown(this.keys.interact) && (!property || property.owned)) {
       this.enterBuilding(door);
       return;
     }
@@ -1753,13 +1940,18 @@ export default class WorldScene extends Phaser.Scene {
 
     if (this.checkEncounter()) return;
 
+    // Esc = nabídka pauzy (Vrátit se, Uložit, Načíst, Nastavení…), ne hlavní menu.
     if (Phaser.Input.Keyboard.JustDown(this.keys.menu) && !this.leavingToMenu) {
       this.savePosition();
-      // Poslední náhled hry (pro sloty uložení) – snímek před přechodem do menu.
+      this.player.stop();
+      // Náhled hry pro sloty uložení – snímek před otevřením pauzy.
       this.leavingToMenu = true;
       SaveSystem.capturePreview(this.game, () => {
         this.leavingToMenu = false;
-        this.scene.start('Menu', { state: this.state });
+        this.partyHud?.setVisible(false);
+        this.scene.pause();
+        this.scene.launch('Pause', { state: this.state, returnScene: this.scene.key });
+        this.scene.bringToTop('Pause');
       });
     }
   }

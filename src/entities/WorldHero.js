@@ -107,7 +107,11 @@ export default class WorldHero {
   // Promítne logickou pozici do izometrie. Volá se po kroku fyziky.
   syncView() {
     const screen = this.projection.toScreen(this.mover.x, this.mover.y);
-    this.view.setPosition(screen.x, screen.y);
-    this.view.setDepth(screen.y);
+    // Zahloubený terén (dno lomu): plynulý sestup / výstup.
+    const target = this.scene.groundLift?.(this.mover.x / 64, this.mover.y / 64) ?? 0;
+    this.lift = this.lift === undefined ? target : this.lift + (target - this.lift) * 0.25;
+    if (Math.abs(target - this.lift) < 0.3) this.lift = target;
+    this.view.setPosition(screen.x, screen.y + this.lift);
+    this.view.setDepth(screen.y + this.lift);
   }
 }

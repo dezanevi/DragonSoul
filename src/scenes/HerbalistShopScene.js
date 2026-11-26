@@ -9,15 +9,16 @@ import {
   normalizeHerbalism, herbLevel, chooseHerbSpecialization, herbalistStock, recordHerbalistSale, wantedHerb
 } from '../systems/HerbalismSystem.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
-import { cardText, cardButton, uiWindow, uiTitle, uiSection } from '../ui/fantasyCard.js';
+import { cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
 import { questBuyMark } from '../ui/craftLook.js';
 import { questShoppingList } from '../systems/QuestSystem.js';
+import { ShopCart } from '../ui/shopCart.js';
 
 // Obchod Bylinkářky v Greenvale: omezená denní zásoba běžných bylin (vzácné se neprodávají),
 // Zahradnický srp, výkup bylin a vzácných nálezů za polovinu ceny (hledaná bylina dne ×2)
-// a specializace Sběru bylin.
+// a specializace Sběru bylin. Nákup a prodej jde přes košík (ui/shopCart.js).
 
-const W = 1500;
+const W = 1860;
 const H = 900;
 const X = GAME_WIDTH / 2 - W / 2;
 const Y = GAME_HEIGHT / 2 - H / 2;
@@ -40,17 +41,24 @@ export default class HerbalistShopScene extends Phaser.Scene {
     normalizeInventory(this.state);
     normalizeHerbalism(this.state);
     this.state.gold = Math.max(0, Math.floor(Number(this.state.gold) || 0));
+    this.cart = new ShopCart(this, this.state, {
+      sellValue: (id, qty) => sellPrice(id, wantedHerb()) * qty,
+      sellOne: (id) => (removeItem(this.state, id, 1) ? sellPrice(id, wantedHerb()) : null),
+      buyOne: (good) => this.buyOne(good),
+      onDone: (text) => { this.messageText.setText(text); this.refresh(); }
+    });
 
     uiWindow(this, X, Y, W, H, { shade: 0.6 });
     uiSection(this, X + 20, Y + 84, 610, H - 188);
-    uiSection(this, X + 650, Y + 84, W - 670, H - 188);
+    uiSection(this, X + 650, Y + 84, 660, H - 188);
+    uiSection(this, X + 1330, Y + 84, W - 1350, H - 188);
 
     uiTitle(this, X + 36, Y + 24, `${this.merchantName} – obchod`, { icon: 'herbs', size: 34 });
     this.goldText = cardText(this, X + W - 36, Y + 32, '', { size: 24, bold: true, color: '#ffd76a', originX: 1 });
     cardText(this, X + 36, Y + 100, 'Koupit (zásoba na dnešek)', { size: 22, bold: true });
     cardText(this, X + 36, Y + 432, 'Specializace Sběru bylin', { size: 22, bold: true });
     cardText(this, X + 680, Y + 100, 'Prodat (byliny a vzácné nálezy)', { size: 22, bold: true });
-    this.messageText = cardText(this, GAME_WIDTH / 2, Y + H - 140, '', { size: 21, color: '#ffd76a', originX: 0.5 });
+    this.messageText = cardText(this, X + 36, Y + H - 72, '', { size: 20, color: '#ffd76a', wrap: 1300 });
 
     this.layer = this.add.container(0, 0);
     cardButton(this, null, X + W - 36 - 220, Y + H - 86, 220, 62, 'Zavřít (ESC)', () => this.close(), { danger: true });
@@ -74,7 +82,8 @@ export default class HerbalistShopScene extends Phaser.Scene {
 
   refresh() {
     this.layer.removeAll(true);
-    this.goldText.setText(`Zlato: ${this.state.gold} zl`);
+    this.goldText.setText('');
+    this.layer.add(coinAmount(this, X + W - 36, Y + 32, this.state.gold, { size: 24, bold: true, color: '#ffd76a', originX: 1 }, { prefix: 'Zlato:' }));
 
     // Nákup: denní zásoba bylin + Zahradnický srp.
     const sickle = SICKLES[0];
@@ -90,19 +99,19 @@ export default class HerbalistShopScene extends Phaser.Scene {
       if (shopping[good.id]) this.layer.add(questBuyMark(this, X + 26, y - 2, 598, 58, shopping[good.id], cardText, X + 458));
       this.icon(good.id, X + 60, y + 26);
       this.layer.add(cardText(this, X + 92, y + 4, getItem(good.id).name, { size: 21, bold: true }));
-      this.layer.add(cardText(this, X + 92, y + 32, `${good.price} zl · ${good.note}`, { size: 17, color: '#b8a890' }));
-      this.layer.add(cardButton(this, null, X + 470, y + 2, 140, 54, 'Koupit', () => this.buy(good),
-        { size: 20, disabled: this.state.gold < good.price || good.left <= 0 }).objects);
+      this.layer.add(coinAmount(this, X + 92, y + 32, good.price, { size: 17, color: '#b8a890' }, { rest: `· ${good.note}` }));
+      this.layer.add(cardButton(this, null, X + 440, y + 2, 170, 54, 'Do košíku', () => { this.cart.addBuy({ ...good, qty: 1 }); this.messageText.setText(''); this.refresh(); },
+        { size: 20, disabled: !this.cart.canAddBuy(good) || good.left - this.cart.buyCount(good.id) <= 0 }).objects);
     });
 
-    // Specializace: od úrovně 25, první volba zdarma, změna 250 zl.
+    // Specializace: od úrovně 25, první volba zdarma, změna 250 zlata.
     const current = this.state.herbalism.specialization;
     const level = herbLevel(this.state);
     const cost = current ? HERB_RULES.specializationChangeCost : 0;
     this.layer.add(cardText(this, X + 36, Y + 464,
       level < HERB_RULES.specializationLevel
         ? `Odemkne se na Sběru bylin ${HERB_RULES.specializationLevel} (máš ${level}).`
-        : current ? `Změna stojí ${cost} zl.` : 'První volba je zdarma.',
+        : current ? `Změna stojí ${cost} zlata.` : 'První volba je zdarma.',
       { size: 17, color: '#b8a890' }));
     HERB_SPECIALIZATIONS.forEach((spec, index) => {
       const y = Y + 488 + index * 96;
@@ -125,6 +134,8 @@ export default class HerbalistShopScene extends Phaser.Scene {
       if (row) row.qty += slot.qty;
       else owned.push({ id: slot.id, qty: slot.qty });
     }
+    for (const row of owned) row.qty -= this.cart.sellCount(row.id);
+    owned.splice(0, owned.length, ...owned.filter((row) => row.qty > 0));
     if (!owned.length) {
       this.layer.add(cardText(this, X + 680, Y + 180, 'Nemáš žádné byliny na prodej.', { size: 20, color: '#9aa4ae' }));
     }
@@ -133,44 +144,36 @@ export default class HerbalistShopScene extends Phaser.Scene {
       const item = getItem(row.id);
       const color = (RARITY[item.rarity] ?? RARITY.common).color;
       this.icon(row.id, X + 704, y + 26);
-      this.layer.add(cardText(this, X + 736, y + 4, `${item.name} ×${row.qty}`, { size: 20, bold: true, color }));
-      this.layer.add(cardText(this, X + 736, y + 32, `${sellPrice(row.id, wanted)} zl / ks`, { size: 17, color: '#b8a890' }));
-      this.layer.add(cardButton(this, null, X + 1090, y + 2, 160, 54, 'Prodat 1', () => this.sell(row.id, 1), { size: 20 }).objects);
-      this.layer.add(cardButton(this, null, X + 1262, y + 2, 190, 54, 'Prodat vše', () => this.sell(row.id, row.qty), { size: 20 }).objects);
+      const name = cardText(this, X + 736, y + 4, `${item.name} ×${row.qty}`, { size: 20, bold: true, color });
+      if (name.width > 210) name.setScale(210 / name.width);
+      this.layer.add(name);
+      this.layer.add(coinAmount(this, X + 736, y + 32, sellPrice(row.id, wanted), { size: 17, color: '#b8a890' }, { rest: '/ ks' }));
+      this.layer.add(cardButton(this, null, X + 960, y + 2, 150, 54, 'Prodat 1', () => this.addSell(row.id, 1), { size: 20 }).objects);
+      this.layer.add(cardButton(this, null, X + 1120, y + 2, 170, 54, 'Prodat vše', () => this.addSell(row.id, row.qty), { size: 20 }).objects);
     });
+
+    this.cart.render(this.layer, { x: X + 1330, y: Y + 84, w: W - 1350, h: H - 188 }, () => this.refresh());
   }
 
-  buy(good) {
-    if (this.state.gold < good.price || good.left <= 0) return;
-    const left = addItem(this.state, good.id, 1);
-    if (left > 0) {
-      this.messageText.setText('Inventář je plný.');
-      return;
-    }
+  addSell(itemId, qty) {
+    this.cart.addSell(itemId, qty);
+    this.messageText.setText('');
+    this.refresh();
+  }
+
+  // Košík: koupí 1 kus (denní zásoba se odečte).
+  buyOne(good) {
+    if (this.state.gold < good.price) return 'gold';
+    if (addItem(this.state, good.id, 1) > 0) return 'full';
     this.state.gold -= good.price;
     if (Number.isFinite(good.left)) recordHerbalistSale(this.state, good.id, 1);
-    this.messageText.setText(`Koupeno: ${getItem(good.id).name}`);
-    SaveSystem.save(this.state);
-    this.refresh();
+    return 'ok';
   }
 
   choose(id) {
     const result = chooseHerbSpecialization(this.state, id);
     this.messageText.setText(result.message);
     if (result.ok) SaveSystem.save(this.state);
-    this.refresh();
-  }
-
-  sell(itemId, qty) {
-    const price = sellPrice(itemId, wantedHerb());
-    let sold = 0;
-    for (let i = 0; i < qty; i++) {
-      if (!removeItem(this.state, itemId, 1)) break;
-      sold += 1;
-    }
-    this.state.gold += sold * price;
-    this.messageText.setText(`Prodáno za ${sold * price} zl.`);
-    SaveSystem.save(this.state);
     this.refresh();
   }
 

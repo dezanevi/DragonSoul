@@ -3,17 +3,19 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { getItem } from '../data/items.js';
 import { BAITS, RODS, METAL_PARTS, FISHING_RULES, RARITY } from '../data/fishing.js';
+import { ShopCart } from '../ui/shopCart.js';
 import { addItem, getItemCount, removeItem, normalizeInventory } from '../systems/InventorySystem.js';
 import { dailyDemand, sellPrice } from '../systems/FishingSystem.js';
 import { STAPLES } from '../data/cooking.js';
 import { FISHER_EXTRA_GOODS } from '../data/merchants.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
-import { CARD_GOLD, cardText, cardButton, uiWindow, uiTitle, uiSection } from '../ui/fantasyCard.js';
+import { CARD_GOLD, cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
 
 // Obchod rybáře v Rybářské chatě: prodej základního náčiní a návnad, výkup ryb
 // a vodních surovin za plnou cenu, denní poptávka (jeden druh za 150 %, nejvýš 10 ks).
+// Nákup a prodej jde přes košík (ui/shopCart.js).
 
-const W = 1500;
+const W = 1860;
 const H = 860;
 const X = GAME_WIDTH / 2 - W / 2;
 const Y = GAME_HEIGHT / 2 - H / 2;
@@ -40,17 +42,24 @@ export default class FishingShopScene extends Phaser.Scene {
     this.closing = false;
     normalizeInventory(this.state);
     this.state.gold = Math.max(0, Math.floor(Number(this.state.gold) || 0));
+    this.cart = new ShopCart(this, this.state, {
+      sellValue: (id, qty) => this.sellValue(id, qty),
+      sellOne: (id) => this.sellOne(id),
+      buyOne: (good) => this.buyOne(good),
+      onDone: (text) => { this.messageText.setText(text); this.refresh(); }
+    });
 
     uiWindow(this, X, Y, W, H, { shade: 0.6 });
     uiSection(this, X + 20, Y + 84, 530, H - 188);
-    uiSection(this, X + 570, Y + 84, W - 590, H - 188);
+    uiSection(this, X + 570, Y + 84, 660, H - 188);
+    uiSection(this, X + 1250, Y + 84, W - 1270, H - 188);
 
     uiTitle(this, X + 36, Y + 24, `${this.merchantName} – obchod`, { icon: 'coins', size: 34 });
     this.goldText = cardText(this, X + W - 36, Y + 32, '', { size: 24, bold: true, color: '#ffd76a', originX: 1 });
     cardText(this, X + 36, Y + 104, 'Koupit', { size: 24, bold: true });
     cardText(this, X + 600, Y + 104, 'Prodat (ryby a vodní suroviny)', { size: 24, bold: true });
     this.demandText = cardText(this, X + 600, Y + 140, '', { size: 18, color: '#7fd67a' });
-    this.messageText = cardText(this, GAME_WIDTH / 2, Y + H - 140, '', { size: 20, color: '#ffd76a', originX: 0.5 });
+    this.messageText = cardText(this, X + 36, Y + H - 72, '', { size: 20, color: '#ffd76a', wrap: 1300 });
 
     this.layer = this.add.container(0, 0);
     cardButton(this, null, X + W - 36 - 200, Y + H - 82, 200, 58, 'Zavřít (ESC)', () => this.close(), { danger: true });
@@ -74,7 +83,8 @@ export default class FishingShopScene extends Phaser.Scene {
 
   refresh() {
     this.layer.removeAll(true);
-    this.goldText.setText(`Zlato: ${this.state.gold} zl`);
+    this.goldText.setText('');
+    this.layer.add(coinAmount(this, X + W - 36, Y + 32, this.state.gold, { size: 24, bold: true, color: '#ffd76a', originX: 1 }, { prefix: 'Zlato:' }));
     const demand = dailyDemand(this.state);
     const left = Math.max(0, FISHING_RULES.dailyDemandLimit - demand.sold);
     this.demandText.setText(`Dnešní poptávka: ${getItem(demand.id)?.name} za 150 % (zbývá ${left} ks)`);
@@ -93,9 +103,11 @@ export default class FishingShopScene extends Phaser.Scene {
       const y = Y + 150 + index * 62;
       const item = getItem(good.id);
       this.icon(good.id, X + 60, y + 26);
-      this.layer.add(cardText(this, X + 92, y + 6, `${item.name}${good.qty > 1 ? ` (${good.qty} ks)` : ''}`, { size: 20, bold: true }));
-      this.layer.add(cardText(this, X + 92, y + 32, `${good.price} zl · máš ${getItemCount(this.state, good.id)}`, { size: 16, color: '#9fb3c8' }));
-      const button = cardButton(this, null, X + 420, y + 8, 110, 44, 'Koupit', () => this.buy(good), { size: 18, disabled: this.state.gold < good.price });
+      const name = cardText(this, X + 92, y + 6, `${item.name}${good.qty > 1 ? ` (${good.qty} ks)` : ''}`, { size: 20, bold: true });
+      if (name.width > 270) name.setScale(270 / name.width);
+      this.layer.add(name);
+      this.layer.add(coinAmount(this, X + 92, y + 32, good.price, { size: 16, color: '#9fb3c8' }, { rest: `· máš ${getItemCount(this.state, good.id)}` }));
+      const button = cardButton(this, null, X + 372, y + 4, 160, 54, 'Do košíku', () => { this.cart.addBuy(good); this.messageText.setText(''); this.refresh(); }, { size: 20, disabled: !this.cart.canAddBuy(good) });
       this.layer.add(button.objects);
     });
 
@@ -109,6 +121,8 @@ export default class FishingShopScene extends Phaser.Scene {
       if (row) row.qty += slot.qty;
       else owned.push({ id: slot.id, qty: slot.qty });
     }
+    for (const row of owned) row.qty -= this.cart.sellCount(row.id);
+    owned.splice(0, owned.length, ...owned.filter((row) => row.qty > 0));
     if (!owned.length) {
       this.layer.add(cardText(this, X + 600, Y + 190, 'Nemáš žádné ryby ani vodní suroviny na prodej.', { size: 19, color: '#9aa4ae' }));
     }
@@ -117,43 +131,50 @@ export default class FishingShopScene extends Phaser.Scene {
       const item = getItem(row.id);
       const color = (RARITY[item.rarity] ?? RARITY.common).color;
       this.icon(row.id, X + 624, y + 24);
-      this.layer.add(cardText(this, X + 656, y + 4, `${item.name} ×${row.qty}`, { size: 19, bold: true, color }));
-      this.layer.add(cardText(this, X + 656, y + 30, `${sellPrice(this.state, row.id)} zl / ks`, { size: 16, color: '#9fb3c8' }));
-      this.layer.add(cardButton(this, null, X + 1110, y + 6, 150, 44, 'Prodat 1', () => this.sell(row.id, 1), { size: 17 }).objects);
-      this.layer.add(cardButton(this, null, X + 1272, y + 6, 180, 44, 'Prodat vše', () => this.sell(row.id, row.qty), { size: 17 }).objects);
+      const name = cardText(this, X + 656, y + 4, `${item.name} ×${row.qty}`, { size: 19, bold: true, color });
+      if (name.width > 210) name.setScale(210 / name.width);
+      this.layer.add(name);
+      this.layer.add(coinAmount(this, X + 656, y + 30, sellPrice(this.state, row.id), { size: 16, color: '#9fb3c8' }, { rest: '/ ks' }));
+      this.layer.add(cardButton(this, null, X + 880, y + 2, 150, 54, 'Prodat 1', () => this.addSell(row.id, 1), { size: 20 }).objects);
+      this.layer.add(cardButton(this, null, X + 1040, y + 2, 170, 54, 'Prodat vše', () => this.addSell(row.id, row.qty), { size: 20 }).objects);
     });
+
+    this.cart.render(this.layer, { x: X + 1250, y: Y + 84, w: W - 1270, h: H - 188 }, () => this.refresh());
   }
 
-  buy(good) {
-    if (this.state.gold < good.price) return;
+  addSell(itemId, qty) {
+    this.cart.addSell(itemId, qty);
+    this.messageText.setText('');
+    this.refresh();
+  }
+
+  // Výdělek za qty kusů: denní poptávka platí jen do limitu.
+  sellValue(itemId, qty) {
+    const base = sellPrice(this.state, itemId, false);
+    const demand = dailyDemand(this.state);
+    if (demand.id !== itemId) return base * qty;
+    const bonus = Math.min(qty, Math.max(0, FISHING_RULES.dailyDemandLimit - demand.sold));
+    return bonus * Math.round(base * FISHING_RULES.dailyDemandBonus) + (qty - bonus) * base;
+  }
+
+  sellOne(itemId) {
+    if (!removeItem(this.state, itemId, 1)) return null;
+    const earned = sellPrice(this.state, itemId);
+    const demand = dailyDemand(this.state);
+    if (demand.id === itemId) demand.sold += 1;
+    return earned;
+  }
+
+  // Košík: koupí 1 balení (celé, nebo nic).
+  buyOne(good) {
+    if (this.state.gold < good.price) return 'gold';
     const left = addItem(this.state, good.id, good.qty);
-    if (left === good.qty) {
-      this.messageText.setText('Inventář je plný.');
-      return;
-    }
-    if (left > 0) removeItem(this.state, good.id, good.qty - left); // nekupuj napůl
     if (left > 0) {
-      this.messageText.setText('Do inventáře se celé balení nevejde.');
-      return;
+      if (left < good.qty) removeItem(this.state, good.id, good.qty - left);
+      return 'full';
     }
     this.state.gold -= good.price;
-    this.messageText.setText(`Koupeno: ${getItem(good.id).name}`);
-    SaveSystem.save(this.state);
-    this.refresh();
-  }
-
-  sell(itemId, qty) {
-    let earned = 0;
-    for (let i = 0; i < qty; i++) {
-      if (!removeItem(this.state, itemId, 1)) break;
-      earned += sellPrice(this.state, itemId);
-      const demand = dailyDemand(this.state);
-      if (demand.id === itemId) demand.sold += 1;
-    }
-    this.state.gold += earned;
-    this.messageText.setText(`Prodáno za ${earned} zl.`);
-    SaveSystem.save(this.state);
-    this.refresh();
+    return 'ok';
   }
 
   close() {

@@ -7,12 +7,13 @@ import {
   CARD_HEIGHT,
   CLOSE_BUTTON,
   CONTENT_AREA,
-  STATUS_AREA
+  STATUS_AREA,
+  MAGIC_SCHOOLS
 } from '../ui/heroCard/cardLayout.js';
 import FantasyButton from '../ui/heroCard/FantasyButton.js';
 import CharacterTabs from '../ui/heroCard/CharacterTabs.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
-import { drawCardFrame, CARD_FIT } from '../ui/fantasyCard.js';
+import { drawCardFrame, CARD_FIT, cardButton } from '../ui/fantasyCard.js';
 import CardTooltip from '../ui/heroCard/CardTooltip.js';
 import EquipmentPanel from '../ui/heroCard/EquipmentPanel.js';
 import SkillsPanel from '../ui/heroCard/SkillsPanel.js';
@@ -29,7 +30,14 @@ import { HERO_CARD_FEMALE } from '../ui/heroCard/heroButtonSprites.js';
 
 // Šířka obrázku tlačítka Zavřít v souřadnicích podkladu (namalované tlačítko je ~270 px).
 const CLOSE_IMAGE_WIDTH = 310;
-import { EQUIPMENT_CHANGED, normalizeEquipment } from '../systems/EquipmentSystem.js';
+import { EQUIPMENT_CHANGED, normalizeEquipment, getEquippedItem } from '../systems/EquipmentSystem.js';
+import { equipSlot, unequipToSlot } from '../systems/InventorySystem.js';
+import { getItem } from '../data/items.js';
+import { RARITY } from '../data/fishing.js';
+import { describeGearBonus } from '../data/smithing.js';
+import { openHeroPicker } from '../ui/heroCard/heroPicker.js';
+
+const SCHOOL_NAMES = { fire: 'Oheň', water: 'Voda', earth: 'Země', air: 'Vzduch', light: 'Světlo', dark: 'Temnota' };
 
 // Události karty na this.game.events (pro ostatní systémy hry).
 export const HERO_CARD_EVENTS = {
@@ -170,9 +178,11 @@ export default class HeroScene extends Phaser.Scene {
       new MagicSchoolsPanel(this, this.heroLayer, (school, info) => {
         this.setStatus(
           info.unlocked
-            ? `Škola ${school.label}: úroveň ${info.level} · zkušenosti ${info.exp} / ${info.needed}`
-            : `Škola ${school.label}: zamčeno – odemkne se v průběhu hry.`
+            ? `Škola ${SCHOOL_NAMES[school.id] ?? school.label}: úroveň ${info.level} · zkušenosti ${info.exp} / ${info.needed}`
+            : `Škola ${SCHOOL_NAMES[school.id] ?? school.label}: zamčeno – odemkne se v průběhu hry.`
         );
+        // Klik na školu magie otevře Knihu kouzel na stránce této školy.
+        this.openSpellbook(school.id);
       }),
       new GameInfoPanel(this, this.heroLayer)
     ];
@@ -180,9 +190,10 @@ export default class HeroScene extends Phaser.Scene {
     this.equipment = new EquipmentPanel(this, this.heroLayer, this.tooltip, (slot, item) => {
       this.game.events.emit(HERO_CARD_EVENTS.equipmentSelected, { slot, item, state: this.state });
       this.setStatus(
-        slot ? `Vybrán slot: ${slot.label}${item ? ` – ${item.name ?? item.id}` : ' (prázdný)'}` : ''
+        slot ? `Vybrán slot: ${slot.label}${item ? ` – ${item.name ?? item.id}` : ' (prázdný)'} · pravý klik = obléct` : ''
       );
-    });
+    }, (slot) => this.openEquipPicker(slot));
+    this.input.mouse?.disableContextMenu();
 
     this.skills = new SkillsPanel(this, this.heroLayer, this.tooltip, (skill) => {
       this.game.events.emit(HERO_CARD_EVENTS.skillSelected, { skill, state: this.state });
@@ -195,6 +206,17 @@ export default class HeroScene extends Phaser.Scene {
     });
 
     this.panels.push(this.equipment, this.skills);
+
+    // Kniha kouzel: tlačítko vpravo od Zavřít (souřadnice podkladu karty, stejná výška).
+    this.spellbookButton = cardButton(this, this.heroLayer, 930, 914, 300, 78, 'Kniha kouzel (K)', () => this.openSpellbook(), { size: 24 });
+  }
+
+  // Kniha kouzel přes kartu hrdiny (karta se pozastaví a po zavření knihy pokračuje).
+  openSpellbook(school = null) {
+    this.tooltip?.hide();
+    this.scene.pause();
+    this.scene.launch('Spellbook', { state: this.state, school, returnScene: this.scene.key });
+    this.scene.bringToTop('Spellbook');
   }
 
   refresh() {
@@ -239,7 +261,7 @@ export default class HeroScene extends Phaser.Scene {
 
   showTab(tab) {
     // Záložky Talenty a Party otevřou samostatné karty (stejné jako klávesy T a P).
-    const cardScenes = { talents: 'Talents', party: 'Party', inventory: 'Inventory', crafting: 'Professions', map: 'WorldMap', quests: 'Quests' };
+    const cardScenes = { talents: 'Talents', party: 'Party', inventory: 'Inventory', crafting: 'Professions', bestiary: 'Bestiary', map: 'WorldMap', quests: 'Quests' };
     if (cardScenes[tab.id]) {
       const sceneKey = cardScenes[tab.id];
       SaveSystem.save(this.state);
@@ -263,6 +285,7 @@ export default class HeroScene extends Phaser.Scene {
     [...this.equipment.buttons, ...this.skills.buttons, ...this.panels[2].buttons].forEach((button) =>
       button.setVisible(isHero)
     );
+    for (const o of this.spellbookButton?.objects ?? []) o.setVisible(isHero);
 
     this.setStatus('');
     this.clearFocus();
@@ -283,6 +306,55 @@ export default class HeroScene extends Phaser.Scene {
     );
   }
 
+  // Bod karty (souřadnice podkladu) → souřadnice obrazovky.
+  cardPoint(x, y) {
+    return { x: this.card.x + x * this.card.scaleX, y: this.card.y + y * this.card.scaleY };
+  }
+
+  // Pravý klik na slot výbavy: předměty pro tento slot z inventáře (klik = obléct)
+  // a Sundat, když je slot obsazený.
+  openEquipPicker(slot) {
+    this.tooltip?.hide();
+    const groups = new Map();
+    this.state.inventory.slots.forEach((entry, index) => {
+      const item = getItem(entry?.id);
+      if (!item || item.slot !== slot.id) return;
+      const group = groups.get(item.id) ?? { item, index, qty: 0 };
+      group.qty += entry.qty;
+      groups.set(item.id, group);
+    });
+    const rows = [...groups.values()].map(({ item, index, qty }) => ({
+      itemId: item.id,
+      title: `${item.name}${qty > 1 ? ` ×${qty}` : ''}`,
+      sub: (item.gear ? describeGearBonus(item.gear) : '') || item.description || '',
+      color: RARITY[item.rarity]?.color,
+      onClick: () => {
+        const result = equipSlot(this.state, index, this.game.events);
+        this.setStatus(result.message);
+        SaveSystem.save(this.state);
+        this.refresh();
+      }
+    }));
+    const equipped = getEquippedItem(this.state, slot.id);
+    const at = this.cardPoint(slot.area.x + slot.area.w + 10, slot.area.y);
+    openHeroPicker(this, {
+      x: at.x, y: at.y,
+      title: `${slot.label} – obléct`,
+      rows,
+      emptyText: 'Nemáš žádné vybavení.',
+      footer: equipped ? {
+        label: `Sundat: ${equipped.name ?? equipped.id}`,
+        danger: true,
+        onClick: () => {
+          const result = unequipToSlot(this.state, slot.id, null, this.game.events);
+          this.setStatus(result.message);
+          SaveSystem.save(this.state);
+          this.refresh();
+        }
+      } : null
+    });
+  }
+
   setStatus(text) {
     this.status.setText(text);
     this.statusBox.setVisible(Boolean(text));
@@ -294,8 +366,17 @@ export default class HeroScene extends Phaser.Scene {
     this.focusIndex = -1;
 
     this.onCardKeyDown = (event) => {
+      // Otevřené okno výběru (výbava, kouzla) zavře Esc jako první.
+      if (event.code === 'Escape' && this.heroPicker) {
+        this.heroPicker.close();
+        return;
+      }
       if (event.code === 'Escape' || event.code === 'KeyC') {
         this.closeCard();
+        return;
+      }
+      if (event.code === 'KeyK' && this.heroLayer.visible) {
+        this.openSpellbook();
         return;
       }
 

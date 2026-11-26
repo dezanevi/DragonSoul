@@ -6,13 +6,15 @@ import { RARITY } from '../data/fishing.js';
 import { PICKAXES, MINING_TOOLS, MINING_SPECIALIZATIONS, MINING_RULES } from '../data/mining.js';
 import { addItem, getItemCount, removeItem, normalizeInventory } from '../systems/InventorySystem.js';
 import { normalizeMining, miningLevel, chooseSpecialization } from '../systems/MiningSystem.js';
+import { ShopCart } from '../ui/shopCart.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
-import { CARD_GOLD, cardText, cardButton, uiWindow, uiTitle, uiSection } from '../ui/fantasyCard.js';
+import { CARD_GOLD, cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
 
 // Obchod Hornického mistra v kovárně Greenvale. Do dokončení Kovářství prodává krumpáče
 // I–III a Důlní podpěru (rudy se neprodávají), vykupuje suroviny z Těžby a mění specializaci.
+// Nákup a prodej jde přes košík (ui/shopCart.js).
 
-const W = 1500;
+const W = 1860;
 const H = 900;
 const X = GAME_WIDTH / 2 - W / 2;
 const Y = GAME_HEIGHT / 2 - H / 2;
@@ -35,17 +37,25 @@ export default class MiningShopScene extends Phaser.Scene {
     normalizeInventory(this.state);
     normalizeMining(this.state);
     this.state.gold = Math.max(0, Math.floor(Number(this.state.gold) || 0));
+    const priceOf = (id) => getItem(id)?.price ?? 0;
+    this.cart = new ShopCart(this, this.state, {
+      sellValue: (id, qty) => priceOf(id) * qty,
+      sellOne: (id) => (removeItem(this.state, id, 1) ? priceOf(id) : null),
+      buyOne: (good) => this.buyOne(good),
+      onDone: (text) => { this.messageText.setText(text); this.refresh(); }
+    });
 
     uiWindow(this, X, Y, W, H, { shade: 0.6 });
     uiSection(this, X + 20, Y + 84, 610, H - 188);
-    uiSection(this, X + 650, Y + 84, W - 670, H - 188);
+    uiSection(this, X + 650, Y + 84, 660, H - 188);
+    uiSection(this, X + 1330, Y + 84, W - 1350, H - 188);
 
     uiTitle(this, X + 36, Y + 24, `${this.merchantName} – obchod`, { icon: 'coins', size: 34 });
     this.goldText = cardText(this, X + W - 36, Y + 32, '', { size: 24, bold: true, color: '#ffd76a', originX: 1 });
     cardText(this, X + 36, Y + 100, 'Koupit (dokud krumpáče nevyrábí Kovářství)', { size: 22, bold: true });
     cardText(this, X + 36, Y + 440, 'Specializace Těžby', { size: 22, bold: true });
     cardText(this, X + 680, Y + 100, 'Prodat (suroviny z Těžby)', { size: 22, bold: true });
-    this.messageText = cardText(this, GAME_WIDTH / 2, Y + H - 140, '', { size: 20, color: '#ffd76a', originX: 0.5 });
+    this.messageText = cardText(this, X + 36, Y + H - 72, '', { size: 20, color: '#ffd76a', wrap: 1300 });
 
     this.layer = this.add.container(0, 0);
     cardButton(this, null, X + W - 36 - 200, Y + H - 82, 200, 58, 'Zavřít (ESC)', () => this.close(), { danger: true });
@@ -69,25 +79,26 @@ export default class MiningShopScene extends Phaser.Scene {
 
   refresh() {
     this.layer.removeAll(true);
-    this.goldText.setText(`Zlato: ${this.state.gold} zl`);
+    this.goldText.setText('');
+    this.layer.add(coinAmount(this, X + W - 36, Y + 32, this.state.gold, { size: 24, bold: true, color: '#ffd76a', originX: 1 }, { prefix: 'Zlato:' }));
 
     GOODS.forEach((good, index) => {
       const y = Y + 140 + index * 64;
       const item = getItem(good.id);
       this.icon(good.id, X + 60, y + 26);
       this.layer.add(cardText(this, X + 92, y + 6, item.name, { size: 20, bold: true }));
-      this.layer.add(cardText(this, X + 92, y + 32, `${good.price} zl · Těžba ${good.level}+ · máš ${getItemCount(this.state, good.id)}`, { size: 16, color: '#b8a890' }));
-      this.layer.add(cardButton(this, null, X + 500, y + 8, 110, 44, 'Koupit', () => this.buy(good), { size: 18, disabled: this.state.gold < good.price }).objects);
+      this.layer.add(coinAmount(this, X + 92, y + 32, good.price, { size: 16, color: '#b8a890' }, { rest: `· Těžba ${good.level}+ · máš ${getItemCount(this.state, good.id)}` }));
+      this.layer.add(cardButton(this, null, X + 446, y + 4, 164, 54, 'Do košíku', () => { this.cart.addBuy(good); this.messageText.setText(''); this.refresh(); }, { size: 20, disabled: !this.cart.canAddBuy(good) }).objects);
     });
 
-    // Specializace: od Těžby 25, první volba zdarma, změna 250 zl.
+    // Specializace: od Těžby 25, první volba zdarma, změna 250 zlata.
     const current = this.state.mining.specialization;
     const level = miningLevel(this.state);
     const cost = current ? MINING_RULES.specializationChangeCost : 0;
     this.layer.add(cardText(this, X + 36, Y + 474,
       level < MINING_RULES.specializationLevel
         ? `Odemkne se na Těžbě ${MINING_RULES.specializationLevel} (máš ${level}).`
-        : current ? `Změna stojí ${cost} zl.` : 'První volba je zdarma.',
+        : current ? `Změna stojí ${cost} zlata.` : 'První volba je zdarma.',
       { size: 16, color: '#b8a890' }));
     MINING_SPECIALIZATIONS.forEach((spec, index) => {
       const y = Y + 506 + index * 92;
@@ -108,6 +119,8 @@ export default class MiningShopScene extends Phaser.Scene {
       if (row) row.qty += slot.qty;
       else owned.push({ id: slot.id, qty: slot.qty });
     }
+    for (const row of owned) row.qty -= this.cart.sellCount(row.id);
+    owned.splice(0, owned.length, ...owned.filter((row) => row.qty > 0));
     if (!owned.length) {
       this.layer.add(cardText(this, X + 680, Y + 150, 'Nemáš žádné suroviny z Těžby na prodej.', { size: 19, color: '#9aa4ae' }));
     }
@@ -116,44 +129,39 @@ export default class MiningShopScene extends Phaser.Scene {
       const item = getItem(row.id);
       const color = (RARITY[item.rarity] ?? RARITY.common).color;
       this.icon(row.id, X + 704, y + 24);
-      this.layer.add(cardText(this, X + 736, y + 4, `${item.name} ×${row.qty}`, { size: 19, bold: true, color }));
-      this.layer.add(cardText(this, X + 736, y + 30, `${item.price} zl / ks`, { size: 16, color: '#b8a890' }));
-      this.layer.add(cardButton(this, null, X + 1110, y + 6, 150, 44, 'Prodat 1', () => this.sell(row.id, 1), { size: 17 }).objects);
-      this.layer.add(cardButton(this, null, X + 1272, y + 6, 180, 44, 'Prodat vše', () => this.sell(row.id, row.qty), { size: 17 }).objects);
+      const name = cardText(this, X + 736, y + 4, `${item.name} ×${row.qty}`, { size: 19, bold: true, color });
+      if (name.width > 210) name.setScale(210 / name.width);
+      this.layer.add(name);
+      this.layer.add(coinAmount(this, X + 736, y + 30, item.price, { size: 16, color: '#b8a890' }, { rest: '/ ks' }));
+      this.layer.add(cardButton(this, null, X + 960, y + 3, 150, 54, 'Prodat 1', () => this.addSell(row.id, 1), { size: 20 }).objects);
+      this.layer.add(cardButton(this, null, X + 1120, y + 3, 170, 54, 'Prodat vše', () => this.addSell(row.id, row.qty), { size: 20 }).objects);
     });
+
+    this.cart.render(this.layer, { x: X + 1330, y: Y + 84, w: W - 1350, h: H - 188 }, () => this.refresh());
   }
 
-  buy(good) {
-    if (this.state.gold < good.price) return;
+  addSell(itemId, qty) {
+    this.cart.addSell(itemId, qty);
+    this.messageText.setText('');
+    this.refresh();
+  }
+
+  // Košík: koupí 1 kus (celý, nebo nic).
+  buyOne(good) {
+    if (this.state.gold < good.price) return 'gold';
     const left = addItem(this.state, good.id, good.qty);
     if (left > 0) {
       if (left < good.qty) removeItem(this.state, good.id, good.qty - left);
-      this.messageText.setText('Inventář je plný.');
-      return;
+      return 'full';
     }
     this.state.gold -= good.price;
-    this.messageText.setText(`Koupeno: ${getItem(good.id).name}`);
-    SaveSystem.save(this.state);
-    this.refresh();
+    return 'ok';
   }
 
   choose(id) {
     const result = chooseSpecialization(this.state, id);
     this.messageText.setText(result.message);
     if (result.ok) SaveSystem.save(this.state);
-    this.refresh();
-  }
-
-  sell(itemId, qty) {
-    const price = getItem(itemId)?.price ?? 0;
-    let sold = 0;
-    for (let i = 0; i < qty; i++) {
-      if (!removeItem(this.state, itemId, 1)) break;
-      sold += 1;
-    }
-    this.state.gold += sold * price;
-    this.messageText.setText(`Prodáno za ${sold * price} zl.`);
-    SaveSystem.save(this.state);
     this.refresh();
   }
 

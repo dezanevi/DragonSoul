@@ -49,7 +49,9 @@
         display: block;
         width: 100%;
         height: 100%;
-        image-rendering: pixelated;
+        /* Zmenšení obrazu 1920 × 1080 na menší okno s vyhlazením – „pixelated“ zahazovalo celé
+           řádky pixelů a písmo bylo v nižších rozlišeních nečitelné. */
+        image-rendering: auto !important;
         border: 2px solid #8d744b;
       }
 

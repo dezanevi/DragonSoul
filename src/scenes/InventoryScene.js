@@ -15,6 +15,7 @@ import {
   equipSlot,
   canUse,
   canEquip,
+  sortInventory,
   INVENTORY_CHANGED
 } from '../systems/InventorySystem.js';
 import { EQUIPMENT_SLOT_IDS, RARITIES, normalizeEquipment } from '../systems/EquipmentSystem.js';
@@ -50,6 +51,8 @@ const CARD_H = 1024;
 const { SCALE, OFFSET_X, OFFSET_Y } = CARD_FIT;
 const CLOSE_AREA = { x: 628, y: 914, w: 275, h: 78 };
 const CLOSE_IMAGE_WIDTH = 310;
+// Souřadnice podkladu (karta je na obrazovce zmenšená ~0,77×): 74 px → ~57 px na obrazovce.
+const SORT_AREA = { x: 1187, y: 916, w: 280, h: 74 };
 
 // Rozložení podkladu (souřadnice obrázku 1536 × 1024).
 const GRID = { cols: [674, 775, 875, 974, 1073, 1173, 1274, 1374], rows: [143, 246, 349, 452, 556], w: 93, h: 96 };
@@ -777,6 +780,21 @@ export default class InventoryScene extends Phaser.Scene {
       zone.on('pointerdown', () => show('active'));
     }
     this.card.add(zone);
+
+    // Seřadit (vpravo vedle Zavřít): v pořadí filtrů, sloučí neúplné hromádky.
+    this.sortButton = cardButton(this, this.card, SORT_AREA.x, SORT_AREA.y, SORT_AREA.w, SORT_AREA.h, 'Seřadit', () => this.sortItems(), { size: 28 });
+  }
+
+  sortItems() {
+    if (this.modal) return;
+    this.closeMenu();
+    this.moving = null;
+    this.selected = null;
+    const used = sortInventory(this.state);
+    this.page = 0;
+    this.changed();
+    this.render();
+    this.flash(`Seřazeno: ${used} políček (Zbroj, Materiály, Potiony, Doplňky, Klíče, Ostatní).`, '#8fd3ff');
   }
 
   closeCard() {

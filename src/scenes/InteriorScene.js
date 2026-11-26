@@ -4,7 +4,11 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { unlockRegion } from '../systems/RegionSystem.js';
 import { addItem, getItemCount } from '../systems/InventorySystem.js';
 import { createCardTabBar, CARD_FOR_TAB, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
-import { nineImage, drawCardFrame, cardCloseButton, cardText, CARD_PANEL } from '../ui/fantasyCard.js';
+import { nineImage, drawCardFrame, cardCloseButton, cardText, cardButton, uiToast, CARD_PANEL } from '../ui/fantasyCard.js';
+import {
+  bindBusinessState, grantDialogXp, onDiplomacyXp, diplomacyLevel, canBuyProperty, buyProperty, getShop,
+  PROPERTIES, PROPERTY_TYPES
+} from '../systems/DiplomacySystem.js';
 import {
   QUESTS,
   QUEST_STATUS,
@@ -44,7 +48,8 @@ const IMAGES = {
   clothStall: 'Stánek s látkami a usměvavým obchodníkem-1.png',
   alchemist: 'Alchymistova bylinková dílna.png',
   mage: 'Kouzelnická pracovna plná magie.png',
-  tannery: 'Fantasy Koželužnická Dílná s Řemeslnicí.png'
+  tannery: 'Fantasy Koželužnická Dílná s Řemeslnicí.png',
+  ownSmallShop: 'Diplomacy/Středověký obchod s kouzelnou atmosférou-1.png'
 };
 
 const cottageSpots = (residentLabel) => [
@@ -54,6 +59,24 @@ const cottageSpots = (residentLabel) => [
 ];
 
 // title = název karty; resident = jméno hlavní postavy (dialogy, obchody); spots = klikací místa.
+// Plné vyléčení: hrdina (HP, mana), monstra v partě i v úschovně.
+export function restoreParty(state) {
+  state.hp = state.maxHp;
+  state.mp = state.maxMp;
+  for (const monster of [...(state.party ?? []), ...(state.monsterStorage ?? [])]) {
+    if (monster.stats) monster.currentHp = monster.stats.vitality;
+    monster.skillUses ??= {};
+    for (const skillId of monster.skills ?? []) {
+      const skill = getSkillForInterior(skillId);
+      if (skill) monster.skillUses[skillId] = skill.maxUses;
+    }
+  }
+}
+
+// Místa odpočinku: sem se hrdina vrátí po porážce (poslední navštívené). Hodnota = kdo ho přivítá.
+export const REST_POINTS = { greenvale_tavern: 'Výčepní', greenvale_home_3: 'Liora, léčitelka' };
+const ROOM_PRICE = 15;
+
 const INTERIOR_DEFINITIONS = {
   greenvale_town_hall: {
     title: 'Radnice Greenvale',
@@ -72,16 +95,15 @@ const INTERIOR_DEFINITIONS = {
   greenvale_tavern: {
     title: 'Hostinec Greenvale',
     image: IMAGES.tavern,
-    resident: 'Liora, léčitelka',
-    storageAccess: true, // u Liory jde přesouvat monstra mezi partou a úschovnou
+    resident: 'Výčepní',
     spots: [
-      { label: 'Liora, léčitelka', verb: 'léčit', rect: [185, 140, 120, 165], action: 'healer' },
+      { label: 'Výčepní – pokoj na noc', verb: 'odpočinout', rect: [185, 140, 120, 165], action: 'innRoom' },
       { label: 'Hostinská kuchyně', verb: 'vařit', rect: [582, 160, 235, 145], action: 'kitchen', station: 4 },
       { label: 'Sklep – úschovna monster', verb: 'otevřít', rect: [0, 170, 140, 135], action: 'card', card: 'Party' },
       { label: 'Bard', verb: 'mluvit', rect: [478, 172, 110, 140], action: 'bard', questMarker: { quest: 'greenvale_air_song', role: 'objective' },
         lines: ['Zahraju ti o lovci, který ochočil draka… nebo aspoň Dire Wolfa.', 'Na louce západně od vesnice se toulají divoká monstra. Kdo je umí zkrotit, nikdy nebude sám.'] },
       { label: 'Lovec u stolu', verb: 'mluvit', rect: [840, 212, 112, 108], action: 'talk',
-        lines: ['Než vyrazíš na louku, nech si od Liory vyléčit partu.', 'A dobrý pokrm z kuchyně ti v boji přidá sílu – ověřeno.'] }
+        lines: ['Než vyrazíš na louku, odpočiň si tu na pokoji, nebo zajdi za Liorou do domu léčitelky.', 'A dobrý pokrm z kuchyně ti v boji přidá sílu – ověřeno.'] }
     ]
   },
   greenvale_smithy: {
@@ -168,13 +190,25 @@ const INTERIOR_DEFINITIONS = {
     ]
   },
   greenvale_home_2: { title: 'Dům v Greenvale', image: IMAGES.cottage, spots: cottageSpots('Obyvatel domu') },
-  // Třetí dům: zrzavá sousedka u krbu (dřívější obrázek hostince).
-  greenvale_home_3: {
-    title: 'Dům v Greenvale',
-    image: IMAGES.hostess,
+  // Vlastní obchod hráče (Diplomacie): zelený dům u náměstí, koupě u starosty od Diplomacie 10.
+  greenvale_house_w1: {
+    title: 'Tvůj obchod – Zelený dům',
+    image: IMAGES.ownSmallShop,
+    ownShop: true,
     spots: [
-      { label: 'Sousedka', verb: 'mluvit', rect: [300, 115, 170, 300], action: 'talk',
-        lines: ['Dobrý den, sousede! Krb je teplý, klidně si u něj uvař.'] },
+      { label: 'Prodejní pult', verb: 'prodej a ceny', rect: [0, 300, 470, 175], action: 'ownShop', tab: 'sale' },
+      { label: 'Sklad – police a bedny', verb: 'sklad', rect: [805, 90, 175, 300], action: 'ownShop', tab: 'storage' },
+      { label: 'Účetní kniha', verb: 'statistiky', rect: [95, 245, 120, 80], action: 'ownShop', tab: 'stats' }
+    ]
+  },
+  // Dům léčitelky Liory: léčí zdarma, u ní jde přesouvat monstra mezi partou a úschovnou.
+  greenvale_home_3: {
+    title: 'Dům léčitelky',
+    image: IMAGES.hostess,
+    resident: 'Liora, léčitelka',
+    storageAccess: true,
+    spots: [
+      { label: 'Liora, léčitelka', verb: 'léčit', rect: [300, 115, 170, 300], action: 'healer' },
       { label: 'Krb – kuchyňský sporák', verb: 'vařit', rect: [632, 178, 298, 250], action: 'kitchen', station: 2 }
     ]
   }
@@ -204,6 +238,16 @@ export default class InteriorScene extends Phaser.Scene {
     }
 
     this.state.interiorId = this.interiorId;
+    if (REST_POINTS[this.interiorId]) this.state.lastRestPoint = this.interiorId;
+    // Diplomacie: obchody běží se stavem této hry; zisk XP = krátké oznámení dole.
+    bindBusinessState(this.state);
+    this.offXp?.();
+    this.offXp = onDiplomacyXp((r) => {
+      // Obchody hlásí XP samy (zpráva košíku, karta obchodu) – tady jen rozhovory, úkoly a nové úrovně.
+      if (!this.sys.isActive() || (r.reason === 'Obchod' && !r.levelUps)) return;
+      uiToast(this, r.levelUps ? `Diplomacie: úroveň ${r.level}! (+${r.gained} XP)` : `+${r.gained} XP Diplomacie (${r.reason})`, { y: INNER.y + 120, depth: 6000 });
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.offXp?.(); this.offXp = null; });
     this.fromWorld = Boolean(data?.fromWorld);
     this.dialogLines = null;
     this.dialogIndex = 0;
@@ -212,6 +256,7 @@ export default class InteriorScene extends Phaser.Scene {
     this.closing = false;
     // Scéna se používá znovu – odkazy na objekty minulé místnosti zahodit.
     this.questMarkers = [];
+    this.choiceObjects = null;
     this.spotLabel = null;
     this.spotPlate = null;
 
@@ -245,6 +290,10 @@ export default class InteriorScene extends Phaser.Scene {
     this.onKeyDown = (event) => {
       if (event.repeat || this.closing) return;
       if (performance.now() < (this.ignoreKeysUntil ?? 0)) return;
+      if (this.choiceObjects) {
+        if (event.code === 'Escape') this.closeChoice();
+        return;
+      }
       if (this.dialogLines) {
         if (['KeyE', 'Space', 'Enter'].includes(event.code)) this.advanceDialog();
         else if (event.code === 'Escape') this.closeDialog();
@@ -301,7 +350,9 @@ export default class InteriorScene extends Phaser.Scene {
     });
 
     // Název místnosti nahoře uprostřed na tmavém štítku.
-    const title = cardText(this, GAME_WIDTH / 2, INNER.y + 34, this.interior.title, {
+    // Vlastní obchod nese jméno, které mu dal hráč.
+    const shopName = this.interior.ownShop ? getShop(this.state, this.interiorId)?.name : null;
+    const title = cardText(this, GAME_WIDTH / 2, INNER.y + 34, shopName ? `Tvůj obchod – ${shopName}` : this.interior.title, {
       size: 36, bold: true, color: '#ffe7ae', originX: 0.5, originY: 0.5, strokeThickness: 5
     });
     const plate = nineImage(this, 'nu-panel', GAME_WIDTH / 2 - title.width / 2 - 40, INNER.y + 6, title.width + 80, 58, 0.5);
@@ -350,6 +401,18 @@ export default class InteriorScene extends Phaser.Scene {
     }
     this.refreshQuestMarker();
 
+    // Po porážce v souboji: hrdina se probral tady (BattleScene → lastRestPoint).
+    if (this.state.flags?.revivedHere) {
+      this.state.flags.revivedHere = false;
+      const who = REST_POINTS[this.interiorId];
+      this.time.delayedCall(450, () => { if (!this.dialogLines && !this.closing) this.showDialog(who, [
+        this.interiorId === 'greenvale_tavern'
+          ? 'Našli tě na cestě v bezvědomí a přinesli tě sem. Vyspal ses na pokoji – tentokrát na účet podniku.'
+          : 'Přinesli tě ke mně v bezvědomí. Neboj, ty i tvoji společníci jste zase v pořádku.',
+        'Tvoje monstra jsou vyléčená. Příště si dej pozor, na co se na loukách pouštíš.'
+      ]); });
+    }
+
     // Hvězdárna: Mág promluví sám – na začátku nové hry (úvodní úkol) a po ochočení
     // Air Elementala (hráč se sem přenese ze souboje).
     if (this.interiorId === 'greenvale_observatory') {
@@ -378,7 +441,9 @@ export default class InteriorScene extends Phaser.Scene {
   useSpot(spot) {
     switch (spot.action) {
       case 'mayor': this.talkToMayor(); break;
+      case 'ownShop': this.launchOver('OwnShop', { shopId: this.interiorId, tab: spot.tab, animateIn: true }); break;
       case 'healer': this.healAtInn(); break;
+      case 'innRoom': this.rentRoom(); break;
       case 'fisher': this.talkToFisher(); break;
       case 'fishingShop': this.openFishingShop(); break;
       case 'miner': this.talkToMiner(); break;
@@ -399,6 +464,8 @@ export default class InteriorScene extends Phaser.Scene {
         this.showDialog(spot.label, spot.lines ?? ['…']);
         break;
     }
+    // Značky „!“ / „?“ hned podle nového stavu úkolu (přijetí, splnění cíle, odevzdání).
+    this.refreshQuestMarker();
   }
 
   // Nástěnka: nedokončené úkoly oblasti v kartě Úkoly (rozklikávací seznam, Sledovat).
@@ -421,7 +488,7 @@ export default class InteriorScene extends Phaser.Scene {
         `Vítej ve Hvězdárně, ${name}. Lovec z lesů a jeho věrný Dire Wolf – hvězdy mi o vás řekly.`,
         'Tvůj vlk je dobrý lovecký pes. Skutečný krotitel ale umí víc: se Soul Crystalem si získá i divokou bytost.',
         'Cítím v tobě jiskru magie – probudil jsem ti vítr. Kouzla Vzduchu najdeš v souboji pod tlačítkem Kouzla (Q).',
-        'Na louce u vesnice krouží Air Elemental. Vlk ho musí zasáhnout, ty vyzkoušíš kouzlo a oslabený ti pak uvěří – ochočíš ho.',
+        'Na louce za Loveckou chatou krouží Air Elemental. Vlk ho musí zasáhnout, ty vyzkoušíš kouzlo a oslabený ti pak uvěří – ochočíš ho.',
         'Tady máš Soul Crystal. V souboji tě povedu krok za krokem.',
         'Nový úkol: Krotitelova zkouška. Cestu ukazují zlaté tečky (úkol se sleduje sám).'
       ]);
@@ -432,14 +499,14 @@ export default class InteriorScene extends Phaser.Scene {
       // Krystal pro jistotu doplnit, aby se úkol nedal zablokovat.
       if (getItemCount(this.state, 'basic_crystal') <= 0) addItem(this.state, 'basic_crystal', 1);
       SaveSystem.save(this.state);
-      this.showDialog(speaker, ['Air Elemental čeká na louce u vesnice. Jednou ho zasáhni a pak ho ochoč Soul Crystalem.']);
+      this.showDialog(speaker, ['Air Elemental čeká na louce za Loveckou chatou. Vlk ho zasáhne, ty vyzkoušej kouzlo a pak ho ochoč Soul Crystalem.']);
       return;
     }
     completeQuest(this.state, INTRO_QUEST);
     SaveSystem.save(this.state);
     this.showDialog(speaker, [
       'Vítej zpátky – přenesl jsem tě sem, sotva krystal zazářil. Air Elemental je teď tvůj společník.',
-      'Monstra v partě uvidíš v kartě Party (P). Zraněné vyléčí Liora v hostinci.',
+      'Monstra v partě uvidíš v kartě Party (P). Zraněné vyléčí Liora v domě léčitelky u náměstí.',
       'Ve vesnici tě čekají lidé s prací: Alchymista, Učednice v kovárně a Bylinkářka. Starosta Edric na radnici má vážnější úkol – ale až si získáš důvěru vesnice.',
       'Za odvahu ti dávám pět Soul Crystalů – ať můžeš krotit dál.',
       'A až budeš chtít vítr poznat hlouběji, vrať se ke mně.',
@@ -521,7 +588,92 @@ export default class InteriorScene extends Phaser.Scene {
 
   // Úkol Orčí hrozba (dřív Jeskynní sliz): starosta ho svěří až po všech ostatních úkolech
   // v Greenvale, odměnou jsou talentové stromy a cesta do Verdant Forest.
+  // Starosta: nejdřív úkoly, potom nabídka domů na prodej (Diplomacie).
   talkToMayor() {
+    this.talkToMayorQuest();
+    if (this.dialogLines && !this.afterDialog && this.propertyOffer()) this.afterDialog = () => this.offerProperty();
+  }
+
+  // Nemovitost, o které má starosta mluvit: nekoupená. Pod Diplomacií 10 se o ní zmíní jen jednou.
+  propertyOffer() {
+    const prop = Object.values(PROPERTIES).find((p) => p.seller === 'Starosta Edric' && !getShop(this.state, p.id));
+    if (!prop) return null;
+    const needed = PROPERTY_TYPES[prop.type].level;
+    if (diplomacyLevel(this.state) < needed && this.state.flags?.[`propertyHint_${prop.id}`]) return null;
+    return prop;
+  }
+
+  offerProperty() {
+    const prop = this.propertyOffer();
+    if (!prop) return;
+    const type = PROPERTY_TYPES[prop.type];
+    const speaker = 'Starosta Edric';
+    if (diplomacyLevel(this.state) < type.level) {
+      this.state.flags ??= {};
+      this.state.flags[`propertyHint_${prop.id}`] = true;
+      this.showDialog(speaker, [
+        `Ještě něco: ${prop.name.toLowerCase()} je na prodej. Mohl by v něm být pěkný obchod.`,
+        `Prodám ho ale jen zkušenému obchodníkovi. Vrať se, až budeš mít Diplomacii ${type.level} (teď máš ${diplomacyLevel(this.state)}).`,
+        'Diplomacii zvedneš obchodem, splněnými úkoly a rozhovory s lidmi.'
+      ]);
+      return;
+    }
+    const check = canBuyProperty(this.state, prop.id);
+    this.showChoice(`${prop.name} – ${type.name}`, [
+      `${type.slots} prodejních slotů · zhruba ${type.customers} zákazníků za herní den · provoz ${type.dailyCost} zl / den`,
+      `Cena: ${prop.price} ${prop.price === 1 ? 'zlatý' : 'zlata'}${check.ok ? '' : `\n${check.reason}`}`
+    ].join('\n'), [
+      { label: 'Koupit dům', disabled: !check.ok, onClick: () => this.purchaseProperty(prop) },
+      { label: 'Teď ne', onClick: () => {} }
+    ]);
+  }
+
+  purchaseProperty(prop) {
+    const result = buyProperty(this.state, prop.id);
+    SaveSystem.save(this.state);
+    if (!result.ok) {
+      this.showDialog('Starosta Edric', [result.reason]);
+      return;
+    }
+    this.showDialog('Starosta Edric', [
+      `Výborně! ${prop.name} je od teď tvůj. Tady máš klíče.`,
+      'Vstup má teď fialový kruh. Uvnitř najdeš prodejní pult, sklad a účetní knihu.',
+      'Zboží dej do skladu, vyber, co se má prodávat, a nastav ceny. Zákazníci chodí, i když nejsi uvnitř – jen dokud hraješ.'
+    ]);
+  }
+
+  // Volba se dvěma a více tlačítky (např. koupě domu). Tlačítka mají výšku 58 a písmo 22.
+  showChoice(title, text, options) {
+    this.closeChoice();
+    const w = 980;
+    const h = 330;
+    const x = GAME_WIDTH / 2 - w / 2;
+    const y = GAME_HEIGHT / 2 - h / 2;
+    const objects = [];
+    const blocker = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.45).setOrigin(0).setDepth(6000).setInteractive();
+    objects.push(blocker);
+    const panel = nineImage(this, 'nu-panel', x, y, w, h, 0.75);
+    if (panel) objects.push(panel.setDepth(6001));
+    objects.push(cardText(this, x + 40, y + 30, title, { size: 30, bold: true, color: '#ffe7ae' }).setDepth(6002));
+    objects.push(cardText(this, x + 40, y + 86, text, { size: 22, color: '#fff2d1', wrap: w - 80, lineSpacing: 6 }).setDepth(6002));
+    const bw = 260;
+    options.forEach((opt, i) => {
+      const bx = x + w - 40 - (options.length - i) * (bw + 20) + 20;
+      const btn = cardButton(this, null, bx, y + h - 92, bw, 58, opt.label, () => {
+        this.closeChoice();
+        opt.onClick();
+      }, { size: 22, disabled: opt.disabled, danger: i === options.length - 1 && options.length > 1 });
+      for (const o of btn.objects) { o.setDepth?.(6003); objects.push(o); }
+    });
+    this.choiceObjects = objects;
+  }
+
+  closeChoice() {
+    for (const o of this.choiceObjects ?? []) o.destroy();
+    this.choiceObjects = null;
+  }
+
+  talkToMayorQuest() {
     const name = this.state.playerName ?? 'Arion';
     const speaker = 'Starosta Edric';
     const status = getQuestStatus(this.state, CAVE_QUEST);
@@ -573,39 +725,45 @@ export default class InteriorScene extends Phaser.Scene {
 
     this.showDialog(speaker, [
       'Orčí válečník pořád řádí. Jeskyně je za vesnicí u skal – přijď k vchodu a stiskni E.',
-      'Než vyrazíš, ať tě Liora v hostinci dá do pořádku.'
+      'Než vyrazíš, ať tě Liora v domě léčitelky dá do pořádku.'
     ]);
   }
 
   // „!“ = nový úkol, „?“ = splněno, vrať se. Jen u starosty.
   refreshQuestMarker() {
     for (const { marker, quest, role, alt } of this.questMarkers ?? []) {
-      // alt = další úkol téže postavy (Mág: úvodní úkol, pak Píseň větrů).
-      const mark = questMark(this.state, quest, role, this.interiorId) ?? (alt ? questMark(this.state, alt, role, this.interiorId) : null);
+      // alt = další úkol téže postavy (Mág: úvodní úkol, pak Píseň větrů) – až po dokončení prvního.
+      const altMark = alt && getQuestStatus(this.state, quest) === QUEST_STATUS.done ? questMark(this.state, alt, role, this.interiorId) : null;
+      const mark = questMark(this.state, quest, role, this.interiorId) ?? altMark;
       marker.setText(mark?.char ?? '').setColor(mark?.color ?? '#ffd23a');
     }
   }
 
+  // Výčepní v hostinci: pokoj na noc za zlato – stejné léčení jako u Liory.
+  rentRoom() {
+    const gold = Math.max(0, Math.floor(Number(this.state.gold) || 0));
+    if (gold < ROOM_PRICE) {
+      this.showDialog('Výčepní', [`Pokoj na noc stojí ${ROOM_PRICE} zlata a ty máš jen ${gold}.`, 'Liora v domě léčitelky u náměstí léčí zadarmo.']);
+      return;
+    }
+    this.state.gold = gold - ROOM_PRICE;
+    restoreParty(this.state);
+    SaveSystem.save(this.state);
+    this.showDialog('Výčepní', [
+      `Pokoj je tvůj – ${ROOM_PRICE} zlata. Dobrou noc!`,
+      'Ráno: vyspalý, s plnou manou. Tvoje monstra v partě i ve stáji jsou odpočatá.'
+    ]);
+  }
+
   healAtInn() {
     // HP hrdiny je skryté (nikde se nezobrazuje), v uložené hře zůstává.
-    this.state.hp = this.state.maxHp;
-    this.state.mp = this.state.maxMp;
-
-    // Liora léčí aktivní partu i monstra v úschovně.
-    for (const monster of [...(this.state.party ?? []), ...(this.state.monsterStorage ?? [])]) {
-      if (monster.stats) monster.currentHp = monster.stats.vitality;
-      monster.skillUses ??= {};
-      for (const skillId of monster.skills ?? []) {
-        const skill = getSkillForInterior(skillId);
-        if (skill) monster.skillUses[skillId] = skill.maxUses;
-      }
-    }
+    restoreParty(this.state);
     SaveSystem.save(this.state);
 
     const lines = [
       'Pojď blíž, podívám se na tebe i na tvoje společníky.',
       'Obnovila jsem ti manu. Tvoji společníci v partě i v úschovně jsou zase v pořádku.',
-      'Monstra mezi partou a úschovnou přesuneš ve sklepě (sud vlevo) nebo v kartě Party (P).'
+      'Monstra mezi partou a úschovnou přesuneš u mě v kartě Party (P).'
     ];
     if (getQuestStatus(this.state, CAVE_QUEST) === QUEST_STATUS.active) {
       lines.push('Jdeš na toho orka? Jeho sekera je těžká jako kámen. Vrať se, kdyby bylo zle.');
@@ -709,7 +867,7 @@ export default class InteriorScene extends Phaser.Scene {
   }
 
   openCard(sceneKey, initialTab = undefined) {
-    // U Liory (hostinec) jde v Party kartě přesouvat monstra mezi partou a úschovnou.
+    // U Liory (dům léčitelky) jde v Party kartě přesouvat monstra mezi partou a úschovnou.
     this.launchOver(sceneKey, { storageAccess: Boolean(this.interior.storageAccess), initialTab, animateIn: true });
   }
 
@@ -764,6 +922,8 @@ export default class InteriorScene extends Phaser.Scene {
 
   showDialog(speaker, lines) {
     this.hideSpotLabel();
+    // Diplomacie: nový rozhovor dá XP, opakovaný stejný rozhovor už ne.
+    grantDialogXp(this.state, speaker, lines);
     this.dialogSpeaker = speaker;
     this.dialogLines = lines;
     this.dialogIndex = 0;

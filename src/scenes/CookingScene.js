@@ -11,7 +11,7 @@ import { ALCHEMY_CATEGORIES, ALCHEMY_STATIONS, ALCHEMY_ORIGINS, ALL_ALCHEMY, des
 import {
   normalizeAlchemy, isAlchemyKnown, canBrew, brew, alchemyMaxBatches, alchemyIngredientCount, alchemyLevel
 } from '../systems/AlchemySystem.js';
-import { SMITHING_CATEGORIES, SMITHING_STATIONS, SMITHING_ORIGINS, ALL_SMITHING, describeSmithing } from '../data/smithing.js';
+import { SMITHING_CATEGORIES, SMITHING_STATIONS, SMITHING_ORIGINS, ALL_SMITHING, SMITHING_SUBFILTERS, describeSmithing } from '../data/smithing.js';
 import {
   normalizeSmithing, isSmithingKnown, canForge, forge, smithingMaxBatches, smithingIngredientCount, smithingLevel
 } from '../systems/SmithingSystem.js';
@@ -20,9 +20,9 @@ import {
   normalizeCrafting, isCraftingKnown, canCraft, craftItem, craftingMaxBatches, craftingIngredientCount, craftingLevel, craftingStationOk
 } from '../systems/CraftingSystem.js';
 import { recipeOutput } from '../systems/ProfessionDatabase.js';
-import { cardText, cardButton, uiWindow, uiTitle } from '../ui/fantasyCard.js';
+import { cardText, cardButton, uiWindow, uiTitle, uiProgressBar } from '../ui/fantasyCard.js';
 import { arrowKey } from '../ui/inventorySprites.js';
-import { tileRow, darkPanel, headingLine, itemIcon, framedIcon, rarityColor } from '../ui/craftLook.js';
+import { tileRow, darkPanel, headingLine, itemIcon, framedIcon, rarityColor, roundBox } from '../ui/craftLook.js';
 
 // Výrobní profese, které okno umí (Vaření = scéna Cooking, Alchymie = scéna Alchemy).
 const PROFESSIONS = {
@@ -39,7 +39,8 @@ const PROFESSIONS = {
   Smithing: {
     icon: 'anvil', title: 'Kovářství', prof: 'smithing', make: 'Vykovat', made: 'Kovářství', categories: SMITHING_CATEGORIES, stations: SMITHING_STATIONS,
     origins: SMITHING_ORIGINS, all: ALL_SMITHING, describe: describeSmithing, normalize: normalizeSmithing, known: isSmithingKnown,
-    can: canForge, craft: forge, batches: smithingMaxBatches, count: smithingIngredientCount, level: smithingLevel
+    can: canForge, craft: forge, batches: smithingMaxBatches, count: smithingIngredientCount, level: smithingLevel,
+    subfilters: SMITHING_SUBFILTERS
   },
   // Řemeslnictví: tři různá pracoviště (ne stupně) – recept jen na svém pracovišti; okno začne
   // kategorií, kterou pracoviště vyrábí.
@@ -84,6 +85,10 @@ export default class CookingScene extends Phaser.Scene {
     this.cfg.normalize(this.state);
     // Filtr: Vše, nebo kategorie (pracoviště Řemeslnictví začne svou kategorií).
     this.category = this.cfg.stationCategory?.[this.stationRank] ?? this.category ?? 'all';
+    if (this.category !== 'all' && !this.cfg.categories.some((c) => c.id === this.category)) this.category = 'all';
+    this.subOpen = false; // vysouvací panel podfiltrů (Kovářství: sady podle kovu)
+    this.subfilter = null;
+    this.working = null;
     this.selectedId = null;
 
     uiWindow(this, X, Y, W, H, { shade: 0.6 });
@@ -112,9 +117,18 @@ export default class CookingScene extends Phaser.Scene {
     this.cookButton = cardButton(this, null, DETAIL.x + 24, Y + H - 96, 220, 58, this.cfg.make, () => this.doCook(1));
     this.cook5Button = cardButton(this, null, DETAIL.x + 258, Y + H - 96, 200, 58, `${this.cfg.make} ×5`, () => this.doCook(5));
     cardButton(this, null, DETAIL.x + DETAIL.w - 224, Y + H - 96, 200, 58, 'Zavřít (ESC)', () => this.close(), { danger: true });
+    this.flyLayer = this.add.container(0, 0); // vysouvací panel podfiltrů – nad vším
+
+    // Průběh výroby (pod hláškou).
+    this.craftBar = uiProgressBar(this, DETAIL.x + 24, Y + H - 196, DETAIL.w - 48, 16, 0xffc94a);
+    this.craftBar.setVisible(false);
 
     this.onKey = (event) => {
-      if (!event.repeat && event.code === 'Escape') this.close();
+      if (!event.repeat && event.code === 'Escape') {
+        if (this.subOpen) { this.subOpen = false; this.refresh(); return; }
+        if (this.working) this.finishWork(null, true);
+        else this.close();
+      }
       // Šipky nahoru / dolů mění vlastní množství.
       if (event.code === 'ArrowUp') this.setQty(this.customQty + 1);
       if (event.code === 'ArrowDown') this.setQty(this.customQty - 1);
@@ -135,21 +149,26 @@ export default class CookingScene extends Phaser.Scene {
     return this.cfg.known(this.state, recipe) && recipe.level <= this.cfg.level(this.state) + RANGE;
   }
 
-  recipesOf(category) {
+  // sub = podfiltr kategorie (Kovářství: sada podle kovu / vzácné), jinak všechny.
+  recipesOf(category, sub = null) {
     return this.cfg.all
-      .filter((r) => (category === 'all' || r.category === category) && this.visible(r))
+      .filter((r) => (category === 'all' || r.category === category) && (!sub || r.set === sub) && this.visible(r))
       .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'cs'));
   }
 
+  shown() {
+    return this.recipesOf(this.category, this.subfilter);
+  }
+
   pageCount() {
-    return Math.max(1, Math.ceil(this.recipesOf(this.category).length / PAGE_SIZE));
+    return Math.max(1, Math.ceil(this.shown().length / PAGE_SIZE));
   }
 
   turnPage(step) {
     const page = Phaser.Math.Clamp((this.page ?? 0) + step, 0, this.pageCount() - 1);
     if (page === this.page) return;
     this.page = page;
-    this.selectedId = this.recipesOf(this.category)[page * PAGE_SIZE]?.id ?? null;
+    this.selectedId = this.shown()[page * PAGE_SIZE]?.id ?? null;
     this.refresh();
   }
 
@@ -165,6 +184,7 @@ export default class CookingScene extends Phaser.Scene {
     const prof = this.state.professions[this.cfg.prof];
     this.levelText.setText(`${this.cfg.title} úr. ${prof.level}  ·  ${prof.exp} / ${prof.next} XP`);
     this.renderFilters();
+    this.renderFly();
     this.renderList();
     this.renderDetail();
   }
@@ -172,14 +192,28 @@ export default class CookingScene extends Phaser.Scene {
   // Filtry vlevo: Vše + kategorie s počtem viditelných receptů.
   renderFilters() {
     this.filterLayer.removeAll(true);
-    const filters = [{ id: 'all', label: 'Vše' }, ...this.cfg.categories];
+    // Kategorie s podfiltry (Zbroje a štíty ›) otevře vysouvací panel se sadami (renderFly);
+    // zvolená sada se ukáže v názvu kategorie.
+    const subLabel = (c) => this.cfg.subfilters?.[c.id]?.find((s) => s.id === this.subfilter)?.label;
+    const filters = [{ id: 'all', label: 'Vše' }, ...this.cfg.categories.map((c) => ({
+      ...c,
+      label: this.cfg.subfilters?.[c.id] ? (c.id === this.category && subLabel(c) ? `${c.label}: ${subLabel(c)}` : `${c.label} ›`) : c.label
+    }))];
     const step = Math.min(62, Math.floor((H - 130) / filters.length));
     filters.forEach((filter, i) => {
       const y = Y + 96 + i * step;
       const active = filter.id === this.category;
-      const count = this.recipesOf(filter.id).length;
-      this.filterLayer.add(tileRow(this, X + 24, y, 262, step - 6, active, () => {
-        if (active) return;
+      const hasSubs = Boolean(this.cfg.subfilters?.[filter.id]);
+      const count = active ? this.shown().length : this.recipesOf(filter.id).length;
+      this.filterLayer.add(tileRow(this, X + 24, y, 262, step - 6, active || (hasSubs && this.subOpen), () => {
+        if (hasSubs) {
+          this.subOpen = !(this.subOpen && active);
+          if (!active) this.subfilter = null;
+        } else {
+          if (active) return;
+          this.subOpen = false;
+          this.subfilter = null;
+        }
         this.category = filter.id;
         this.selectedId = null;
         this.page = 0;
@@ -193,9 +227,47 @@ export default class CookingScene extends Phaser.Scene {
     });
   }
 
+  // Vysouvací panel podfiltrů vedle kategorií (přes začátek seznamu receptů). Po výběru se
+  // zavře; klik mimo panel nebo Esc ho zavře bez změny.
+  renderFly() {
+    this.flyLayer.removeAll(true);
+    const subs = this.subOpen ? this.cfg.subfilters?.[this.category] : null;
+    if (!subs) return;
+    const entries = [{ id: null, label: 'Všechny' }, ...subs];
+    const rowH = 54;
+    const gap = 4;
+    const w = 300;
+    const x = X + 296;
+    const y = Y + 88;
+    const h = entries.length * (rowH + gap) + 16;
+    const outside = this.add.zone(0, 0, GAME_WIDTH, GAME_HEIGHT).setOrigin(0).setInteractive();
+    outside.on('pointerdown', () => { this.subOpen = false; this.refresh(); });
+    const bg = this.add.graphics();
+    roundBox(bg, x, y, w, h, 0x060b14, 0.97, 0xd6a23a, 1, 2, 12);
+    const block = this.add.zone(x, y, w, h).setOrigin(0).setInteractive(); // klik na pozadí panelu ho nezavře
+    this.flyLayer.add([outside, bg, block]);
+    entries.forEach((entry, i) => {
+      const ry = y + 8 + i * (rowH + gap);
+      const active = entry.id === this.subfilter;
+      const count = this.recipesOf(this.category, entry.id).length;
+      this.flyLayer.add(tileRow(this, x + 8, ry, w - 16, rowH, active, () => {
+        this.subfilter = entry.id;
+        this.subOpen = false;
+        this.selectedId = null;
+        this.page = 0;
+        this.refresh();
+      }));
+      const color = active ? '#ffe7ae' : count ? '#e8dcc0' : '#6c7480';
+      const label = cardText(this, x + 26, ry + rowH / 2, entry.label, { size: 20, bold: true, color, originY: 0.5 });
+      const num = cardText(this, x + w - 24, ry + rowH / 2, String(count), { size: 20, bold: true, color: count ? '#ffd76a' : '#6c7480', originX: 1, originY: 0.5 });
+      if (label.width > w - 70 - num.width) label.setScale((w - 70 - num.width) / label.width);
+      this.flyLayer.add([label, num]);
+    });
+  }
+
   renderList() {
     this.listLayer.removeAll(true);
-    const all = this.recipesOf(this.category);
+    const all = this.shown();
     const pages = this.pageCount();
     this.page = Phaser.Math.Clamp(this.page ?? 0, 0, pages - 1);
     const recipes = all.slice(this.page * PAGE_SIZE, (this.page + 1) * PAGE_SIZE);
@@ -308,8 +380,9 @@ export default class CookingScene extends Phaser.Scene {
     add(`Původ receptu: ${this.cfg.origins[recipe.origin] ?? recipe.origin}`, { size: 16, color: '#8f9aa6' });
 
     const one = this.cfg.can(this.state, recipe, this.stationRank, 1);
-    this.cookButton.setDisabled(!one.ok);
-    this.cook5Button.setDisabled(!this.cfg.can(this.state, recipe, this.stationRank, 5).ok);
+    this.cookButton.setDisabled(!one.ok || Boolean(this.working));
+    this.cook5Button.setDisabled(!this.cfg.can(this.state, recipe, this.stationRank, 5).ok || Boolean(this.working));
+    add(`Doba výroby: ${this.craftSeconds(recipe).toFixed(1).replace('.', ',')} s za kus`, { size: 16, color: '#8f9aa6' });
     if (!one.ok) add(one.reason, { size: 18, color: '#ff9a8a' });
   }
 
@@ -319,26 +392,49 @@ export default class CookingScene extends Phaser.Scene {
     return Math.max(1, recipe ? this.cfg.batches(this.state, recipe) : 1);
   }
 
+  // Množství jde zvolit jen do počtu, který jde ze surovin vyrobit (nejvýš 99).
+  qtyLimit() {
+    return Math.min(99, this.maxQty());
+  }
+
   setQty(value) {
-    this.customQty = Phaser.Math.Clamp(Math.round(value) || 1, 1, 99);
+    this.customQty = Phaser.Math.Clamp(Math.round(value) || 1, 1, this.qtyLimit());
     this.updateQty();
   }
 
   updateQty() {
     const recipe = this.cfg.all.find((r) => r.id === this.selectedId);
+    // Jiný recept = množství znovu od 1; po výrobě (míň surovin) se sníží na maximum.
+    if (this.qtyRecipe !== this.selectedId) {
+      this.qtyRecipe = this.selectedId;
+      this.customQty = 1;
+    }
+    this.customQty = Phaser.Math.Clamp(this.customQty, 1, this.qtyLimit());
     this.qtyText.setText(String(this.customQty));
     this.customButton.setLabel(`${this.cfg.make} ×${this.customQty}`);
     this.minusButton.setDisabled(this.customQty <= 1);
-    this.plusButton.setDisabled(this.customQty >= 99);
+    this.plusButton.setDisabled(this.customQty >= this.qtyLimit());
     this.maxButton.setDisabled(!recipe);
-    this.customButton.setDisabled(!recipe || !this.cfg.can(this.state, recipe, this.stationRank, this.customQty).ok);
+    this.customButton.setDisabled(!recipe || Boolean(this.working) || !this.cfg.can(this.state, recipe, this.stationRank, this.customQty).ok);
   }
 
+  // Doba výroby jednoho kusu (s): těžší recepty déle, mezivýrobky rychleji.
+  craftSeconds(recipe) {
+    const base = 1.2 + recipe.level * 0.04;
+    return recipe.category === 'M' ? base * 0.6 : base;
+  }
+
+  // Výroba trvá: kusy se vyrábějí jeden po druhém s ukazatelem průběhu (Esc přeruší).
   doCook(times) {
+    if (this.working) return;
     const recipe = this.cfg.all.find((r) => r.id === this.selectedId);
     if (!recipe) return;
-    const needFuel = this.fuel && !this.fuelPaid;
-    if (needFuel) {
+    const check = this.cfg.can(this.state, recipe, this.stationRank, times);
+    if (!check.ok) {
+      this.messageText.setText(check.reason);
+      return;
+    }
+    if (this.fuel && !this.fuelPaid) {
       // Palivo navíc k případnému dřevu v receptu.
       const inRecipe = Object.entries(recipe.ingredients ?? {})
         .filter(([key]) => key.split('|')[0] === this.fuel)
@@ -348,16 +444,51 @@ export default class CookingScene extends Phaser.Scene {
         return;
       }
     }
-    const result = this.cfg.craft(this.state, recipe, this.stationRank, times);
-    if (result.ok && needFuel) {
+    this.working = { recipe, times, done: 0, made: 0, xp: 0, levels: 0, elapsed: 0, total: this.craftSeconds(recipe) * 1000 };
+    this.setBusy(true);
+  }
+
+  setBusy(busy) {
+    for (const b of [this.cookButton, this.cook5Button, this.customButton, this.maxButton, this.minusButton, this.plusButton]) b.setDisabled(busy);
+    this.craftBar.setVisible(busy);
+    if (!busy) this.refresh();
+  }
+
+  update(time, delta) {
+    const w = this.working;
+    if (!w) return;
+    w.elapsed += delta;
+    const ratio = Math.min(1, (w.done + w.elapsed / w.total) / w.times);
+    this.craftBar.set(ratio);
+    const left = ((w.times - w.done) * w.total - w.elapsed) / 1000;
+    this.messageText.setText(`${this.cfg.make === 'Uvařit' ? 'Vaříš' : 'Vyrábíš'}: ${w.recipe.name} ${w.done + 1}/${w.times} · ${Math.max(0, left).toFixed(1).replace('.', ',')} s (Esc = přerušit)`);
+    if (w.elapsed < w.total) return;
+    w.elapsed = 0;
+    const result = this.cfg.craft(this.state, w.recipe, this.stationRank, 1);
+    if (!result.ok) { this.finishWork(result.message); return; }
+    if (this.fuel && !this.fuelPaid) {
       removeItem(this.state, this.fuel, 1);
       this.fuelPaid = true;
     }
-    let message = result.message;
-    if (result.ok && result.levelsGained > 0) message += ` ${this.cfg.title}: nová úroveň ${this.state.professions[this.cfg.prof].level}!`;
+    w.done += 1;
+    w.made += Number(result.made) || w.recipe.qty || 1;
+    w.xp += Number(result.xp) || 0;
+    w.levels += Number(result.levelsGained) || 0;
+    SaveSystem.save(this.state);
+    this.renderList();
+    if (w.done >= w.times) this.finishWork();
+  }
+
+  finishWork(error = null, interrupted = false) {
+    const w = this.working;
+    this.working = null;
+    this.setBusy(false);
+    if (!w) return;
+    let message = w.done ? `Hotovo: ${w.recipe.name} ×${w.made}${w.xp ? ` (+${w.xp} XP)` : ''}.` : '';
+    if (interrupted) message = `Přerušeno. ${message}`;
+    if (error) message = `${message} ${error}`.trim();
+    if (w.levels > 0) message += ` ${this.cfg.title}: nová úroveň ${this.state.professions[this.cfg.prof].level}!`;
     this.messageText.setText(message);
-    if (result.ok) SaveSystem.save(this.state);
-    this.refresh();
   }
 
   // Databáze (karta Řemesla) nad oknem výroby; okno počká a po zavření karty pokračuje.
@@ -371,6 +502,7 @@ export default class CookingScene extends Phaser.Scene {
   close() {
     if (this.closing) return;
     this.closing = true;
+    this.working = null; // rozdělaná výroba se přeruší (vyrobené kusy zůstávají)
     SaveSystem.save(this.state);
     this.scene.stop();
     this.scene.resume(this.returnScene);

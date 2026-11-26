@@ -8,7 +8,8 @@ import { getBondLevel } from '../systems/MonsterBondSystem.js';
 import { elementName } from '../systems/ElementSystem.js';
 import { createMonsterModel } from '../battle/monsterModels.js';
 import { monsterHeadKey, monsterStillKey } from '../battle/monsterAnimations.js';
-import { cardText, openCardModal, drawCardFrame, CARD_FIT, nineImage } from '../ui/fantasyCard.js';
+import { cardText, cardButton, openCardModal, drawCardFrame, CARD_FIT, nineImage } from '../ui/fantasyCard.js';
+import { askName } from '../ui/nameInput.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 import { closeStateKey } from '../ui/heroCard/tabSprites.js';
 import {
@@ -30,7 +31,7 @@ import {
 // interaktivní prvky jsou výřezy z partyscene-buttons.png a monsterselect.png ve stavech
 // výchozí / hover / vybrané; šedá jen u tlačítek +, když nejsou body k přidělení
 // (a u nedostupných tlačítek). Úschovnu jde jen prohlížet – přesouvat monstra mezi partou
-// a úschovnou lze jen u Liory v hostinci (data.storageAccess).
+// a úschovnou lze jen u Liory v domě léčitelky (data.storageAccess).
 
 const PARTY_LIMIT = 4;
 const MAX_FREE_TRAINING = 510; // stejný strop jako při načtení hry (SaveSystem)
@@ -260,7 +261,7 @@ export default class PartyScene extends Phaser.Scene {
     this.text(HEADER.infoX, HEADER.infoY,
       this.storageAccess
         ? 'Jsi u Liory: můžeš přesouvat monstra mezi partou a úschovnou. Liora léčí partu i úschovnu.'
-        : 'Úschovnu tu jen prohlížíš – přesouvat monstra mezi partou a úschovnou jde u Liory v hostinci.',
+        : 'Úschovnu tu jen prohlížíš – přesouvat monstra mezi partou a úschovnou jde u Liory v domě léčitelky.',
       { size: 16, color: this.storageAccess ? '#8fd3ff' : '#c9d3dd', wrap: 760, originY: 0.5, strokeThickness: 3 });
     this.text(HEADER.countsX, HEADER.countsY, `Aktivní parta ${party.length}/${PARTY_LIMIT} · Úschovna ${storage.length}`, {
       size: 17, originX: 1, color: '#f3e4bd', strokeThickness: 3
@@ -376,7 +377,12 @@ export default class PartyScene extends Phaser.Scene {
     }
     this.addModel(monster, DETAIL.model.x, DETAIL.model.y, 1.05);
 
-    this.text(DETAIL.textX, DETAIL.nameY, monster.name, { size: 34, bold: true, color: '#ffe7ae', originY: 0.5, strokeThickness: 5 });
+    // Jméno + tlačítko přejmenování (✎) hned za ním; dlouhé jméno se zúží, aby se nepřekrývalo s živlem.
+    const nameText = this.text(DETAIL.textX, DETAIL.nameY, monster.name, { size: 34, bold: true, color: '#ffe7ae', originY: 0.5, strokeThickness: 5 });
+    const nameMax = DETAIL.elementDot.x - DETAIL.elementDot.r - 12 - 54 - 12 - DETAIL.textX;
+    if (nameText.width > nameMax) nameText.setScale(nameMax / nameText.width);
+    const rename = cardButton(this, null, DETAIL.textX + nameText.displayWidth + 12, DETAIL.nameY - 27, 54, 54, '✎', () => this.renameMonster(monster), { size: 28 });
+    for (const o of rename.objects) this.layer.add(o);
     this.text(DETAIL.textX, DETAIL.line1Y - 8, `${this.speciesName(monster)} · ${elementName(monster.element)} · Úroveň ${monster.level} · ${where}`, {
       size: 16, color: '#c9b98f', strokeThickness: 2, originY: 0.5
     });
@@ -456,8 +462,9 @@ export default class PartyScene extends Phaser.Scene {
     });
     shown.forEach((skill, index) => {
       const y = SKILLS.rowsY[index];
-      this.text(SKILLS.x + 22, y + SKILLS.h / 2, skill.name, { size: 19, bold: true, color: skill.remainingUses > 0 ? '#f3e4bd' : '#7f8a96', originY: 0.5, strokeThickness: 3 });
-      this.text(SKILLS.usesX, y + SKILLS.h / 2, `${skill.remainingUses}/${skill.maxUses}`, { size: 17, color: '#dbe6f3', originX: 1, originY: 0.5 });
+      // Bez počtu použití (pravidlo zrušeno) – vpravo síla útoku.
+      this.text(SKILLS.x + 22, y + SKILLS.h / 2, skill.name, { size: 19, bold: true, color: '#f3e4bd', originY: 0.5, strokeThickness: 3 });
+      if (skill.power) this.text(SKILLS.usesX, y + SKILLS.h / 2, `síla ${skill.power}`, { size: 17, color: '#dbe6f3', originX: 1, originY: 0.5 });
     });
   }
 
@@ -485,7 +492,7 @@ export default class PartyScene extends Phaser.Scene {
     const lines = [
       `${CATEGORY_LABELS[skill.category] ?? skill.category} · ${elementName(skill.element)}${skill.bondOnly ? ' · Bond' : ''}`,
       skill.power ? `Síla útoku ${skill.power} · přesnost ${Math.round((skill.accuracy ?? 1) * 100)} %` : `Přesnost ${Math.round((skill.accuracy ?? 1) * 100)} %`,
-      `Dosah ${skill.range ?? 1} · použití ${skill.remainingUses}/${skill.maxUses}`
+      `Dosah ${skill.range ?? 1}`
     ];
     if (skill.statusEffect) lines.push(`Efekt: ${STATUS[skill.statusEffect.id] ?? skill.statusEffect.id} (${Math.round((skill.statusEffect.chance ?? 0) * 100)} %, ${skill.statusEffect.duration ?? 1} tahy)`);
     if (skill.effect?.stat) lines.push(`Posílení: ${skill.effect.stat} +${skill.effect.amount} na ${skill.effect.duration} tahy`);
@@ -560,7 +567,8 @@ export default class PartyScene extends Phaser.Scene {
         : `Pohyb: v boji ujde 2 pole za tah. Od Rychlosti 12 ujde 3 pole (chybí ${12 - value}).`;
       case 'precision': {
         const diff = (value - 80) * 0.5;
-        return `Zásah: ${diff >= 0 ? '+' : '−'}${String(Math.abs(diff)).replace('.', ',')} % k šanci zasáhnout schopností (0,5 % za každý bod nad 80, nejvýš 98 %).`;
+        const reach = 5 + Math.max(0, Math.floor((value - 80) / 8));
+        return `Fyzické útoky: ${diff >= 0 ? '+' : '−'}${String(Math.abs(diff)).replace('.', ',')} % k šanci zasáhnout (0,5 % za bod nad 80, nejvýš 98 %). Kouzla: plný dosah ${reach} polí bez postihu (+1 pole za každých 8 bodů nad 80).`;
       }
       default: return '';
     }
@@ -587,7 +595,7 @@ export default class PartyScene extends Phaser.Scene {
 
   moveSelected() {
     if (!this.storageAccess) {
-      this.flash('Přesouvat monstra mezi partou a úschovnou jde jen u Liory v hostinci.');
+      this.flash('Přesouvat monstra mezi partou a úschovnou jde jen u Liory v domě léčitelky.');
       return;
     }
     const monster = this.selectedMonster();
@@ -638,6 +646,25 @@ export default class PartyScene extends Phaser.Scene {
         { label: 'Zpět', onClick: () => { this.closeModal(); this.render(); } }
       ]
     );
+  }
+
+  // Přejmenování monstra kdykoli po chycení (prázdné jméno = jméno druhu).
+  renameMonster(monster) {
+    const speciesName = this.speciesName(monster);
+    askName(this, {
+      title: 'Přejmenovat monstrum',
+      current: monster.name,
+      fallback: speciesName,
+      fallbackLabel: 'Jméno druhu',
+      onDone: (name) => {
+        if (!name || name === monster.name) return;
+        const old = monster.name;
+        monster.name = name;
+        SaveSystem.save(this.state);
+        this.render();
+        this.flash(`${old} se teď jmenuje ${name}.`, '#ffd76a');
+      }
+    });
   }
 
   release() {

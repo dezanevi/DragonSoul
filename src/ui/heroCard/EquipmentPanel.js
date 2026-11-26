@@ -10,7 +10,8 @@ import { describeGearBonus } from '../../data/smithing.js';
 // z hoover-icon.png (tmavý = výchozí, modrý = pod myší), ikonu vybaveného předmětu,
 // rámeček a záři podle vzácnosti, výběr a tooltip.
 export default class EquipmentPanel {
-  constructor(scene, parent, tooltip, onSelect) {
+  // onContext(slot) – pravý klik na slot (výběr předmětu z inventáře).
+  constructor(scene, parent, tooltip, onSelect, onContext = null) {
     this.tooltip = tooltip;
     this.onSelect = onSelect;
     this.selectedId = null;
@@ -52,6 +53,14 @@ export default class EquipmentPanel {
           onOut: () => this.tooltip.hide()
         })
     );
+    // Pravý klik: nabídka předmětů pro slot (levý klik slot jen vybere).
+    this.buttons.forEach((button, index) => {
+      button.zone.on('pointerdown', (pointer) => {
+        if (!pointer.rightButtonDown()) return;
+        button.pressed = false;
+        onContext?.(EQUIPMENT_SLOTS[index]);
+      });
+    });
   }
 
   select(id) {
@@ -68,7 +77,7 @@ export default class EquipmentPanel {
     const item = getEquippedItem(this.state, slot.id);
 
     if (!item) {
-      this.tooltip.show(slot.area, slot.label, ['Prázdný slot', 'Kliknutím slot vybereš.', ...this.totalLines()]);
+      this.tooltip.show(slot.area, slot.label, ['Prázdný slot', 'Pravý klik = obléct předmět z inventáře.', ...this.totalLines()]);
       return;
     }
 
@@ -77,6 +86,7 @@ export default class EquipmentPanel {
     // Aktuální popis z dat (uložená výbava může mít starší text).
     const description = getItem(item.id)?.description ?? item.description;
     if (description) lines.push(description);
+    lines.push('Pravý klik = vyměnit nebo sundat.');
     lines.push(...this.totalLines());
 
     this.tooltip.show(slot.area, item.name ?? item.id ?? slot.label, lines, rarity.color, rarity.css);

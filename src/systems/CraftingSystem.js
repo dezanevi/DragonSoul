@@ -12,7 +12,6 @@
 import { ALL_CRAFTING, CRAFTING_BY_ID, craftingOutputId, craftingXp, xpToNextCraftingLevel } from '../data/crafting.js';
 import { getItemCount, removeItem, addItem, INVENTORY_PAGE_SIZE } from './InventorySystem.js';
 import { professionXpMultiplier } from './AlchemySystem.js';
-import skillRows from '../data/skills.json';
 
 const MAX_LEVEL = 100;
 const MAX_FREE_TRAINING = 510;
@@ -139,22 +138,6 @@ export function useCraftedItem(state, recipeId, now = Date.now()) {
     const target = party.sort((a, b) => (Number(a.unspentTrainingPoints) || 0) - (Number(b.unspentTrainingPoints) || 0))[0];
     target.unspentTrainingPoints = Math.min(MAX_FREE_TRAINING, (Number(target.unspentTrainingPoints) || 0) + 3);
     return { ok: true, message: `${target.name}: +3 tréninkové body (volné ${target.unspentTrainingPoints}).` };
-  }
-
-  if (e.use === 'skills') {
-    let restored = 0;
-    for (const monster of state.party ?? []) {
-      monster.skillUses ??= {};
-      for (const skillId of monster.skills ?? []) {
-        const skill = skillRows.find((s) => s.id === skillId);
-        if (skill && monster.skillUses[skillId] !== skill.maxUses) {
-          monster.skillUses[skillId] = skill.maxUses;
-          restored += 1;
-        }
-      }
-    }
-    if (!restored) return { ok: false, message: 'Všechny techniky v partě mají plný počet použití.' };
-    return { ok: true, message: `${recipe.name}: obnovena použití technik (${restored}).` };
   }
 
   return { ok: false, message: 'Tento předmět se nasazuje jako výbava nebo leží v inventáři jako nástroj.' };

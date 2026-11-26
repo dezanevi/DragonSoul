@@ -202,12 +202,10 @@ export function getMonsterSkills(monster) {
       const skill = getSkill(skillId);
       if (!skill) return null;
 
-      const remainingUses =
-        monster.skillUses?.[skillId] ?? skill.maxUses;
-
+      // Schopnosti nemají omezený počet použití (pravidlo zrušeno) – vždy plné.
       return {
         ...skill,
-        remainingUses
+        remainingUses: skill.maxUses
       };
     })
     .filter(Boolean);
@@ -304,17 +302,11 @@ export function canUseSkill(monster, skillId) {
     return false;
   }
 
-  const remainingUses =
-    monster.skillUses?.[skillId] ?? skill.maxUses;
-
-  return remainingUses > 0;
+  return true;
 }
 
+// Použití schopnosti se neodečítá (omezený počet použití byl zrušen); jen ověří, že ji
+// monstrum zná. Staré záznamy skillUses v uložených hrách se ignorují.
 export function consumeSkillUse(monster, skillId) {
-  if (!canUseSkill(monster, skillId)) return false;
-
-  monster.skillUses ??= {};
-  monster.skillUses[skillId] -= 1;
-
-  return true;
+  return canUseSkill(monster, skillId);
 }

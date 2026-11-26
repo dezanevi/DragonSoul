@@ -28,8 +28,8 @@ create(data) {
     .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
     .setDepth(-10);
 
-  // Tlačítka vpravo, pořadí podle návrhu: Nová hra, Pokračovat, Nahrát hru, Uložit hru.
-  const columnX = GAME_WIDTH - 330;
+  // Tlačítka uprostřed obrazovky (výška beze změny), pořadí: Nová hra, Pokračovat, Nahrát hru, Uložit hru.
+  const columnX = GAME_WIDTH / 2;
   const firstY = 560;
   const step = 122;
 
@@ -70,6 +70,9 @@ create(data) {
     () => this.openSlots('save'),
     Boolean(this.menuState)
   );
+
+  // Prototyp souboje Soul Clash – cvičné souboje (nezávislé na uložené hře).
+  cardButton(this, null, 40, GAME_HEIGHT - 110, 420, 66, 'Cvičné souboje (Soul Clash)', () => this.scene.start('SoulClash', { returnScene: 'Menu' }), { size: 22 });
 }
 
 openGameState(state) {

@@ -353,9 +353,9 @@ export function chooseHerbSpecialization(state, id) {
   if (state.herbalism.specialization === id) return { ok: false, message: `${spec.name} už je tvoje specializace.` };
   const cost = state.herbalism.specialization ? HERB_RULES.specializationChangeCost : 0;
   const gold = Math.floor(Number(state.gold) || 0);
-  if (gold < cost) return { ok: false, message: `Změna specializace stojí ${cost} zl.` };
+  if (gold < cost) return { ok: false, message: `Změna specializace stojí ${cost} zlata.` };
   state.gold = gold - cost;
   state.herbalism.specialization = id;
   state.herbalism.specChanges += cost ? 1 : 0;
-  return { ok: true, message: `Specializace Sběru bylin: ${spec.name}${cost ? ` (−${cost} zl)` : ''}.` };
+  return { ok: true, message: `Specializace Sběru bylin: ${spec.name}${cost ? ` (−${cost} zlata)` : ''}.` };
 }

@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor oblasti Greenvale</title>
+<style>
+  :root { --bg: #1d1712; --panel: #2c2219; --line: #6b5233; --gold: #e8c47a; --text: #f3e6cc; --muted: #b9a585; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 18px/1.35 Georgia, 'Times New Roman', serif; }
+  body { display: grid; grid-template-columns: 330px 1fr; height: 100vh; overflow: hidden; }
+  aside { background: var(--panel); border-right: 2px solid var(--line); padding: 14px; overflow-y: auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; color: var(--gold); }
+  h2 { font-size: 19px; margin: 16px 0 8px; color: var(--gold); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  p.hint { color: var(--muted); font-size: 15px; margin: 4px 0; }
+  button { min-height: 54px; font: 20px Georgia, serif; color: var(--text); background: #3d2e20; border: 2px solid var(--line);
+           border-radius: 8px; cursor: pointer; padding: 6px 10px; }
+  button:hover { border-color: var(--gold); }
+  button:disabled { opacity: 0.4; cursor: default; border-color: var(--line); }
+  button.on { border-color: var(--gold); background: #5a4126; box-shadow: 0 0 0 2px #e8c47a55 inset; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .tile { display: flex; align-items: center; gap: 8px; text-align: left; }
+  .sw { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #0008; flex: none; }
+  label.chk { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 18px; cursor: pointer; }
+  label.chk input { width: 22px; height: 22px; }
+  main { position: relative; overflow: auto; background: #120e0a; }
+  canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+  #status { position: fixed; right: 14px; bottom: 12px; background: #000c; border: 1px solid var(--line); border-radius: 8px;
+            padding: 8px 12px; font-size: 18px; pointer-events: none; }
+  #toast { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: #3d2e20; border: 2px solid var(--gold);
+           border-radius: 8px; padding: 10px 16px; font-size: 18px; display: none; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Editor oblasti Greenvale</h1>
+  <p class="hint">2D pohled shora na celou oblast. Kresli myší rozložení cest a luk. Úpravy se ukládají v prohlížeči. Až budeš hotový, řekni mi a zapracuji je do hry.</p>
+
+  <h2>Terén</h2>
+  <div id="palette" class="grid2"></div>
+
+  <h2>Nástroj</h2>
+  <div class="grid3">
+    <button data-tool="brush" class="on">Štětec</button>
+    <button data-tool="fill">Výplň</button>
+    <button data-tool="pick">Kapátko</button>
+  </div>
+  <p class="hint">Velikost štětce</p>
+  <div class="grid3">
+    <button data-size="1" class="on">1</button>
+    <button data-size="2">2</button>
+    <button data-size="3">3</button>
+  </div>
+  <p class="hint">Pravé tlačítko = guma (vrátí pole do stavu ve hře). Ctrl+Z zpět, Ctrl+Y znovu.</p>
+
+  <h2>Zobrazení</h2>
+  <div class="grid2">
+    <button id="zoomOut">Oddálit</button>
+    <button id="zoomIn">Přiblížit</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="showBuildings" checked> Budovy a dveře</label>
+  <label class="chk"><input type="checkbox" id="showZones"> Zóny setkání</label>
+  <label class="chk"><input type="checkbox" id="showChanges"> Označit změny tečkou</label>
+  <label class="chk"><input type="checkbox" id="showGrid" checked> Mřížka</label>
+
+  <h2>Úpravy</h2>
+  <div class="grid2">
+    <button id="undo">Zpět</button>
+    <button id="redo">Znovu</button>
+  </div>
+  <div class="grid2" style="margin-top:6px">
+    <button id="copy">Kopírovat</button>
+    <button id="reset">Zahodit vše</button>
+  </div>
+  <p class="hint" id="changeCount"></p>
+</aside>
+<main id="view"><canvas id="map"></canvas></main>
+<div id="status">–</div>
+<div id="toast"></div>
+
+<script type="module">
+import { GREENVALE_MAP } from './src/data/maps/greenvale.js';
+import { TILE_BY_CHAR } from './src/data/tiles.js';
+
+const STORE = 'greenvale-map-editor';
+const original = GREENVALE_MAP.ground.map((row) => row.split(''));
+const H = original.length;
+const W = original[0].length;
+let rows = original.map((r) => r.slice());
+
+// Uložené úpravy: { edits: { "x,y": char } } nad aktuální mapou ze hry.
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE) ?? 'null');
+  for (const [key, c] of Object.entries(saved?.edits ?? {})) {
+    const [x, y] = key.split(',').map(Number);
+    if (rows[y]?.[x] !== undefined) rows[y][x] = c;
+  }
+} catch { /* prázdné úložiště */ }
+
+const PALETTE = [':', '#', ',', '.', '_', 'T', 'S', 'R', '~', '=', 'g', '^'];
+const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+// Barvy jen pro editor – každý terén jasně odlišený (ve hře jsou cesta, dlažba a parcela podobné).
+const COLORS = {
+  '.': '#7fb35a', // tráva – světle zelená
+  ',': '#2f7d3a', // louka – sytě tmavě zelená
+  ':': '#f0a830', // cesta – oranžová
+  '#': '#d8d4cc', // dlažba – světle šedá
+  '_': '#9a5f38', // parcela – hnědá
+  '=': '#c0306a', // most – malinová
+  '~': '#2f6fd0', // voda – modrá
+  '^': '#5a4a40', // útes – tmavě hnědá
+  'T': '#7fb35a', 'S': '#7fb35a', 'R': '#7fb35a', // pod objekty tráva
+  'g': '#a8a49a', // suť – šedá
+  'D': '#b07a3c', 'C': '#201814', 'F': '#9cd8f0'
+};
+const OBJ = { T: '#1d4a14', S: '#0f3320', R: '#6e6a66' };
+const tileColor = (c) => COLORS[c] ?? (TILE_BY_CHAR.get(c) ? hex(TILE_BY_CHAR.get(c).color) : '#ff00ff');
+
+let tile = ':';
+let tool = 'brush';
+let size = 1;
+let cell = 9;
+// Historie Zpět / Znovu se ukládá s úpravami, takže funguje i po obnovení stránky.
+const HISTORY = STORE + '-history';
+let undoStack = [];
+let redoStack = [];
+try {
+  const h = JSON.parse(localStorage.getItem(HISTORY) ?? 'null');
+  if (h) { undoStack = h.undo ?? []; redoStack = h.redo ?? []; }
+} catch { /* bez historie */ }
+
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+const view = document.getElementById('view');
+const $ = (id) => document.getElementById(id);
+
+// --- paleta
+const palette = $('palette');
+for (const c of PALETTE) {
+  const t = TILE_BY_CHAR.get(c);
+  const b = document.createElement('button');
+  b.className = 'tile' + (c === tile ? ' on' : '');
+  b.dataset.tile = c;
+  b.innerHTML = `<span class="sw" style="background:${OBJ[c] ?? tileColor(c)}"></span>${t.name.replace(' (setkání)', '')}`;
+  b.onclick = () => selectTile(c);
+  palette.appendChild(b);
+}
+function selectTile(c) {
+  tile = c;
+  palette.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tile === c));
+}
+document.querySelectorAll('[data-tool]').forEach((b) => b.onclick = () => {
+  tool = b.dataset.tool;
+  document.querySelectorAll('[data-tool]').forEach((o) => o.classList.toggle('on', o === b));
+});
+document.querySelectorAll('[data-size]').forEach((b) => b.onclick = () => {
+  size = Number(b.dataset.size);
+  document.querySelectorAll('[data-size]').forEach((o) => o.classList.toggle('on', o === b));
+});
+
+// --- kreslení mapy
+function draw() {
+  canvas.width = W * cell;
+  canvas.height = H * cell;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) drawCell(x, y);
+  }
+  if ($('showGrid').checked && cell >= 8) {
+    ctx.strokeStyle = '#0000001f';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x++) { ctx.moveTo(x * cell + 0.5, 0); ctx.lineTo(x * cell + 0.5, H * cell); }
+    for (let y = 0; y <= H; y++) { ctx.moveTo(0, y * cell + 0.5); ctx.lineTo(W * cell, y * cell + 0.5); }
+    ctx.stroke();
+    // Silnější čára po 10 polích (orientace podle souřadnic).
+    ctx.strokeStyle = '#00000055';
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 10) { ctx.moveTo(x * cell + 0.5, 0); ctx.lineTo(x * cell + 0.5, H * cell); }
+    for (let y = 0; y <= H; y += 10) { ctx.moveTo(0, y * cell + 0.5); ctx.lineTo(W * cell, y * cell + 0.5); }
+    ctx.stroke();
+  }
+  if ($('showZones').checked) drawZones();
+  if ($('showBuildings').checked) drawBuildings();
+  updateCount();
+}
+
+function drawCell(x, y) {
+  const c = rows[y][x];
+  ctx.fillStyle = tileColor(c);
+  ctx.fillRect(x * cell, y * cell, cell, cell);
+  if (OBJ[c]) {
+    ctx.fillStyle = OBJ[c];
+    ctx.beginPath();
+    ctx.arc((x + 0.5) * cell, (y + 0.5) * cell, cell * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Změněné pole: jen malá bílá tečka uprostřed, barva terénu zůstává stejná jako v paletě.
+  if ($('showChanges').checked && c !== original[y][x] && cell >= 6) {
+    ctx.fillStyle = '#ffffffd0';
+    const s = Math.max(2, Math.round(cell / 5));
+    ctx.fillRect(Math.round((x + 0.5) * cell - s / 2), Math.round((y + 0.5) * cell - s / 2), s, s);
+  }
+}
+
+function drawBuildings() {
+  ctx.font = `${Math.max(11, Math.min(16, cell * 1.1))}px Georgia`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const b of GREENVALE_MAP.buildings ?? []) {
+    ctx.fillStyle = '#3a1e10cc';
+    ctx.fillRect(b.x * cell, b.y * cell, b.width * cell, b.height * cell);
+    ctx.strokeStyle = '#e8c47a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x * cell + 1, b.y * cell + 1, b.width * cell - 2, b.height * cell - 2);
+    if (b.door) {
+      ctx.fillStyle = '#ffd84a';
+      ctx.fillRect((b.door.x + 0.2) * cell, (b.door.y + 0.2) * cell, cell * 0.6, cell * 0.6);
+    }
+    if (cell >= 9) {
+      ctx.fillStyle = '#fff4d6';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      const cx = (b.x + b.width / 2) * cell;
+      const cy = (b.y + b.height / 2) * cell;
+      ctx.strokeText(b.name, cx, cy);
+      ctx.fillText(b.name, cx, cy);
+    }
+  }
+}
+
+function drawZones() {
+  for (const z of GREENVALE_MAP.encounterZones ?? []) {
+    ctx.strokeStyle = '#ff9a3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(z.x0 * cell, z.y0 * cell, (z.x1 - z.x0 + 1) * cell, (z.y1 - z.y0 + 1) * cell);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffcf9a';
+    ctx.font = '14px Georgia';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${z.name} (úr. ${z.level?.[0]}–${z.level?.[1]})`, z.x0 * cell + 4, z.y0 * cell + 12);
+  }
+}
+
+// --- úpravy
+function setCell(x, y, c, batch) {
+  if (x < 0 || y < 0 || x >= W || y >= H || rows[y][x] === c) return;
+  batch.push([x, y, rows[y][x], c]);
+  rows[y][x] = c;
+  drawCell(x, y);
+}
+function paintAt(x, y, c, batch) {
+  const r0 = -Math.floor((size - 1) / 2);
+  for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) {
+    const px = x + r0 + dx, py = y + r0 + dy;
+    setCell(px, py, c === null ? original[py]?.[px] : c, batch);
+  }
+}
+function fillAt(x, y, c, batch) {
+  const from = rows[y][x];
+  if (from === c) return;
+  const stack = [[x, y]];
+  const seen = new Set();
+  while (stack.length) {
+    const [px, py] = stack.pop();
+    const key = px + ',' + py;
+    if (seen.has(key) || px < 0 || py < 0 || px >= W || py >= H || rows[py][px] !== from) continue;
+    seen.add(key);
+    setCell(px, py, c, batch);
+    stack.push([px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1]);
+  }
+}
+function commit(batch) {
+  if (!batch.length) return;
+  undoStack.push(batch);
+  if (undoStack.length > 200) undoStack.shift();
+  redoStack.length = 0;
+  save();
+  draw();
+}
+function applyBatch(batch, reverse) {
+  for (const [x, y, before, after] of reverse ? [...batch].reverse() : batch) rows[y][x] = reverse ? before : after;
+  save();
+  draw();
+}
+function edits() {
+  const out = {};
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (rows[y][x] !== original[y][x]) out[`${x},${y}`] = rows[y][x];
+  return out;
+}
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify({ updated: new Date().toISOString(), edits: edits() }));
+    localStorage.setItem(HISTORY, JSON.stringify({ undo: undoStack.slice(-100), redo: redoStack.slice(-100) }));
+  } catch { /* bez úložiště */ }
+}
+function updateCount() {
+  const n = Object.keys(edits()).length;
+  $('changeCount').textContent = n ? `Změněno polí: ${n}` : 'Zatím beze změn.';
+  $('undo').disabled = !undoStack.length;
+  $('redo').disabled = !redoStack.length;
+}
+function toast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => (el.style.display = 'none'), 2200);
+}
+
+// --- myš
+let drawing = null;
+const cellAt = (e) => {
+  const r = canvas.getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left) / cell), Math.floor((e.clientY - r.top) / cell)];
+};
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('pointerdown', (e) => {
+  const [x, y] = cellAt(e);
+  if (x < 0 || y < 0 || x >= W || y >= H) return;
+  const erase = e.button === 2;
+  if (!erase && tool === 'pick') { selectTile(rows[y][x]); return; }
+  const batch = [];
+  if (!erase && tool === 'fill') { fillAt(x, y, tile, batch); commit(batch); return; }
+  drawing = { batch, erase, last: [x, y] };
+  canvas.setPointerCapture(e.pointerId);
+  paintAt(x, y, erase ? null : tile, batch);
+});
+canvas.addEventListener('pointermove', (e) => {
+  const [x, y] = cellAt(e);
+  const c = rows[y]?.[x];
+  if (c !== undefined) {
+    const t = TILE_BY_CHAR.get(c);
+    const b = (GREENVALE_MAP.buildings ?? []).find((q) => x >= q.x && x < q.x + q.width && y >= q.y && y < q.y + q.height);
+    const was = c !== original[y][x] ? ` (ve hře: ${TILE_BY_CHAR.get(original[y][x])?.name})` : '';
+    $('status').textContent = `x ${x}, y ${y} · ${t?.name ?? c}${was}${b ? ' · ' + b.name : ''}`;
+  }
+  if (drawing) {
+    // Rychlý tah: dokreslit všechna pole mezi minulou a současnou pozicí (bez mezer).
+    const [lx, ly] = drawing.last;
+    const steps = Math.max(Math.abs(x - lx), Math.abs(y - ly));
+    for (let i = 1; i <= steps; i++) {
+      paintAt(Math.round(lx + ((x - lx) * i) / steps), Math.round(ly + ((y - ly) * i) / steps), drawing.erase ? null : tile, drawing.batch);
+    }
+    drawing.last = [x, y];
+  }
+});
+const stop = () => { if (drawing) { commit(drawing.batch); drawing = null; } };
+canvas.addEventListener('pointerup', stop);
+canvas.addEventListener('pointercancel', stop);
+
+// --- ovládání
+function zoom(delta) {
+  const cx = (view.scrollLeft + view.clientWidth / 2) / cell;
+  const cy = (view.scrollTop + view.clientHeight / 2) / cell;
+  cell = Math.max(4, Math.min(28, cell + delta));
+  draw();
+  view.scrollLeft = cx * cell - view.clientWidth / 2;
+  view.scrollTop = cy * cell - view.clientHeight / 2;
+}
+$('zoomIn').onclick = () => zoom(3);
+$('zoomOut').onclick = () => zoom(-3);
+view.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); zoom(e.deltaY < 0 ? 2 : -2); } }, { passive: false });
+['showBuildings', 'showZones', 'showChanges', 'showGrid'].forEach((id) => $(id).onchange = draw);
+$('undo').onclick = () => { const b = undoStack.pop(); if (b) { redoStack.push(b); applyBatch(b, true); } };
+$('redo').onclick = () => { const b = redoStack.pop(); if (b) { undoStack.push(b); applyBatch(b, false); } };
+document.addEventListener('keydown', (e) => {
+  if (!e.ctrlKey) return;
+  if (e.key === 'z') { e.preventDefault(); $('undo').click(); }
+  if (e.key === 'y') { e.preventDefault(); $('redo').click(); }
+});
+$('copy').onclick = async () => {
+  const text = JSON.stringify({ region: 'Greenvale', edits: edits() });
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch { /* zkusit náhradní způsob */ }
+  if (!ok) {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(area);
+    area.select();
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    area.remove();
+  }
+  toast(ok ? `Zkopírováno ${Object.keys(edits()).length} změněných polí.` : 'Schránka není dostupná – úpravy jsou uložené v prohlížeči, Claude si je přečte sám.');
+};
+// Zahodit vše: první klik se zeptá přímo na tlačítku (okno confirm() panel prohlížeče neukáže),
+// druhý klik do 4 s potvrdí. I pak jde akci vrátit tlačítkem Zpět.
+let resetArmed = null;
+$('reset').onclick = () => {
+  const btn = $('reset');
+  if (!resetArmed) {
+    btn.textContent = 'Opravdu?';
+    btn.classList.add('on');
+    resetArmed = setTimeout(() => { resetArmed = null; btn.textContent = 'Zahodit vše'; btn.classList.remove('on'); }, 4000);
+    return;
+  }
+  clearTimeout(resetArmed);
+  resetArmed = null;
+  btn.textContent = 'Zahodit vše';
+  btn.classList.remove('on');
+  const batch = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (rows[y][x] !== original[y][x]) batch.push([x, y, rows[y][x], original[y][x]]);
+  if (!batch.length) { toast('Není co zahodit.'); return; }
+  for (const [x, y, , a] of batch) rows[y][x] = a;
+  commit(batch);
+  toast('Úpravy zahozené – tlačítkem Zpět je vrátíš.');
+};
+
+// Start: celá oblast se vejde do okna.
+cell = Math.max(4, Math.floor(Math.min(view.clientWidth / W, view.clientHeight / H)));
+draw();
+window.mapEditor = { edits, rows: () => rows.map((r) => r.join('')) };
+</script>
+</body>
+</html>

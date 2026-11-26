@@ -104,7 +104,30 @@ const SITE_ROWS = [
   // Záhony statku: kultivované, obnova 10 min, bez vedlejších a vzácných nálezů, poloviční XP.
   ['Z01', 'Záhon statku – Léčivé byliny', 'Greenvale', 'cultivated', 'healing_herbs', null],
   ['Z02', 'Záhon statku – Čistící byliny', 'Greenvale', 'cultivated', 'cleansing_herbs', null],
-  ['Z03', 'Záhon statku – Poutnický tymián', 'Greenvale', 'cultivated', 'wayfarer_thyme', null]
+  ['Z03', 'Záhon statku – Poutnický tymián', 'Greenvale', 'cultivated', 'wayfarer_thyme', null],
+  // Zahrádky domů v Greenvale (bylinky do úrovně 10).
+  ['G01', 'Zahrádka u domu', 'Greenvale', 'meadow', 'healing_herbs', 'cleansing_herbs'],
+  ['G02', 'Zahrádka u domu', 'Greenvale', 'forest', 'forest_sage', 'healing_herbs'],
+  ['G03', 'Zahrádka Řemeslné dílny', 'Greenvale', 'wetland', 'cleansing_herbs', 'healing_herbs'],
+  ['G04', 'Zahrádka Řemeslné dílny', 'Greenvale', 'forest', 'bitter_root', 'forest_sage'],
+  ['G05', 'Zahrádka u domu', 'Greenvale', 'meadow', 'healing_herbs', 'bitter_root'],
+  ['G06', 'Zahrádka u domu', 'Greenvale', 'shade', 'blue_herbs', 'cleansing_herbs'],
+  ['G07', 'Zahrádka Lovecké chaty', 'Greenvale', 'forest', 'bitter_root', 'healing_herbs'],
+  ['G08', 'Zahrádka u domu', 'Greenvale', 'meadow', 'wayfarer_thyme', 'healing_herbs'],
+  ['G09', 'Zahrádka u domu', 'Greenvale', 'wetland', 'cleansing_herbs', 'blue_herbs'],
+  ['G10', 'Zahrádka Rybářské chaty', 'Greenvale', 'shade', 'blue_herbs', 'mat_vodni_kvet'],
+  ['G11', 'Zahrádka u domu', 'Greenvale', 'forest', 'forest_sage', 'bitter_root'],
+  ['G12', 'Zahrádka u domu', 'Greenvale', 'meadow', 'healing_herbs', 'wayfarer_thyme'],
+  // Bylinková louka u statku (jedna velká ohrazená louka, do úrovně 10).
+  ['L01', 'Bylinková louka', 'Greenvale', 'meadow', 'healing_herbs', 'cleansing_herbs'],
+  ['L02', 'Bylinková louka – mokřina', 'Greenvale', 'wetland', 'cleansing_herbs', 'blue_herbs'],
+  ['L03', 'Bylinková louka – stín', 'Greenvale', 'shade', 'blue_herbs', 'bitter_root'],
+  ['L04', 'Bylinková louka – remízek', 'Greenvale', 'forest', 'bitter_root', 'forest_sage'],
+  ['L05', 'Bylinková louka', 'Greenvale', 'meadow', 'forest_sage', 'healing_herbs'],
+  ['L06', 'Bylinková louka', 'Greenvale', 'meadow', 'wayfarer_thyme', 'healing_herbs'],
+  ['L07', 'Bylinková louka – tůňka', 'Greenvale', 'wetland', 'mat_vodni_kvet', 'cleansing_herbs'],
+  ['L08', 'Bylinková louka – remízek', 'Greenvale', 'forest', 'mat_svitici_list', 'forest_sage'],
+  ['L09', 'Bylinková louka – kamení', 'Greenvale', 'mountain', 'mountain_root', 'bitter_root']
 ];
 
 export const HERB_SITES = SITE_ROWS.map(([id, name, region, biome, main, side]) => {

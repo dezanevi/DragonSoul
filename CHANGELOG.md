@@ -25,7 +25,319 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
 
 ## Verze 0.1 – rozpracováno
 
+### Výkon – svět Greenvale
+Změřeno v Greenvale u náměstí: čas snímku 3,28 → 2,42 ms (−26 %), vykreslení 2,78 → 2,09 ms.
+- **Grafika mimo záběr se nekreslí** (`WorldScene.cullRect / cullPoint`, v `cullGround`):
+  - značky nalezišť (byliny, těžba, rybaření), vstupní kruhy budov a značky NPC;
+  - ploché dlaždice (most, molo, vodopád) a stěny lomu.
+
+  Phaser grafiku neořezává a každý snímek ji přepočítává i daleko mimo obrazovku. Kreslicích
+  příkazů grafik za snímek je teď 4 402 místo 29 188 (−85 %).
+- **Méně bodů na elipsu** (`ELLIPSE_POINTS = 20` místo 32) u značek a kruhů. Vzhled je stejný.
+- **Ladicí mřížka (G) se postaví až při prvním zapnutí.** Dřív vznikala při každém startu světa:
+  576 skrytých textů a grafika se 475 tisíci příkazy. Ve světě jsou teď 4 texty místo 580
+  a textur je o 576 méně (paměť a rychlejší start světa).
+
+### Přidáno – Kniha kouzel
+- **Kniha kouzel v kartě hrdiny** (`scenes/SpellbookScene.js`, přepsaná stará anglická scéna).
+  Otevírá ji tlačítko „Kniha kouzel (K)“ vpravo od Zavřít nebo klávesa K. Klik na školu magie
+  otevře knihu rovnou na stránce té školy (dřív se ukázal jen malý seznam).
+  - **Vlevo** je šest škol s úrovní a počtem kouzel; zamčené školy jsou označené. Šipky
+    nahoru / dolů přepínají školu.
+  - **Vpravo** jsou kouzla školy seřazená jako v souboji: útočná podle úrovně školy, potom
+    podpůrná, s nápovědou, jak se v souboji sesílají.
+  - U každého kouzla je cena many (s talenty), síla včetně skutečného poškození hrdiny
+    („teď ~N“), cíle (1 / 2 / 3 / plocha 3×3 / všichni / celá parta), živelný efekt se šancí,
+    popis a stav („umíš“, „od úrovně N“, „zamčená škola“).
+  - Esc nebo K zavře knihu a karta hrdiny pokračuje.
+
+### Změněno – kouzla hrdiny
+Přepracovaná kouzla (`data/spells.json`, `BattleScene.castSelectedSpell / spellTargets /
+castSupportSpell`): každá škola má svou roli, je 39 kouzel (11 nových). Stávající kouzla si
+nechala id, takže uložené hry fungují dál a nová kouzla se do knihy doplní podle úrovně školy.
+- **Oheň – silné útoky:**
+  - Ohnivá jiskra se šancí na spálení;
+  - Plamenná stěna na 2 cíle;
+  - nová **Ohnivá koule s plochou 3 × 3 pole**: zasáhne cíl a všechny nepřátele kolem něj, bez
+    mřížky cíl a jeho sousedy v řadě (`spell.area`);
+  - Meteorický úder je nejsilnější zásah jednoho cíle;
+  - Pekelný žár zasáhne všechny nepřátele.
+- **Voda – léčení:**
+  - Léčivý pramen (12 HP);
+  - nové **Osvěžující déšť** (celá parta), **Pramen života** (28 HP a odstranění negativních
+    efektů) a **Příliv obnovy** (celá parta 20 HP a odstranění efektů);
+  - útočná kouzla mají šanci zmrazit, Mrazivá vlna zasáhne 2 cíle.
+- **Země – obrana vlastních monster:**
+  - Kamenná kůže;
+  - nové **Kamenná hradba** (+3 Zbroj celé partě), **Žulový štít** (+7 Zbroj na 3 tahy) a
+    **Pevnost hor** (+6 Zbroj celé partě na 3 tahy);
+  - Kamenný výbuch zasáhne 2 cíle, Zlom země všechny nepřátele se šancí na omráčení.
+- **Vzduch – rychlost:**
+  - Zadní vítr;
+  - nové **Vichřice v zádech** (+3 Tempo celé partě) a **Bouřný spěch** (+7 Tempo);
+  - nová **Bouře** zasáhne všechny nepřátele se šancí na paralýzu, Hromový zásah také paralyzuje.
+- **Světlo:**
+  - nové **Světlo naděje** (+3 Síla celé partě);
+  - Pád hvězdy zasáhne 3 cíle.
+- **Temnota – prokletí:**
+  - Stínový šíp a Trhlina duše mají šanci prokletí;
+  - Paprsek propasti zasáhne všechny nepřátele.
+- **Živelné bonusy:** účinnost podle živlu cíle už ve hře byla a platí pro každý zasažený cíl.
+  Nově přibyly živelné stavové efekty: oheň = spálení, voda = zmrazení, země = omráčení,
+  vzduch = paralýza, temnota = prokletí.
+- Kniha kouzel v souboji ukazuje počet cílů nebo plochu a šanci na efekt. Karta Hrdina a Kniha
+  kouzel ukazují „celé party / 3 cíle / plocha 3×3 / všichni nepřátelé“.
+- Hláška o zkušenostech školy je česky („Magie Oheň +5 EXP“) a na nejvyšší úrovni už nepíše „+0 EXP“.
+
+### Opraveno – čitelnost písma v nižších rozlišeních
+Příčina: hra kreslí obraz 1920 × 1080 a prohlížeč ho zmenšoval na velikost okna „nejbližším
+pixelem“ (`image-rendering: pixelated`, `pixelArt: true`). Z tenkých tahů písmen tak vypadávaly
+celé řádky pixelů. Při 1280 × 720 se třeba „máš 99“ četlo jako „máš 93“.
+- **Vyhlazené zmenšení obrazu** (`index.html`, `main.js`): plátno se zmenšuje s vyhlazením. Při
+  1920 × 1080 se nic nemění.
+- **Vyhlazené textury písma** (`main.js`, `smoothTextTextures`): texty se do obrazu zmenšují
+  s vyhlazeným filtrem. Sprity, mapa a ikony zůstávají ostré (pixel art).
+- **Světlejší šedá** (`main.js`, `READABLE_GREYS`): 15 málo kontrastních šedých a šedomodrých
+  odstínů textů je zhruba o čtvrtinu světlejších a zachovávají si odstín. Platí pro všechny texty
+  (při vytvoření i `setColor`), včetně nápisů zakázaných tlačítek. Nejvíc je to vidět v Řemeslech
+  (popisy receptů, „máš N“, původ receptu).
+
+### Přidáno – souboj bez mřížky
+- **Nová volba před bojem „Bez mřížky (R)“** vedle Bojovat (na mřížce), Simulovat a Útěk
+  (`BattleScene.enterSimpleMode`). Tahový souboj zůstává se stejným pořadím tahů, ale:
+  - nikdo nechodí a všechny vzdálenosti se počítají jako „vedle sebe“ (`BattleScene.dist`),
+    takže každá schopnost i podpora dosáhne na každý cíl;
+  - útok na dálku nemá postih −70 %;
+  - jednotky stojí ve dvou řadách proti sobě, bez políček, desky a překážek. Zvýraznění je jen záře
+    pod jednotkami.
+  - Nepřátelé přednostně útočí na monstra s útoky na dálku (kouzla), mezi nimi na nejzraněnější
+    (`chooseSimpleTarget`). Když žádné takové není, rozhodují jako dřív.
+
+  Souboj na mřížce zůstává beze změny.
+
+### Opraveno – jméno hrdiny
+- **V souboji už se neobjevuje „Arion“** místo jména hráče (`BattleScene.heroName / heroVerb`).
+  Opravené texty:
+  - tlačítko „Kouzlit (jméno)“ a nápověda ke kouzlům;
+  - hlášky o seslání kouzla, o kouzlu už použitém v tomto kole, o útěku, o porážce a o novém postupu
+    na úroveň;
+  - souhrn simulace („bez tvých kouzel“).
+
+  Sloveso se řídí pohlavím postavy (seslal / seslala, upadl / upadla, „Přinesou ho / ji“).
+  „Arion“ zůstává jen jako výchozí jméno, když hráč žádné nezadá.
+
+### Přidáno – Jména
+- **Společné okno pro zadání jména** (`ui/nameInput.js`): píše se na klávesnici, Enter potvrdí,
+  Esc zruší. Tlačítko vpravo vrátí výchozí jméno. Klávesnice karty je během psaní vypnutá, takže
+  písmena nespouštějí zkratky. Používá ho pojmenování monstra po chycení v souboji (stejné
+  chování jako dřív) i obě nová přejmenování.
+- **Přejmenování monstra kdykoli po chycení:** v kartě Party je tlačítko ✎ hned za jménem
+  monstra. Prázdné jméno nebo „Jméno druhu“ vrátí jméno druhu. Dlouhé jméno se zúží, aby
+  nepřekrylo živel.
+- **Přejmenování vlastního obchodu:** v kartě obchodu je tlačítko ✎ za názvem, nejvíc 28 znaků,
+  „Původní název“ vrátí Zelený dům u náměstí. Nový název se ukazuje v kartě, v nadpisu interiéru,
+  ve výzvě u dveří („E: vstoupit – …“) a v přehledu Diplomacie.
+
+### Přidáno – Diplomacie (1. etapa: vlastní obchod)
+Podle dokumentu „Diplomacie“ (`data/diplomacy.js`, `systems/DiplomacySystem.js`, `scenes/OwnShopScene.js`).
+- **Dovednost Diplomacie** (úroveň 1–100, třídy I–VI, křivka XP jako u ostatních profesí). Na kartě
+  Profese má přehled: úroveň, XP, zdroje XP, odemykání funkcí a vlastní provozovny.
+- **XP Diplomacie** jde ze tří zdrojů:
+  - **obchody:** každý předmět má vlastní XP hodnotu podle ceny a vzácnosti. Platí to pro prodej
+    NPC, nákup u NPC (polovina) a prodej ve vlastním obchodě. Počítá se položka, ne kus.
+    Opakovaný obchod stejného předmětu během herního dne slábne (×0,8, nejméně 10 %).
+    Bezcenné předměty XP nedávají;
+  - **úkoly:** 50 XP, jednorázově za každý splněný úkol;
+  - **nové rozhovory s NPC:** 10 XP. Stejný rozhovor znovu nedá nic.
+- **Zelený dům u náměstí** (`greenvale_house_w1`) má dveře na JZ (68, 64):
+  - pod Diplomacií 10 má šedý zamčený vstupní kruh, od úrovně 10 fialový;
+  - koupě je u starosty Edrica: po rozhovoru nabídne dům v okně s volbou;
+  - cena je zatím 1 zlatý (ekonomika se doladí později), typ Malý obchod (16 slotů, ~30 zákazníků
+    za herní den, provoz 2 zl / den).
+- **Vlastní obchod:** interiér s prodejním pultem, skladem a účetní knihou, které otevírají kartu
+  obchodu se třemi záložkami:
+  - **Prodej:** 16 slotů, cena (−10 / −1 / +1 / +10, tržní cena), hodnocení ceny, popularita,
+    regionální poptávka, nasycení trhu, odhad prodeje za den a XP za prodej;
+  - **Sklad:** přesun z inventáře a zpět, nabídnutí do slotu;
+  - **Statistiky:** tržby, náklady, čistý provozní příjem, zákazníci, obchody, reputace, poslední
+    dny, nejprodávanější a neprodávané zboží, historie obchodů.
+
+  Objednávky a Zaměstnanci jsou zamčené pro další etapu. Obchod jde zavřít a otevřít.
+- **Simulace prodeje:**
+  - herní den trvá 24 minut hraní, prodej běží jen při zapnuté hře (žádný offline příjem);
+  - každých 10 s přicházejí zákazníci 7 typů podle profilu Greenvale (rozpočet, preference
+    kategorií, tolerance ceny), každý s 1–2 potřebami. Nakupuje podle vzorce z dokumentu:
+    popularita × preference × region × (hodnota/cena)² × nasycení;
+  - nasycení trhu sdílejí všechny obchody v oblasti a obnovuje se podle rychlosti spotřeby;
+  - reputace 0–100 mění návštěvnost (férové ceny, rozmanitost a obchody ji zvedají, předražení ji
+    snižuje) a nový stupeň reputace dá jednorázově XP;
+  - provoz se platí na konci dne. Bez peněz se obchod zavře se zachovaným zbožím a otevře se po
+    úhradě dluhu.
+
+  Popularita a ekonomická kategorie se počítají pro všech 850 předmětů. Klíče a příběhové
+  předměty prodat nejde.
+
+### Změněno – mapa Greenvale
+- **Nové rozložení oblasti Greenvale z editoru** (`tools/greenvale-region.mjs`, úpravy
+  v `tools/greenvale-region-edits.json`). Louky a cesty jsou podle editoru, oblast se rozrostla
+  na západ, na jih a na jihovýchod. Detaily doladil skript:
+  - osamocená pole (missclick) jsou podle sousedů;
+  - nová pobřeží a okraj mapy lemují útesy, kromě jezírka u x 36, y 111;
+  - nově nakreslená tráva mimo cesty, louky, budovy a naleziště je zalesněná;
+  - kde by les uzavřel louku nebo naleziště, vede k nim travnatá stezka (vše je dosažitelné ze spawnu).
+
+  Rybaření u jezírka (36, 109) je nové místo Lesní řeka (úr. 10). V lomu je 12 nalezišť
+  úr. 8–18: Krystalová puklina ×6, Cínová žíla ×3, Ametystová dutina ×3. Divoké byliny H01–H07
+  jsou rozmístěné náhodně po oblasti. Dvě vzácné mýtiny (H12), které skončily ve vodě
+  a v útesu, jsou přesunuté hluboko do lesa. Zóny setkání pokrývají všechny louky:
+  - původní zóny jdou za svými loukami;
+  - 7 nových luk má úroveň podle vzdálenosti od vesnice (8–16), např. Větrná pláň,
+    Louka u jezírka nebo Odlehlá východní pláň.
+
+  18 dekorací na vodě či ve stromech je pryč.
+- **Brána do Verdant Forest** je přesunutá na konec dlážděné cesty na jihovýchodním okraji
+  (98, 121, `HAND_MAP_EXITS` v `data/maps/index.js`). Původní místo (93, 97) je po novém rozložení v lese.
+- **Odkaz na editor oblasti** je v dokumentu Zadání práce (sekce Nástroje), aby šla mapa upravovat kdykoli.
+- **Výkon: stromy mimo obrazovku se nekreslí** (`WorldScene.cullGround`). Les má ~3 000 objektů
+  a v záběru jich bývá jen 50–300.
+- **Editor oblasti Greenvale** (`map-editor.html`, při běhu hry na `/map-editor.html`): 2D pohled
+  shora na celou oblast načtený přímo z `data/maps/greenvale.js`. Terén se kreslí štětcem
+  (velikost 1–3), výplní nebo se nabírá kapátkem. Pravé tlačítko vrací pole do stavu ve hře
+  a funguje Zpět / Znovu. Zobrazit jde budovy s dveřmi, zóny setkání, zvýraznění změn
+  a mřížku. Úpravy se ukládají v prohlížeči (`greenvale-map-editor`) a do hry se zapracují
+  na požádání.
+- **Průchozí cesta za radnicí** (`collisionAspect` u budovy v `data/maps/greenvale.js`,
+  `WorldScene.fitBuildingCollision`). Obrázek radnice je mnohem větší než její půdorys v mapě
+  a jeho okraj vlevo dole (stín) táhl kolizi o víc než pole na západ, přes dlážděnou cestu
+  mezi radnicí a modrým domem. Radnice teď má vlastní poměr stran kolize (2 : 3): cesta na
+  západě i dokola za budovou je průchozí, zdi blokují a dveře zůstávají volné.
+- **Lom Greenvale** (`tools/greenvale-quarry.mjs`, `WorldScene.groundLift / isQuarry /
+  drawQuarryWalls`, štěrk v `world/terrainTiles.js`): jižně pod Bylinkovou loukou zahloubený
+  lom – dno leží o 40 px níž, po zadních okrajích vrstvené skalní stěny, sjezdy po cestě
+  z jižní cesty a od statku (cesta mírně klesá), hrdina plynule sestupuje. Zem je nová
+  vygenerovaná dlaždice štěrku (kamínky, stíny, vrstvené boky), u stěn ve stínu; balvany
+  po okrajích. 12 nalezišť do úr. 10: Měděná žíla ×2, Uhelná sloj ×2, Žulový lom ×2,
+  Železná žíla ×2, Křemenná žíla, Solná skála, Pyritová žíla, Krystalová puklina; uprostřed
+  mýtina se střídavou vzácnou Cínovou žílou, Skrytá žíla a meteorit zůstávají.
+- **Louky setkání s vlastními monstry a úrovněmi** (`encounterZones` v `data/maps/greenvale.js`,
+  `encounterZoneAt` v `data/maps/index.js`, `BattleScene.createWildMonsters`): úroveň monster
+  už neurčuje úroveň hrdiny, ale louka. Všechny louky jsou otevřené; při vstupu se ukáže
+  název a úrovně, v okně setkání „Setkání – název louky“.
+  - Louka za Loveckou chatou úr. 1–3 (Dire Wolf, Wild Boar)
+  - Severní pastvina úr. 3–5 (Wild Boar, Goblin, Forest Sprite)
+  - Jižní pláně úr. 5–7 (Goblin, Giant Spider, Zephyr Hound)
+  - Lesní paseka (nová, jih) úr. 7–9 (Giant Spider, Galecrest Lynx, Briarbound Wisp)
+  - Skalní stráň (nová, severovýchod) úr. 8–10 (Hobgoblin, Cave Worm, Cave Bear, Zephyr Hound)
+  - Útes ztracených (nová, jihovýchodní poloostrov) úr. 14–16, vzácná (Thornroot Stag,
+    Earth Elemental, Mossveil Lynx)
+- **Cesty a hustý les** (`tools/greenvale-wilds.mjs`): odbočky cest ke všem loukám, lesní pásy
+  mezi loukami s průchodem; mimo cesty, louky, budovy a naleziště je hustý les (~460 stromů),
+  takže se chodí po cestách. Dveře, naleziště a louky ověřené jako dostupné.
+- **Skryté mýtiny se vzácnými nalezišti** (`rareSpots`, `activeRareSpots`): 5 mýtin v lese
+  s neoznačenou stezkou; vždy 2 mají vzácné naleziště (Bouřková kapradina úr. 16, Ametystová
+  dutina úr. 18, Cínová žíla, Lesní řeka), výběr se mění každé 3 hodiny.
+- Zkušební mřížka všech nalezišť Těžby na jihu je pryč (lom přijde s kartou Těžba).
+- Zkušební rybářská místa ostatních oblastí (úr. 20–90) u Rybářské chaty jsou pryč; zůstal
+  rybník, molo a Lesní řeka (do úr. 10).
+
+### Grafika
+- **Obrázky monster z listu „Fantasy RPG Bestiář: 16 Příšer“** (`MONSTER_STILL_SHEETS`
+  v `data/monsterSheets.js`, `prepareStillSheets` v `battle/monsterAnimations.js`): statický
+  list 2 × 8 monster, která se najdou podle mezer mezi nimi. Když se dotýkají, rozdělí se
+  v nejužším místě. Vlastní obrázek dostalo 14 druhů, které dosud měly kreslený model:
+  Wild Boar, Cave Slime, Sporeback Toad, Crystal Spider, Sunshard Beetle, Sphinx, Prism Herald,
+  Comet-tail Fox, Dawncoil Serpent, Star Seraph, Stormneedle Manta, Whistlewing Bat, Succubus
+  a Pit Fiend. **Dire Wolf** má nový obrázek ve stylu ostatních monster místo vlastní animace.
+  Bez obrázku zůstává jen Ignaroth: lávový golem v listu se k ohnivému drakovi nehodí.
+- **Nové ikony předmětů (icons11)**: list „Fantasy RPG ikony surovin a výbavy“ rozřezaný po
+  řádcích (`tools/split-icons-grid.ps1`) na 87 ikon v `public/assets/items/icons`, záznam
+  v `data/itemIcons.json`. Vlastní ikonu místo společné zástupné dostalo 84 předmětů
+  (mapa `ICONS11` v `data/items.js`): 12 bylin, 17 kovů a kovářských surovin, 20 zbraní,
+  8 výztuh, 2 srpy, sůl, mouka, zelenina, 13 druhů masa a 9 kuchyňských meziproduktů.
+  Zbývajících 336 výrobků bez vlastní ikony je v dokumentu „Chybějící ikony“.
+- **Ikony výrobků (icons12–15)**: listy „Atlas fantasy alchymistických ikon“ (106), „Atlas
+  fantasy ikon předmětů RPG“ (74), „Fantazijní mřížka jídelních ikon“ (102) a „Ikonová sada
+  fantasy vybavení a surovin“ (51) rozřezané a přiřazené (`RECIPE_ICONS` v `data/items.js`):
+  vlastní ikonu má 333 výrobků Vaření, Alchymie, Kovářství a Řemeslnictví. Bez ikony zbývá
+  Korálovka na vodním květu, Makrela na ledové mátě a Elixír větrné bouře.
+
+### Změněno
+- **Reset po porážce, léčitelka a pokoj v hostinci** (`InteriorScene.js`, `BattleScene.js`):
+  - Liora se přestěhovala z hostince do Domu léčitelky (dřívější dům se zrzavou sousedkou
+    u náměstí, na mapě „Dům léčitelky“). Léčí zdarma; přesouvání monster mezi partou
+    a úschovnou je teď u ní.
+  - V hostinci je místo ní Výčepní: pokoj na noc za 15 zlata – stejné vyléčení (mana,
+    monstra v partě i v úschovně).
+  - Hostinec a Dům léčitelky jsou místa odpočinku: hra si pamatuje poslední navštívené.
+    Po porážce v souboji se hrdina probudí tam, všichni vyléčení, a výčepní / Liora ho
+    přivítá. Bez navštíveného místa je výchozí hostinec.
+- **Karta hrdiny** (`HeroScene.js`, `ui/heroCard/heroPicker.js`):
+  - Pravý klik na slot výbavy otevře okno s předměty pro tento slot z inventáře (ikona,
+    název, bonus); klik = obléct (dosavadní kus jde do inventáře). Obsazený slot má navíc
+    „Sundat“. Bez vhodných předmětů: „Nemáš žádné vybavení.“
+  - Klik na školu kouzel ukáže kouzla školy: mana, poškození / léčení, potřebná úroveň školy
+    a stav (umíš / od úrovně N / nenaučeno / škola zamčená).
+  - Ukazatel úrovně v tlačítkách dovedností je větší (úroveň a procenta, na úr. 100 „max.“).
+  - Okno zavře klik mimo něj nebo Esc. Názvy škol ve stavovém řádku jsou česky.
+- **Testovací hra**: Bestiář je kompletně odemčený (všech 105 druhů pozorovaných).
+- **Výroba – množství**: vlastní množství jde zvolit jen do počtu, který jde ze surovin vyrobit
+  (+, šipka nahoru i Max se zastaví); výběr jiného receptu začíná znovu od 1.
+- **Souboj – kouzla monster a vzhled** (`BattleScene.js`, `battle/battleUi.js`):
+  - Magický útok (kouzlo monstra) se sesílá z místa – monstrum se nehne (hráč i nepřátelé).
+    Plné poškození do 5 polí, dál −70 %.
+  - Přesnost u kouzel nezvyšuje šanci na zásah, ale plný dosah: +1 pole za každých 8 bodů
+    nad 80. U fyzických útoků zůstává +0,5 % k zásahu za bod (i v simulaci a v kartě Party).
+  - Tooltip schopnosti je menší a ukazuje se vedle nabídky útoku (nepřekrývá Kouzlit).
+  - Kouzlit (Arion) je poslední řádek tabulky útoků místo odsazeného panelu.
+  - Vzhled ve stylu zbytku hry: tmavé panely se zlatavým okrajem, tlačítka jako dlaždice
+    karet (zlatý výběr, zlatavý okraj pod myší), písmo karet. Všechny prvky zůstaly.
+- **Bestiář – schopnosti**: detail objeveného druhu má sloupec Schopnosti – startovní
+  schopnost a schopnosti na úrovních 10, 20, 40 a 80 (štítek „start“ / „úr. N“, druh, síla,
+  dosah nebo „na sebe“). Kořist je vedle ve druhém sloupci, pódium a Záznam jsou nižší.
+- **Sběr bylin v Greenvale** (`data/herbalism.js`, `data/maps/greenvale.js`): jen bylinky do úrovně 10.
+  - Zahrádky domů: 12 nových nalezišť G01–G12 (Léčivé a Čistící byliny, Modré byliny, Hořký
+    kořen, Lesní šalvěj, Poutnický tymián) u 8 domů včetně Řemeslné dílny, Lovecké a Rybářské chaty.
+  - Statek: tři rozházené záhony nahradila jedna velká ohrazená Bylinková louka (x 57–68,
+    y 82–86, brány na východ a na jih) – nahoře řada záhonů Z01–Z03, pod ní 9 divokých nalezišť
+    L01–L09 (do úr. 8) a Hustý bylinný porost (úr. 10). Strom uprostřed louky zmizel.
+  - Zkušební naleziště jiných oblastí a vyšších úrovní (H08–H19, Skryté lesní naleziště,
+    Magická zahrada, Prastaré naleziště) z Greenvale zmizela; H03 a H05 se posunula, aby je
+    nezakrývaly domy.
+- **Chůze za budovami**: pole za budovou (sever / západ) se už neblokují – hrdina za budovu
+  dojde a ta zprůsvitní. Kolize budovy sahá dozadu až po půdorys z mapy (dřív jen podle
+  spodní třetiny obrázku, takže hrdina „za budovou“ stál uprostřed domu); přední strana se
+  dveřmi zůstává podle obrázku. Dveře i cesty zůstaly průchozí (`WorldScene.js`).
+- **Hlavní menu**: volby Nová hra, Pokračovat, Nahrát hru a Uložit hru jsou uprostřed obrazovky
+  pod logem (dřív vpravo); výška beze změny (`MenuScene.js`).
+
 ### Přidáno
+- **Obchody s košíkem** (společný `ui/shopCart.js`; obchodník na tržišti, Bylinkářka, Rybář
+  a Hornický mistr – okna rozšířená na 1860 px): třetí sloupec Košík. U Rybáře košík počítá
+  denní poptávku jen do limitu, u Bylinkářky nejde vložit víc, než je denní zásoba.
+  Specializace (Bylinkářka, Hornický mistr) se volí hned, mimo košík. Tlačítka „Do košíku“,
+  „Prodat 1“ a „Prodat vše“ jen vkládají; v košíku je zeleně „+“ co hráč dostane a červeně „−“
+  co prodává, u každého řádku částka a tlačítko „−“. Dole „Celkem“: +N (zeleně), když prodej
+  převýší nákup, jinak −N (červeně). Obchod se provede až „Potvrdit obchod“ (nejdřív prodej,
+  pak nákup), „Vyprázdnit“ košík zahodí. Nákup nad rámec zlata po obchodu nejde vložit.
+- **Měna – ikona mince místo „zl“** (`coinAmount` v `ui/fantasyCard.js`): ceny a zlato v obchodech
+  mají za číslem zlatou minci; ve větách (zprávy, odměny úkolů, Databáze) je „zlata“.
+- **Tutoriálový souboj – světelný bod**: obrazovka je zatmavená a zlatý pulzující rámeček
+  ukazuje, kam kliknout: Air Elemental → útok v nabídce → Kouzla → kouzlo Vzduchu → Air
+  Elemental → Ochočení → Air Elemental. Panel Mága zůstává světlý (`BattleScene.update`).
+- **Kovářství – vysouvací panel sad**: „Zbroje a štíty ›“ nechá kategorie vlevo a vedle vysune
+  úzký panel (Všechny, 11 kovů, Vzácné a kalené). Po výběru se zavře, zvolená sada je v názvu
+  kategorie („Zbroje a štíty: Železo“). Klik mimo panel nebo Esc ho zavře.
+- **HUD – hrdina, mana, XP a účinky** (`src/ui/partyHud.js`): spodní panel je jedna průhledná
+  tabulka – vlevo portrét hrdiny se jménem, úrovní, ukazatelem many a XP, hned vedle „Účinky“
+  s ikonami aktivního jídla, elixíru, ochrany, průzkumných lektvarů a výztuhy (až 8 ikon, při
+  najetí myší název a zbývající souboje / minuty; bez aktivního účinku se rámeček skryje), pak
+  monstra party s HP a XP. Klik na hrdinu otevře kartu Hrdina, klik na monstrum kartu Party
+  s tímto monstrem (rámeček pod myší zezlátne). Volné body talentů hrdiny („★ Volné body
+  talentů: N“, pod myší podtržené s popisem „Otevřít Talenty“) otevřou Talenty; monstrum
+  s volnými tréninkovými body má místo stavu „★ Volné body: N“.
+- **Karta hrdiny – bonusy z výbavy**: u Fyzického a Magického útoku, Obrany, Magické odolnosti
+  a Rychlosti je zeleně „+N“ (hodnota × % z výbavy). Tooltip vypíše, z kterých předmětů a výztuhy
+  bonus je (`gearBreakdown` v `SmithingSystem.js`).
 - **Nové UI všech karet** z rozdělené sady `newui` (`src/ui/newUiKit.js`): při startu hry se z dílů
   přes 9-slice sestaví podklady karet Hrdina (muž i žena), Talenty (barevná i šedá verze), Party
   a Inventář – panely, štítky s nadpisy, popisky a ikony na stejných místech jako dřív, takže
@@ -402,6 +714,95 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
   Krok, jehož předmět hráč už má, se přeskočí (s hotovým výrobkem rovnou „vrať se“).
   Sledování, modrý kruh a modrý „?“ vedou vždy k aktuálnímu kroku. V obchodě je předmět
   pro úkol nahoře, se zlatým rámečkem, „!“ a štítkem „Úkol: máš/potřeba“.
+- Úkoly: značky „!“ a „?“ zmizí hned po přijetí úkolu, splnění cíle (např. Bard) i odevzdání
+  (v interiéru okamžitě, nad budovami ve světě hned po odchodu).
+  - Mág ukáže „!“ Písně větrů až po dokončení úvodního úkolu.
+  - První úkol má bod na louce za Loveckou chatou (32, 56): tečky vedou tam a tam se spustí
+    souboj s Air Elementalem. Jinde na louce do té doby setkání nejsou.
+- **Výroba trvá** ve všech oknech výroby (Vaření, Alchymie, Kovářství, Řemeslnictví):
+  - Kusy se vyrábějí jeden po druhém s ukazatelem průběhu a odpočtem.
+  - Jeden kus trvá 1,2 s + 0,04 s za úroveň receptu (úr. 1 ≈ 1,2 s, úr. 50 ≈ 3,2 s,
+    úr. 100 ≈ 5,2 s), mezivýrobky 60 % této doby.
+  - Esc výrobu přeruší, už vyrobené kusy zůstávají. Doba je vidět v detailu receptu.
+- Kovářství: „Zbroje a štíty ›“ se rozklikne na podfiltry podle kovu (11 sad) a „Vzácné
+  a kalené“. Kategorie Vzácné a kalené zmizela: elementální zbraně jsou ve Zbraních, ostatní
+  vzácné kusy v novém podfiltru.
+- **Kovářství – sady zbrojí podle kovu**:
+  - Jednotlivé zbroje B01–B28 nahradilo 11 kompletních sad: měď, bronz, železo, ocel, horská
+    ocel, černá ocel, mithril, adamantit, orichalk, hvězdný kov a dračí železo.
+  - Každá sada má přilbu, boty, holenice, štít a zbroj, s úrovní od kovu L do L+4
+    (holenice tedy až do Kovářství 95).
+  - Síla roste se stupněm kovu. Kovy mají vlastní zaměření: horská ocel a adamantit Max. HP,
+    černá ocel obranu, mithril rychlost, orichalk magický útok, hvězdný kov magickou odolnost
+    a odolnost světlu, dračí železo Max. HP a odolnost ohni.
+  - Kusy jedné sady mají stejný stupeň ikony.
+  - Elementální vzácné zbroje (kategorie E) zůstávají. Staré kusy B01–B28 se z uložených her
+    odeberou z inventáře i z výbavy.
+- **Esc ve světě otevře Pauzu** místo hlavního menu:
+  - Nabídka: Vrátit se do hry, Uložit hru, Načíst hru (5 slotů s náhledem), Hlavní menu;
+    Nastavení a Vypnout hru jsou zatím šedé (`scenes/PauseScene.js`).
+  - Volba rozlišení a celé obrazovky byla zrušena (nekonzistentní) – platí původní pravidla:
+    hra vyplní okno, nejvýš 1920 px na šířku, 16 : 9.
+- **Ořez monster**: statický obrázek monstra se ze společného listu vyřízne podle skutečného
+  obrysu (hranice snímku v nejužším místě, souvislá plocha monstra) – už není uříznutá hlava,
+  ocas ani křídlo a nepřilepí se kousek sousedního snímku. Chybějících 15 druhů je
+  v dokumentu „Chybějící monstra“.
+- Animace monster jsou globálně vypnuté: všude (souboj, Soul Clash, Party, Bestiář, panel
+  party) je jen první snímek idle. Animace chůze hrdiny zůstává.
+- **Soul Clash – prototyp zjednodušeného souboje** (hlavní menu → Cvičné souboje):
+  - Formace 2 × 3 bez mřížky, jeden rozkaz na monstrum (schopnost, Chránit, Obrana,
+    Prohodit). Bez rozkazu monstrum udělá instinktivní útok za 50 %.
+  - Nepřátelé ukazují záměry (cíl a poškození). Nabíjené útoky (⚡) jde zásahy zlomit, zlomený
+    nepřítel nejedná a dostává +50 %.
+  - Elementální reakce: Bouře (voda → vzduch), Požár (oheň → příroda), Pára (oheň + voda).
+  - Hrdina velí za Soul energii (Jehla větru, Bariéra, Duší úder).
+  - Pořadí akcí je vidět, náhled poškození je přesný a animace mají rychlost 1×, 2× nebo 4×.
+  - Tři cvičné souboje: Tři goblini, Smíšená tlupa, Boss Minotaurus se dvěma fázemi.
+  - Parta je pevná (Dire Wolf, Fire Elemental, Water Nymph, Air Elemental).
+  - Původní souboj se nemění (`scenes/SoulClashScene.js`).
+- **Zrušeno pravidlo o počtu útoků**:
+  - Schopnosti monster nemají omezený počet použití a v souboji ani v simulaci se neodečítají.
+  - Monstrum už neomdlí kvůli vyčerpaným útočným technikám.
+  - Počty použití zmizely ze souboje (nabídka útoku, lišta, tooltipy), z karty Party (místo
+    nich síla útoku) i z panelu party. Staré záznamy v uložených hrách se ignorují.
+  - Recept a předmět Zrcadlo duše (Řemeslnictví F18, obnovoval použití technik) jsou
+    odstraněné. Řemeslnictví má teď 107 receptů, staré kusy v uložených hrách se odeberou.
+- Herní obrazovka má dole **panel party**:
+  - Každé monstrum má rámeček s miniaturou, jménem a úrovní, HP barem (aktuální / max,
+    zelená → žlutá → červená) a počtem zbývajících útoků (součet použití útočných schopností).
+  - Vyčerpané monstrum je šedé s nápisem „Vyčerpáno“.
+  - Panel se překreslí sám při změně údajů a pod otevřenou kartou nebo interiérem se schová
+    (`ui/partyHud.js`).
+- Inventář má tlačítko **Seřadit** (vpravo vedle Zavřít):
+  - Řadí v pořadí filtrů (Zbroj, Materiály, Potiony, Doplňky, Klíče, Ostatní), v kategorii
+    od nejvzácnějšího a pak podle názvu.
+  - Neúplné hromádky stejného předmětu se slijí a prázdná políčka jsou na konci.
+- **Bestiář** je nová karta ve stylu Řemesel (záložka Bestiář):
+  - Vlevo jsou filtry Všechna, Objevená, Ochočená a 7 elementů (objeveno / celkem).
+  - Uprostřed je seznam druhů s obrázkem, neobjevené jsou „???“ s černou siluetou.
+  - Vpravo je detail s animací na pódiu, elementem, vzácností, oblastí a popisem. Pod ním je
+    záznam (pozorováno, ochočeno, poraženo, v partě) a kořist s proklikem do Databáze.
+- Idle animace monster z listů v `public/assets/monsters`: přiřazeno 90 ze 105 druhů
+  (`src/data/monsterSheets.js`). Zobrazují se v souboji, v kartě Party i v Bestiáři. Bílé
+  pozadí uzavřené mezi nohama se odstraní. Chybějících 15 druhů je v dokumentu Chybějící ikony.
+- Nová hra začíná v Hvězdárně úvodním úkolem **Krotitelova zkouška**:
+  - Hrdina je lovec, Dire Wolf je jeho lovecký pes.
+  - Mág sám promluví, probudí mu magii Vzduchu (hned odemčená), dá 1 Soul Crystal a pošle ho
+    na louku. Úkol se rovnou sleduje.
+  - Na prvním poli louky je vždy Air Elemental. Je to jeho jediný výskyt, v běžných setkáních
+    už není.
+  - Souboj je tutoriál s průvodcem Mágem: bez panelu před bojem, bez simulace, útěku a čekání.
+    Kroky: zásah Dire Wolfem → kouzlo Vzduchu → ochočení. Ochočení se odemkne až po zásahu
+    vlkem a je jisté (100 %). Air Elemental neútočí a neklesne pod 1 HP.
+  - Po ochočení Mág přenese hrdinu zpět do Hvězdárny. Odměna: 5× Basic Soul Crystal, 20 zl
+    a Air Elemental v partě.
+- Úkol Jeskynní sliz se jmenuje **Orčí hrozba**:
+  - Boss je Orčí válečník (Orc Warrior) se dvěma gobliny. Nejde simulovat ani ochočit.
+  - Starosta úkol nabídne až po dokončení všech ostatních úkolů v Greenvale. Do té doby řekne,
+    které chybí, a nemá „!“.
+  - Na nástěnce se úkol ukáže až ve chvíli, kdy jde přijmout.
+- Píseň větrů: magie Vzduchu je odemčená už z úvodního úkolu, odměnou jsou zkušenosti magie
+  Vzduchu (starší hry ji odemknou jako dřív).
 - Obchodníci na tržišti (Trhovkyně, Obchodník s látkami) vykupují suroviny a výrobky
   z inventáře: okno obchodu má vlevo Koupit a vpravo Prodat (Prodat 1 / Prodat vše,
   stránkování). Výkup je za polovinu hodnoty předmětu: vlastní cena, jinak nejnižší cena

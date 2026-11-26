@@ -20,9 +20,11 @@ const MAX_ROUNDS = 60; // pojistka: po 60 kolech rozhodne větší podíl zbylý
 
 const isOffensive = (skill) => skill?.category === 'physical' || skill?.category === 'magical';
 
+// Stejně jako v souboji: Přesnost zvyšuje zásah jen u fyzických útoků (u kouzel dosah).
 function hitChance(unit, skill) {
   const precision = Number(unit.monster?.stats?.precision) || 80;
-  return Math.min(0.98, Math.max(0.05, (Number(skill.accuracy) || 0.9) + (precision - 80) * 0.005));
+  const bonus = skill?.category === 'magical' ? 0 : (precision - 80) * 0.005;
+  return Math.min(0.98, Math.max(0.05, (Number(skill.accuracy) || 0.9) + bonus));
 }
 
 // Poškození jednoho zásahu stejným vzorcem jako v souboji (BattleScene.useSelectedSkill),
@@ -92,7 +94,7 @@ export function runSimulation(units, { modify, random = Math.random } = {}) {
       const target = pickTarget(sim, sims);
       if (!target) break;
       const skill = bestSkill(sim, target, modify);
-      sim.uses[skill.id] -= 1;
+      // Použití schopností se neodečítají (pravidlo o počtu útoků zrušeno).
       if (random() <= hitChance(sim.unit, skill)) {
         // Rozptyl ±10 % kolem vzorce, ať průběhy nejsou všechny stejné.
         const spread = 0.9 + random() * 0.2;
@@ -153,10 +155,6 @@ export function applySimulationResult(result) {
     unit.hp = Math.max(0, Math.min(unit.maxHp, sim.hp));
     const monster = unit.monster;
     if (!monster) continue;
-    if (unit.side === 'player') {
-      monster.skillUses ??= {};
-      for (const skill of sim.skills) monster.skillUses[skill.id] = Math.max(0, sim.uses[skill.id]);
-    }
     monster.currentHp = unit.hp;
   }
 }

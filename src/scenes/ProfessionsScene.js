@@ -8,6 +8,8 @@ import { craftingClass } from '../data/crafting.js';
 import { normalizeFishing } from '../systems/FishingSystem.js';
 import { normalizeMining, chooseSpecialization } from '../systems/MiningSystem.js';
 import { normalizeHerbalism, chooseHerbSpecialization } from '../systems/HerbalismSystem.js';
+import { normalizeDiplomacy, ownedShops, PROPERTIES, PROPERTY_TYPES } from '../systems/DiplomacySystem.js';
+import { DIPLOMACY_UNLOCKS, DIPLOMACY_XP, diplomacyTier } from '../data/diplomacy.js';
 import { RECIPE_BOOKS, itemUses, itemSources, searchItems, DATABASE_FILTERS, recipeOutput } from '../systems/ProfessionDatabase.js';
 import { itemIconKey, arrowKey } from '../ui/inventorySprites.js';
 import {
@@ -72,7 +74,10 @@ const WHERE = {
     'Řemeslná dílna u radnice: Koželužský stůl a Šperkařský stůl, Řemeslnice.',
     'Hvězdárna (sever za radnicí): Soul Crystal Workbench.'
   ],
-  diplomacy: ['Diplomacie se připravuje – navrhneme ji samostatně.']
+  diplomacy: [
+    'XP: obchody s NPC i ve vlastním obchodě, splněné úkoly a nové rozhovory s obyvateli.',
+    'Starosta Edric na radnici prodává Zelený dům u náměstí (od Diplomacie 10).'
+  ]
 };
 
 const RECIPE_FILTERS = [
@@ -299,7 +304,7 @@ export default class ProfessionsScene extends Phaser.Scene {
     PROFS.forEach((prof, i) => {
       const tile = this.profButtons[i];
       const data = this.state.professions?.[prof.id];
-      if (prof.id === 'diplomacy' || !data) tile.setInfo('', null);
+      if (!data) tile.setInfo('', null);
       else tile.setInfo(String(data.level ?? 1), data.level >= 100 ? 1 : (data.exp ?? 0) / Math.max(1, data.next ?? 1));
       tile.setActive(v.mode !== 'database' && v.prof === prof.id);
     });
@@ -460,6 +465,50 @@ export default class ProfessionsScene extends Phaser.Scene {
     this.text(x + w / 2, y + 27, `${page + 1} / ${pages}`, { size: 19, color: '#9fb3c8', originX: 0.5, originY: 0.5 });
   }
 
+  // ------------------------------------------------------------ Diplomacie
+
+  // Přehled Diplomacie: úroveň a XP, zdroje XP, odemykání funkcí, vlastní obchody.
+  renderDiplomacy(x, y) {
+    normalizeDiplomacy(this.state);
+    const data = this.state.professions.diplomacy;
+    const tier = diplomacyTier(data.level);
+    const w = C.w - 60;
+    this.text(x, y, 'Diplomacie', { size: 32, bold: true, color: '#ffe7ae' });
+    this.text(x + w, y + 8, `Třída ${tier.tier} – ${tier.name}`, { size: 22, bold: true, color: '#ffd76a', originX: 1 });
+    this.text(x, y + 50, `Úroveň ${data.level}`, { size: 22, bold: true, color: '#f3e4bd' });
+    const bar = uiProgressBar(this, x + 150, y + 58, 560, 18, 0xffc94a);
+    bar.set(data.level >= 100 ? 1 : data.exp / Math.max(1, data.next));
+    this.content.add(bar.objects);
+    this.text(x + 730, y + 52, data.level >= 100 ? 'Maximální úroveň' : `${Math.round(data.exp)} / ${data.next} XP`, { size: 20, color: '#cfe2f5' });
+
+    this.text(x, y + 104, 'Jak získat XP', { size: 24, bold: true, color: '#ffe7ae' });
+    [
+      'Obchod: každý předmět má vlastní XP hodnotu (podle ceny a vzácnosti) – prodej i nákup u NPC (nákup za polovinu),',
+      '   prodej ve vlastním obchodě. Počítá se položka, ne kus; opakovaný obchod stejného předmětu v jednom dni slábne.',
+      `Splněný úkol: ${DIPLOMACY_XP.quest} XP (jednou za každý úkol).`,
+      `Nový rozhovor s obyvatelem: ${DIPLOMACY_XP.newDialog} XP. Když už NPC nemá nic nového, XP se nepřidává.`
+    ].forEach((line, i) => this.text(x, y + 144 + i * 32, line, { size: 19, color: '#dbe6f3' }));
+
+    this.text(x, y + 290, 'Odemykání funkcí', { size: 24, bold: true, color: '#ffe7ae' });
+    DIPLOMACY_UNLOCKS.forEach((u, i) => {
+      const col = i < 6 ? 0 : 1;
+      const row = i % 6;
+      const reached = data.level >= u.level;
+      const color = !u.ready ? '#8a96a2' : reached ? '#7fd67a' : '#f3e4bd';
+      this.text(x + col * 620, y + 330 + row * 32, `${u.level}: ${u.text}${u.ready ? '' : ' (další etapa)'}`, { size: 19, color });
+    });
+
+    const shops = ownedShops(this.state);
+    this.text(x, y + 540, 'Vlastní provozovny', { size: 24, bold: true, color: '#ffe7ae' });
+    if (!shops.length) {
+      const offer = Object.values(PROPERTIES)[0];
+      this.text(x, y + 580, offer ? `Žádná. ${offer.name} (${PROPERTY_TYPES[offer.type].name}) koupíš u starosty Edrica od Diplomacie ${PROPERTY_TYPES[offer.type].level}.` : 'Žádná.', { size: 19, color: '#dbe6f3' });
+    }
+    shops.forEach((shop, i) => {
+      this.text(x, y + 580 + i * 32, `${shop.name} (${PROPERTY_TYPES[shop.type].name}) – ${shop.open ? 'otevřeno' : 'zavřeno'} · tržby celkem ${shop.stats.revenue} zl · reputace ${Math.round(shop.reputation)}`, { size: 19, color: '#dbe6f3' });
+    });
+  }
+
   // ------------------------------------------------------------ Přehled
 
   renderOverview() {
@@ -468,8 +517,7 @@ export default class ProfessionsScene extends Phaser.Scene {
     const x = C.x + 30;
     let y = C.y + 24;
     if (prof.id === 'diplomacy') {
-      this.text(x, y, 'Diplomacie', { size: 30, bold: true, color: '#ffe7ae' });
-      this.text(x, y + 56, 'Diplomacie se připravuje. Navrhneme ji samostatně (vyjednávání s monstry,\nceny u obchodníků, úkoly frakcí…).', { size: 21, color: '#dbe6f3', lineSpacing: 8 });
+      this.renderDiplomacy(x, y);
       return;
     }
 
@@ -584,7 +632,7 @@ export default class ProfessionsScene extends Phaser.Scene {
     const rules = mining ? MINING_RULES : HERB_RULES;
     const current = mining ? this.state.mining.specialization : this.state.herbalism.specialization;
     const unlocked = this.level(prof.id) >= rules.specializationLevel;
-    y += this.heading(x, y, C.w - 60, `Specializace${unlocked ? (current ? ` (změna stojí ${rules.specializationChangeCost} zl)` : ' – zvol jednu') : ` – odemkne se na úrovni ${rules.specializationLevel}`}`) + 14;
+    y += this.heading(x, y, C.w - 60, `Specializace${unlocked ? (current ? ` (změna stojí ${rules.specializationChangeCost} zlata)` : ' – zvol jednu') : ` – odemkne se na úrovni ${rules.specializationLevel}`}`) + 14;
     for (const spec of specs) {
       const chosen = spec.id === current;
       this.text(x + 16, y, `${spec.name}${chosen ? '  ✓' : ''}`, { size: 20, bold: true, color: chosen ? '#7fd67a' : '#f3e4bd' });
@@ -864,7 +912,7 @@ export default class ProfessionsScene extends Phaser.Scene {
   renderItemDetail(item, x, y, w) {
     this.iconFrame(item.id, x + 40, y + 40, 60);
     this.text(x + 100, y + 4, item.name, { size: 28, bold: true, color: rarityColor(item), wrap: w - 106 });
-    this.text(x + 100, y + 46, `${(RARITY[item.rarity] ?? RARITY.common).label}${item.price ? ` · cena ${item.price} zl` : ''} · máš ${this.countOf(item.id)}`, { size: 18, color: '#9fc4e6' });
+    this.text(x + 100, y + 46, `${(RARITY[item.rarity] ?? RARITY.common).label}${item.price ? ` · cena ${item.price} zlata` : ''} · máš ${this.countOf(item.id)}`, { size: 18, color: '#9fc4e6' });
     y += 100;
     const desc = this.text(x, y, item.description ?? '', { size: 18, color: '#dbe6f3', wrap: w });
     y += desc.height + 16;

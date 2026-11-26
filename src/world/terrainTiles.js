@@ -89,6 +89,7 @@ export function prepareTerrainTiles(scene) {
 
   for (const [type, variants] of Object.entries(TERRAIN_VARIANTS)) {
     variants.forEach(([sheet, x, y, width, height], index) => {
+      if (sheet === 'gen') return; // vygenerované dlaždice (štěrk) vznikají zvlášť
       const source = scene.textures.get(sheetKey(sheet)).getSourceImage();
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -106,10 +107,70 @@ export function prepareTerrainTiles(scene) {
     });
   }
 
+  createGravelTiles(scene);
+
   // Listy už nejsou potřeba (stromy a skály si list objektů načítají zvlášť).
   for (const name of Object.keys(SHEETS)) scene.textures.remove(sheetKey(name));
 
   return true;
+}
+
+// Štěrk lomu (v listech dlaždic není): vygenerované izometrické kostky – horní kosočtverec
+// s kamínky a stíny, boky z vrstvené skály. Varianty 0–3 světlé, 4–7 ve stínu (u zadní stěny).
+const GRAVEL = { w: 132, h: 100, cx: 66, cy: 33, face: 128, side: 34 };
+TERRAIN_VARIANTS.gravel = Array.from({ length: 4 }, () => ['gen', 0, 0, GRAVEL.w, GRAVEL.h, GRAVEL.cx, GRAVEL.cy, GRAVEL.face, 1]);
+TERRAIN_VARIANTS.gravelShade = Array.from({ length: 4 }, () => ['gen', 0, 0, GRAVEL.w, GRAVEL.h, GRAVEL.cx, GRAVEL.cy, GRAVEL.face, 1]);
+
+function createGravelTiles(scene) {
+  const { w, h, cx, cy, side } = GRAVEL;
+  const hw = 64;
+  const hh = 32;
+  for (const shade of [false, true]) {
+    for (let v = 0; v < 4; v++) {
+      let seed = 1234 + v * 977 + (shade ? 31 : 0);
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      const k = shade ? 0.72 : 1;
+      const rgb = (r, g, b, a = 1) => `rgba(${Math.round(r * k)},${Math.round(g * k)},${Math.round(b * k)},${a})`;
+      const top = new Path2D();
+      top.moveTo(cx, cy - hh); top.lineTo(cx + hw, cy); top.lineTo(cx, cy + hh); top.lineTo(cx - hw, cy); top.closePath();
+      // Boky: vrstvená skála (levý tmavší).
+      const left = new Path2D();
+      left.moveTo(cx - hw, cy); left.lineTo(cx, cy + hh); left.lineTo(cx, cy + hh + side); left.lineTo(cx - hw, cy + side); left.closePath();
+      const right = new Path2D();
+      right.moveTo(cx + hw, cy); right.lineTo(cx, cy + hh); right.lineTo(cx, cy + hh + side); right.lineTo(cx + hw, cy + side); right.closePath();
+      ctx.fillStyle = rgb(98, 88, 78); ctx.fill(left);
+      ctx.fillStyle = rgb(122, 110, 96); ctx.fill(right);
+      ctx.save(); ctx.clip(left);
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = rgb(80, 72, 64, 0.5); ctx.fillRect(cx - hw, cy + 6 + i * 8 + rnd() * 3, hw, 2); }
+      ctx.restore();
+      ctx.save(); ctx.clip(right);
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = rgb(150, 136, 118, 0.45); ctx.fillRect(cx, cy + 6 + i * 8 + rnd() * 3, hw, 2); }
+      ctx.restore();
+      // Horní plocha: prachová suť s kamínky.
+      const grad = ctx.createLinearGradient(cx - hw, cy - hh, cx + hw, cy + hh);
+      grad.addColorStop(0, rgb(170, 158, 140)); grad.addColorStop(1, rgb(142, 130, 114));
+      ctx.fillStyle = grad; ctx.fill(top);
+      ctx.save(); ctx.clip(top);
+      for (let i = 0; i < 420; i++) {
+        const x = cx - hw + rnd() * hw * 2; const y = cy - hh + rnd() * hh * 2;
+        const c = 110 + rnd() * 70; ctx.fillStyle = rgb(c, c * 0.93, c * 0.84, 0.35); ctx.fillRect(x, y, 1.5, 1.5);
+      }
+      for (let i = 0; i < 26; i++) {
+        const x = cx - hw * 0.8 + rnd() * hw * 1.6; const y = cy - hh * 0.75 + rnd() * hh * 1.5;
+        const r = 2 + rnd() * 4.5; const c = 120 + rnd() * 60;
+        ctx.fillStyle = rgb(60, 52, 46, 0.45); ctx.beginPath(); ctx.ellipse(x + 1.2, y + 1.6, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = rgb(c, c * 0.95, c * 0.88); ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = rgb(230, 222, 205, 0.55); ctx.beginPath(); ctx.ellipse(x - r * 0.3, y - r * 0.25, r * 0.4, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      ctx.strokeStyle = rgb(90, 80, 70, 0.35); ctx.lineWidth = 1; ctx.stroke(top);
+      scene.textures.addCanvas(terrainTextureKey(shade ? 'gravelShade' : 'gravel', v), canvas);
+    }
+  }
 }
 
 // Vybere variantu podle váhy; roll je číslo 0–1 (stejné pro stejné pole).
