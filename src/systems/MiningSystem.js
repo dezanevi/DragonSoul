@@ -14,6 +14,10 @@
 // Kořist se do inventáře nedává tady – potvrdí ji hráč v okně kořisti.
 // ======================================================================
 
+import { formatGameDuration } from './TimeSystem.js';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { luckGatherBonus } from './HeroStatsSystem.js';
 import {
   MINING_RARITY, MINING_RULES, DEPOSITS, DEPOSIT_BY_ID, PICKAXES, MINING_MATERIAL_BY_ID, MINING_SPECIALIZATIONS,
   xpToNextMiningLevel, TIER_LABEL
@@ -21,6 +25,7 @@ import {
 import { getItemCount, removeItem, addItem } from './InventorySystem.js';
 import { getTalentBonuses } from './TalentSystem.js';
 import { exploreBonus, professionXpMultiplier } from './AlchemySystem.js';
+import { TOOL_MOD, toolModOf } from '../data/items.js';
 
 const HOUR = 3600000;
 const GEMLIKE = new Set(['gem', 'elemental', 'crystal']);
@@ -67,27 +72,25 @@ export function currentMeteor(state, now = Date.now()) {
   return mining.meteor.mined ? null : mining.meteor;
 }
 
-// { ready, until } – vytěžené naleziště čeká na obnovu.
-export function depositStatus(state, deposit, now = Date.now()) {
+// { ready, until } – vytěžené naleziště čeká na obnovu. spotKey = konkrétní místo (žíla v lomu)
+// – každá žíla odpočívá zvlášť, i když je stejného druhu (bez spotKey = celý druh, starší volání).
+export function depositStatus(state, deposit, now = Date.now(), spotKey = null) {
   const mining = normalizeMining(state);
   if (deposit.special === 'meteor') {
     const meteor = currentMeteor(state, now);
     return meteor ? { ready: true, until: 0 } : { ready: false, until: mining.meteor.landedAt + MINING_RULES.meteorHours * HOUR };
   }
-  const until = mining.depleted[deposit.id] ?? 0;
-  if (until && until <= now) delete mining.depleted[deposit.id];
+  const key = spotKey ?? deposit.id;
+  const until = mining.depleted[key] ?? 0;
+  if (until && until <= now) delete mining.depleted[key];
   return until > now ? { ready: false, until } : { ready: true, until: 0 };
 }
 
-export const formatWait = (ms) => {
-  const minutes = Math.ceil(ms / 60000);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours} h ${minutes % 60} min`;
-};
+// Odpočet obnovy v herním čase (TimeSystem: 1 minuta hraní = 1 herní hodina).
+export const formatWait = (ms) => formatGameDuration(ms);
 
 // Může hráč naleziště těžit? { ok, reason }
-export function checkDeposit(state, deposit, { hidden = false, now = Date.now() } = {}) {
+export function checkDeposit(state, deposit, { hidden = false, now = Date.now(), spotKey = null } = {}) {
   const level = miningLevel(state);
   if (level < deposit.minLevel) return { ok: false, reason: `Potřebuješ Těžbu na úrovni ${deposit.minLevel} (máš ${level}).` };
   const pick = bestPickaxe(state);
@@ -96,7 +99,7 @@ export function checkDeposit(state, deposit, { hidden = false, now = Date.now() 
     return { ok: false, reason: owned ? `${owned.name} vyžaduje Těžbu ${owned.level}.` : 'Potřebuješ krumpáč (Hornický mistr v kovárně Greenvale).' };
   }
   if (pick.tier < deposit.tier) {
-    const need = PICKAXES.find((p) => p.tier === deposit.tier);
+    const need = PICKAXES.find((p) => p.tier === deposit.tier && !p.starter);
     return { ok: false, reason: `Potřebuješ ${need.name} (stupeň ${TIER_LABEL[need.tier]}) nebo lepší.` };
   }
   if (deposit.tool && !hasTool(state, deposit.tool)) {
@@ -106,7 +109,7 @@ export function checkDeposit(state, deposit, { hidden = false, now = Date.now() 
     if (!hasTool(state, 'tool_support')) return { ok: false, reason: 'Skrytou žílu otevře jen Důlní podpěra s kovovým hrotem.' };
     return { ok: true, reason: '' };
   }
-  const status = depositStatus(state, deposit, now);
+  const status = depositStatus(state, deposit, now, spotKey);
   if (!status.ready) return { ok: false, reason: `Naleziště je vytěžené – obnoví se za ${formatWait(status.until - now)}.` };
   return { ok: true, reason: '' };
 }
@@ -130,12 +133,14 @@ export function miningSeconds(state, deposit) {
   if (!deposit.special && (isOre(deposit) || deposit.main === 'coal') && hasTool(state, 'tool_ore_hammer')) seconds *= 0.85;
   if (specialization(state) === 'deep' && !deposit.special && deposit.tier >= 3 && !isGemlike(deposit)) seconds *= 0.8;
   seconds *= exploreBonus(state, 'mineTime', 1); // Horníkův lektvar
+  seconds *= 1 - TOOL_MOD.timePerPoint * toolModOf(bestPickaxe(state)?.id); // modifikátor krumpáče
   return Math.max(MINING_RULES.minSeconds, seconds);
 }
 
 // Šance na +1 kus hlavní suroviny (0–0,6).
 export function extraChance(state, deposit) {
-  let chance = 0.1 * tiersAbove(state, deposit) + Math.min(0.25, getTalentBonuses(state).miningBonusChance ?? 0);
+  let chance = 0.1 * tiersAbove(state, deposit) + Math.min(0.25, getTalentBonuses(state).miningBonusChance ?? 0) + luckGatherBonus(state); // + Štěstí
+  chance += TOOL_MOD.extraPerPoint * toolModOf(bestPickaxe(state)?.id); // modifikátor krumpáče
   if (isOre(deposit) && hasTool(state, 'tool_wedge')) chance += 0.1;
   if (isGemlike(deposit) && hasTool(state, 'tool_crystal_tongs')) chance += 0.1;
   if (deposit.type === 'deep' && hasTool(state, 'tool_drill')) chance += 0.15;
@@ -227,9 +232,9 @@ function pickWeighted(rows, random) {
 
 // Vytěží naleziště: spočítá kořist, zapíše obnovu a přidá zkušenosti.
 // Vrací { ok, reason } nebo { ok, items: [{ id, qty }], xp, levelsGained, level, rare: [ids], revealedHidden }.
-export function mineDeposit(state, deposit, { hidden = false, random = Math.random, now = Date.now(), region = 'Greenvale' } = {}) {
+export function mineDeposit(state, deposit, { hidden = false, random = Math.random, now = Date.now(), region = 'Greenvale', spotKey = null, rareSpot = false } = {}) {
   normalizeMining(state);
-  const check = checkDeposit(state, deposit, { hidden, now });
+  const check = checkDeposit(state, deposit, { hidden, now, spotKey });
   if (!check.ok) return check;
 
   const loot = new Map();
@@ -264,6 +269,7 @@ export function mineDeposit(state, deposit, { hidden = false, random = Math.rand
   }
 
   const xp = miningXp(state, deposit, { hidden });
+  for (const [id, qty] of loot) countQuestEvent(state, `mine:${id}`, qty); // úkoly Těžby
   state.mining.log[deposit.id] = (state.mining.log[deposit.id] ?? 0) + 1;
 
   if (hidden) {
@@ -272,8 +278,10 @@ export function mineDeposit(state, deposit, { hidden = false, random = Math.rand
   } else if (deposit.special === 'meteor') {
     state.mining.meteor.mined = true;
   } else {
-    const respawn = deposit.respawnMs * (deposit.special && specialization(state) === 'explorer' ? 0.75 : 1);
-    state.mining.depleted[deposit.id] = now + respawn;
+    // Vzácné místo (rare v mapě) se obnovuje jako vzácná naleziště – 48 min.
+    const base = rareSpot ? Math.max(deposit.respawnMs, 48 * 60000) : deposit.respawnMs;
+    const respawn = base * (deposit.special && specialization(state) === 'explorer' ? 0.75 : 1);
+    state.mining.depleted[spotKey ?? deposit.id] = now + respawn;
   }
 
   // Průzkumník nalezišť: 3 % odhalit Skrytou žílu i bez mapy.
@@ -294,7 +302,7 @@ export function mineDeposit(state, deposit, { hidden = false, random = Math.rand
   };
 }
 
-export function addMiningXp(state, amount) {
+function addMiningXpRaw(state, amount) {
   const prof = state.professions.mining;
   prof.exp += amount;
   let gained = 0;
@@ -369,3 +377,11 @@ export function chooseSpecialization(state, id) {
 }
 
 export const allDeposits = () => DEPOSITS;
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addMiningXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'mining');
+  const result = addMiningXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'mining', before, amount);
+  return result;
+}

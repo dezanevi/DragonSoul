@@ -202,6 +202,19 @@ function register(scene, key, c) {
 
 // Podklad karty je průhledný – rám a pozadí kreslí scéna (drawCardFrame v ui/fantasyCard.js,
 // stejný panel jako karta Mapa); obsah karty se do něj zmenší (CARD_FIT).
+// Šipka je vyříznutá i s tmavomodrým pozadím – to se zprůhlední (zlatá šipka má vysoký
+// červený kanál, pozadí nízký; přechod pro hladký okraj). hover = zesvětlená.
+function clearArrow(source, hover = false) {
+  const { c, ctx } = canvas(source.width, source.height);
+  ctx.filter = hover ? 'brightness(1.45) saturate(1.2)' : 'none';
+  ctx.drawImage(source, 0, 0);
+  const data = ctx.getImageData(0, 0, source.width, source.height);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) px[i + 3] = Math.round(px[i + 3] * Math.max(0, Math.min(1, (px[i] - 70) / 60)));
+  ctx.putImageData(data, 0, 0);
+  return c;
+}
+
 function cardBase() {
   return canvas(W, H);
 }
@@ -212,60 +225,61 @@ function buildHeroCard(scene, key, gender) {
   const { c, ctx } = cardBase(scene);
 
   // Portrét
-  fit(ctx, img(scene, legacyKey(`hero_portrait_${gender}`)), 52, 122, 262, 418);
-  nine(scene, ctx, 'slot', 40, 110, 286, 442, 26);
+  // Mřížka karty: okraje x 40 / 1496, mezery 16; horní řada y 124, druhá y 404, Dovednosti od y 722.
+  fit(ctx, img(scene, legacyKey(`hero_portrait_${gender}`)), 52, 136, 262, 418);
+  nine(scene, ctx, 'slot', 40, 124, 286, 442, 26);
 
   // Jméno, úroveň, zkušenosti, mana
-  panel(scene, ctx, 334, 112, 334, 262);
-  text(ctx, 'Jméno', 350, 152, { size: 30, color: '#ffe7ae' });
-  text(ctx, 'Úroveň', 350, 204, { size: 26 });
-  text(ctx, 'Zkušenosti', 354, 248, { size: 22, color: '#f3e4bd', bold: false });
-  bar(ctx, 357, 272, 273, 15);
-  text(ctx, 'Mana', 354, 306, { size: 22, color: '#f3e4bd', bold: false });
-  bar(ctx, 357, 330, 273, 15);
+  panel(scene, ctx, 342, 124, 330, 248);
+  text(ctx, 'Jméno', 358, 164, { size: 30, color: '#ffe7ae' });
+  text(ctx, 'Úroveň', 358, 216, { size: 26 });
+  text(ctx, 'Zkušenosti', 362, 260, { size: 22, color: '#f3e4bd', bold: false });
+  bar(ctx, 365, 284, 273, 15);
+  text(ctx, 'Mana', 362, 318, { size: 22, color: '#f3e4bd', bold: false });
+  bar(ctx, 365, 342, 273, 15);
 
   // Statistiky hrdiny a velitelské statistiky
-  panel(scene, ctx, 680, 124, 390, 244, 'Statistiky hrdiny');
+  panel(scene, ctx, 688, 124, 390, 248, 'Statistiky hrdiny');
   [['brain', 'Intelekt'], ['magic_star', 'Spell Power'], ['winged_boot', 'Rychlost'], ['clover', 'Štěstí'], ['heart', 'Charisma']]
     .forEach(([id, label], i) => {
       const y = [181, 221, 259, 296, 334][i];
-      icon(scene, ctx, id, 722, y - 19, 38);
-      text(ctx, label, 776, y, { size: 24, color: '#f3e4bd', bold: false });
-      if (i < 4) divider(ctx, 712, 1050, y + 19);
+      icon(scene, ctx, id, 730, y - 19, 38);
+      text(ctx, label, 784, y, { size: 24, color: '#f3e4bd', bold: false });
+      if (i < 4) divider(ctx, 720, 1058, y + 19);
     });
-  panel(scene, ctx, 1086, 124, 414, 244, 'Velitelské statistiky', { titleW: 300 });
+  panel(scene, ctx, 1094, 124, 402, 248, 'Velitelské statistiky', { titleW: 300 });
   [['crossed_swords', 'Fyzický útok'], ['magic_staff', 'Magický útok'], ['shield_defense', 'Obrana'], ['shield_magic', 'Magická odolnost']]
     .forEach(([id, label], i) => {
       const y = [182, 226, 270, 313][i];
-      icon(scene, ctx, id, 1124, y - 20, 40);
-      text(ctx, label, 1180, y, { size: 24, color: '#f3e4bd', bold: false });
-      if (i < 3) divider(ctx, 1116, 1482, y + 21);
+      icon(scene, ctx, id, 1132, y - 20, 40);
+      text(ctx, label, 1188, y, { size: 24, color: '#f3e4bd', bold: false });
+      if (i < 3) divider(ctx, 1124, 1478, y + 21);
     });
 
   // Vybavení (sloty kreslí karta)
-  panel(scene, ctx, 336, 398, 484, 292, 'Vybavení');
+  panel(scene, ctx, 342, 404, 484, 292, 'Vybavení');
   // Celá postava (výřezy hero_figure_* jsou useknuté u kolen) – pro obě pohlaví stejná zbroj.
-  fit(ctx, img(scene, legacyKey('inventory_figure')), 452, 420, 256, 266);
+  fit(ctx, img(scene, legacyKey('inventory_figure')), 458, 426, 256, 266);
 
   // Magické školy (karty škol kreslí karta) – názvy pod nimi
-  panel(scene, ctx, 834, 404, 666, 192, 'Magické školy');
+  panel(scene, ctx, 842, 404, 654, 192, 'Magické školy');
   const schoolNames = { fire: 'Oheň', water: 'Voda', earth: 'Země', air: 'Vzduch', light: 'Světlo', dark: 'Temnota' };
   for (const school of MAGIC_SCHOOLS) text(ctx, schoolNames[school.id] ?? school.label, school.x, 578, { size: 17, color: '#f3e4bd', align: 'center' });
 
   // Dovednosti (tlačítka kreslí karta)
-  panel(scene, ctx, 62, 704, 822, 200, 'Dovednosti');
+  panel(scene, ctx, 40, 722, 786, 186, 'Dovednosti');
 
   // Zlato, oblast, magické kameny
-  panel(scene, ctx, 932, 618, 526, 64);
-  icon(scene, ctx, 'coins', 962, 624, 52);
-  text(ctx, 'Zlato', 1030, 650, { size: 28, color: '#f3e4bd' });
-  panel(scene, ctx, 932, 690, 526, 88);
-  icon(scene, ctx, 'map_pin', 962, 700, 48);
-  text(ctx, 'Oblast', 1030, 714, { size: 24, color: '#f3e4bd' });
-  fit(ctx, img(scene, legacyKey('region_greenvale')), 1176, 697, 268, 74);
-  panel(scene, ctx, 932, 786, 526, 110);
-  icon(scene, ctx, 'crystal', 962, 806, 60);
-  text(ctx, 'Magické kameny', 1040, 810, { size: 24, color: '#f3e4bd' });
+  panel(scene, ctx, 842, 612, 654, 64);
+  icon(scene, ctx, 'coins', 872, 618, 52);
+  text(ctx, 'Zlato', 940, 644, { size: 28, color: '#f3e4bd' });
+  panel(scene, ctx, 842, 688, 654, 88);
+  icon(scene, ctx, 'map_pin', 872, 698, 48);
+  text(ctx, 'Oblast', 940, 712, { size: 24, color: '#f3e4bd' });
+  fit(ctx, img(scene, legacyKey('region_greenvale')), 1214, 695, 268, 74);
+  panel(scene, ctx, 842, 788, 654, 110);
+  icon(scene, ctx, 'crystal', 872, 808, 60);
+  text(ctx, 'Magické kameny', 950, 812, { size: 24, color: '#f3e4bd' });
 
   register(scene, key, c);
 }
@@ -277,15 +291,14 @@ const FINAL_ICONS = { combat: 'dragon_gold', crafting: 'crown', wizard: 'dragon_
 
 function buildTalentCard(scene, names = {}) {
   const { c, ctx } = cardBase(scene);
-  icon(scene, ctx, 'book', 56, 70, 64);
-  text(ctx, 'Talenty', 128, 102, { size: 40, italic: true, color: '#ffe7ae' });
+  // Nadpis „Talenty“ kreslí karta (uiTitle) – jednotná hlavička všech karet.
   icon(scene, ctx, 'magic_star', 1150, 74, 54);
   text(ctx, 'Volné body:', 1210, 102, { size: 30, italic: true });
 
   TALENT_TREES.forEach((tree, t) => {
     const p = TREE_PANELS[t];
     nine(scene, ctx, 'panel', p.x, p.y, p.w, p.h, 22);
-    icon(scene, ctx, TREE_ICONS[tree.id], p.x + 20, p.y + 16, 72);
+    icon(scene, ctx, TREE_ICONS[tree.id], p.x + 26, p.y + 22, 64); // uvnitř rámu panelu (okraj 22)
     text(ctx, tree.name, p.x + 102, p.y + 40, { size: 34, italic: true, color: '#ffe7ae' });
     text(ctx, tree.title, p.x + 102, p.y + 72, { size: 20, color: '#f3e4bd', bold: false, strokeWidth: 2.5 });
     divider(ctx, p.x + 16, p.x + p.w - 16, p.y + 100);
@@ -297,17 +310,18 @@ function buildTalentCard(scene, names = {}) {
       tier.talents.forEach((talent, s) => {
         const r = talentNodeRect(t, i, s);
         nine(scene, ctx, 'btn', r.x, r.y, r.w, r.h, 12);
-        const size = r.h - 10;
-        fit(ctx, img(scene, legacyKey(`talent_${tree.id}_${i + 1}_${s}`)), r.x + 8, r.y + 5, size, size);
-        text(ctx, names[talent.id] ?? talent.name, r.x + size + 16, r.y + 21, { size: 18, color: '#f3e4bd', bold: false, strokeWidth: 2, maxWidth: r.w - size - 26 });
+        // Ikona uvnitř rámečku políčka (okraj 12 px) – dřív zakrývala levý, horní i spodní okraj.
+        const size = r.h - 22;
+        fit(ctx, img(scene, legacyKey(`talent_${tree.id}_${i + 1}_${s}`)), r.x + 12, r.y + 11, size, size);
+        text(ctx, names[talent.id] ?? talent.name, r.x + size + 22, r.y + 21, { size: 18, color: '#f3e4bd', bold: false, strokeWidth: 2, maxWidth: r.w - size - 36 });
       });
     });
 
     const f = FINAL_BOXES[t];
     nine(scene, ctx, 'panel', f.x, f.y, f.w, f.h, 18);
-    icon(scene, ctx, 'star', f.x + 14, f.y + 8, 36);
+    icon(scene, ctx, 'star', f.x + 20, f.y + 14, 30);
     text(ctx, tree.final.name, f.x + 58, f.y + 27, { size: 27, italic: true, color: '#ffe7ae' });
-    icon(scene, ctx, FINAL_ICONS[tree.id], f.x + 12, f.y + 44, 52);
+    icon(scene, ctx, FINAL_ICONS[tree.id], f.x + 20, f.y + 44, 40);
   });
   register(scene, TALENT_CARD.color, c);
 
@@ -334,8 +348,7 @@ function buildTalentCard(scene, names = {}) {
 
 function buildPartyCard(scene) {
   const { c, ctx } = cardBase(scene);
-  icon(scene, ctx, 'paw', 58, 74, 66);
-  text(ctx, 'Parta', 134, 112, { size: 48, italic: true, color: '#ffe7ae' });
+  // Nadpis „Parta“ kreslí karta (uiTitle) – jednotná hlavička všech karet.
 
   nine(scene, ctx, 'panel', 34, 175, 506, 494, 22);
   heading(scene, ctx, 'hero_wheel', 'Aktivní parta', 62, 206, 26);
@@ -371,8 +384,8 @@ function buildPartyCard(scene) {
   // Schopnosti, historie
   nine(scene, ctx, 'panel', 1083, 362, 404, 360, 20);
   heading(scene, ctx, 'crossed_swords', 'Schopnosti', 1110, 390, 26);
-  nine(scene, ctx, 'panel', 566, 712, 506, 152, 20);
-  heading(scene, ctx, 'scroll', 'Historie', 592, 740, 26);
+  nine(scene, ctx, 'panel', 566, 706, 506, 142, 20);
+  heading(scene, ctx, 'scroll', 'Historie', 592, 734, 26);
 
   register(scene, PARTY_CARD.background, c);
 
@@ -446,8 +459,11 @@ function buildInventoryCard(scene) {
   for (const y of GRID.rows) for (const x of GRID.cols) ctx.drawImage(cell, x - 3, y - 3, GRID.w + 6, GRID.h + 6);
 
   // Stránky, kategorie, zlato
-  ctx.drawImage(img(scene, legacyKey('arrow_left')), 677, 688, 38, 66);
-  ctx.drawImage(img(scene, legacyKey('arrow_right')), 868, 688, 38, 66);
+  // Šipky bez tmavého čtverce pozadí (průhledné, viz clearArrow).
+  for (const [dir, x] of [['left', 677], ['right', 868]]) {
+    const source = img(scene, legacyKey(`arrow_${dir}`));
+    if (source) ctx.drawImage(clearArrow(source), x, 688, 38, 66);
+  }
   nine(scene, ctx, 'btn', 728, 696, 128, 50, 14);
   ITEM_CATEGORIES.forEach((category, i) => {
     const x = [939, 1028, 1118, 1207, 1296, 1385][i];
@@ -531,7 +547,8 @@ function buildStateTextures(scene) {
       const h = 164;
       const { c, ctx } = canvas(w, h);
       nine(scene, ctx, BUTTON_FOR[state], 4, 10, w - 8, h - 20, 30);
-      icon(scene, ctx, SKILL_ICONS[skill.id], 22, 30, 100, 1, isOff(state) ? DIM : 'none');
+      icon(scene, ctx, SKILL_ICONS[skill.id], 38, 40, 84, 1, // uvnitř rámečku tlačítka (dřív přes levý a horní okraj)
+         isOff(state) ? DIM : 'none');
       text(ctx, skill.label, 132, 58, { size: 32, color: isOff(state) ? '#b9bcc0' : state === 'selected' ? '#fff6da' : '#f2d28a', maxWidth: w - 150 });
       bar(ctx, 200, 115, 158, 24);
       register(scene, skillStateKey(skill.id, state), c);
@@ -545,21 +562,7 @@ function buildStateTextures(scene) {
   for (const dir of ['left', 'right']) {
     const source = img(scene, legacyKey(`arrow_${dir}`));
     if (!source) continue;
-    for (const state of ['normal', 'hover']) {
-      const { c, ctx } = canvas(source.width, source.height);
-      ctx.filter = state === 'hover' ? 'brightness(1.45) saturate(1.2)' : 'none';
-      ctx.drawImage(source, 0, 0);
-      // Šipka je vyříznutá z karty inventáře i s tmavomodrým pozadím – to se zprůhlední
-      // (zlatá šipka má vysoký červený kanál, pozadí nízký; přechod pro hladký okraj).
-      const data = ctx.getImageData(0, 0, source.width, source.height);
-      const px = data.data;
-      for (let i = 0; i < px.length; i += 4) {
-        const r = px[i];
-        px[i + 3] = Math.round(px[i + 3] * Math.max(0, Math.min(1, (r - 70) / 60)));
-      }
-      ctx.putImageData(data, 0, 0);
-      register(scene, arrowKey(dir, state), c);
-    }
+    for (const state of ['normal', 'hover']) register(scene, arrowKey(dir, state), clearArrow(source, state === 'hover'));
   }
 }
 

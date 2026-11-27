@@ -1,16 +1,19 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
-import { getItem } from '../data/items.js';
+import { getItem, ITEM_CATEGORIES } from '../data/items.js';
+// Filtr výkupu = kategorie inventáře (Jídlo má vlastní kategorii – data/items.js), bez Klíčů.
+const sellCategory = (id) => getItem(id)?.category;
+const SELL_FILTERS = ITEM_CATEGORIES.filter((c) => c.id !== 'keys');
 import { RARITY } from '../data/fishing.js';
 import { MERCHANTS } from '../data/merchants.js';
 import { addItem, getItemCount, removeItem, normalizeInventory } from '../systems/InventorySystem.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
 import { cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
-import { questBuyMark } from '../ui/craftLook.js';
+import { questMarkObjects } from '../ui/craftLook.js';
 import { questShoppingList, questNeededItems } from '../systems/QuestSystem.js';
 import { sellPrice } from '../systems/ItemValueSystem.js';
-import { ShopCart } from '../ui/shopCart.js';
+import { ShopCart, sellButtons, SELL_BUTTONS_W, shopItemHover } from '../ui/shopCart.js';
 
 // Obchod obchodníka na tržišti se třemi sloupci:
 //   Koupit (zboží z data/merchants.js) | Prodat (předměty z inventáře za polovinu hodnoty,
@@ -24,8 +27,9 @@ const H = 900;
 const X = GAME_WIDTH / 2 - W / 2;
 const Y = GAME_HEIGHT / 2 - H / 2;
 const BUY = { x: X + 20, w: 600 };
-const SELL = { x: X + 636, w: 640 };
-const CART = { x: X + 1292, w: W - 1312 };
+// Košík uprostřed mezi nákupem a výkupem (přání hráče).
+const CART = { x: X + 636, w: 548 };
+const SELL = { x: X + 1200, w: 640 };
 const ROW = 66;
 const PAGE = 9;
 
@@ -41,6 +45,8 @@ export default class MerchantShopScene extends Phaser.Scene {
     this.closing = false;
     this.page = 0;
     this.sellPage = 0;
+    this.sellFilter = null; // kategorie předmětů ve výkupu (null = vše)
+    this.filterMenu = null;
     normalizeInventory(this.state);
     this.state.gold = Math.max(0, Math.floor(Number(this.state.gold) || 0));
     this.cart = new ShopCart(this, this.state, {
@@ -56,13 +62,13 @@ export default class MerchantShopScene extends Phaser.Scene {
     uiSection(this, CART.x, Y + 84, CART.w, H - 188);
     uiTitle(this, X + 36, Y + 24, `${this.merchant.name} – obchod`, { icon: 'coins', size: 34 });
     cardText(this, BUY.x + 20, Y + 98, 'Koupit', { size: 22, bold: true });
-    cardText(this, SELL.x + 20, Y + 98, 'Prodat (výkup za polovinu hodnoty)', { size: 22, bold: true });
+    cardText(this, SELL.x + 20, Y + 98, 'Prodat (½ hodnoty)', { size: 22, bold: true });
     this.messageText = cardText(this, X + 36, Y + H - 72, '', { size: 20, color: '#ffd76a', wrap: 1100 });
     this.layer = this.add.container(0, 0);
     cardButton(this, null, X + W - 36 - 220, Y + H - 86, 220, 60, 'Zavřít (ESC)', () => this.close(), { danger: true });
 
     this.onKey = (event) => {
-      if (!event.repeat && event.code === 'Escape') this.close();
+      if (!event.repeat && event.code === 'Escape') { if (this.filterMenu) this.closeFilterMenu(); else this.close(); }
     };
     this.time.delayedCall(200, () => this.input.keyboard.on('keydown', this.onKey));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard.off('keydown', this.onKey));
@@ -104,13 +110,20 @@ export default class MerchantShopScene extends Phaser.Scene {
     goods.slice(this.page * PAGE, (this.page + 1) * PAGE).forEach((good, i) => {
       const y = Y + 140 + i * ROW;
       const item = getItem(good.id);
-      if (shopping[good.id]) this.layer.add(questBuyMark(this, BUY.x + 10, y - 2, BUY.w - 20, ROW - 4, shopping[good.id], cardText, BUY.x + BUY.w - 214));
+      let tagW = 0;
+      if (shopping[good.id]) {
+        const mark = questMarkObjects(this, BUY.x + 10, y - 2, BUY.w - 20, ROW - 4, shopping[good.id], cardText, BUY.x + BUY.w - 214, 170);
+        this.layer.add(mark.objects);
+        tagW = mark.width + 12;
+      }
+      shopItemHover(this, this.layer, good.id, BUY.x + 26, y, BUY.w - 214 - 26, ROW - 6);
       this.icon(good.id, BUY.x + 52, y + 28);
       const color = (RARITY[item?.rarity] ?? RARITY.common).color;
       const name = cardText(this, BUY.x + 88, y + 4, `${item?.name ?? good.id}${good.qty > 1 ? ` (${good.qty} ks)` : ''}`, { size: 21, bold: true, color });
-      if (name.width > 300) name.setScale(300 / name.width);
+      const room = Math.min(300, BUY.w - 214 - 88 - tagW);
+      if (name.width > room) name.setScale(room / name.width);
       this.layer.add(name);
-      this.layer.add(coinAmount(this, BUY.x + 88, y + 34, good.price, { size: 18, color: '#9fb3c8' }, { rest: `· máš ${getItemCount(this.state, good.id)}` }));
+      this.layer.add(coinAmount(this, BUY.x + 88, y + 34, this.cart.buyPrice(good.price), { size: 18, color: '#9fb3c8' }, { rest: `· máš ${getItemCount(this.state, good.id)}` }));
       this.layer.add(cardButton(this, null, BUY.x + BUY.w - 196, y + 4, 176, 56, 'Do košíku', () => { this.cart.addBuy(good); this.messageText.setText(''); this.refresh(); }, { size: 20, disabled: !this.cart.canAddBuy(good) }).objects);
     });
     this.pager(BUY.x + 20, Y + H - 170, this.page, pages, (step) => { this.page += step; this.refresh(); });
@@ -131,11 +144,19 @@ export default class MerchantShopScene extends Phaser.Scene {
     return rows.filter((row) => row.qty > 0);
   }
 
-  renderSell() {
+  // Výkup jen zvolené kategorie (filtr nad seznamem Prodat).
+  filteredSellRows() {
     const rows = this.sellRows();
+    return this.sellFilter ? rows.filter((r) => sellCategory(r.id) === this.sellFilter) : rows;
+  }
+
+  renderSell() {
+    this.renderSellFilter();
+    const rows = this.filteredSellRows();
     const needed = questNeededItems(this.state);
     if (!rows.length) {
-      this.layer.add(cardText(this, SELL.x + 20, Y + 150, 'Nemáš nic na prodej.', { size: 20, color: '#9aa4ae' }));
+      const label = SELL_FILTERS.find((c) => c.id === this.sellFilter)?.label;
+      this.layer.add(cardText(this, SELL.x + 20, Y + 160, label ? `V kategorii ${label} nemáš nic na prodej.` : 'Nemáš nic na prodej.', { size: 20, color: '#9aa4ae' }));
       return;
     }
     const pages = Math.max(1, Math.ceil(rows.length / PAGE));
@@ -143,18 +164,63 @@ export default class MerchantShopScene extends Phaser.Scene {
     rows.slice(this.sellPage * PAGE, (this.sellPage + 1) * PAGE).forEach((row, i) => {
       const y = Y + 140 + i * ROW;
       const item = getItem(row.id);
+      shopItemHover(this, this.layer, row.id, SELL.x + 20, y, SELL.w - 40 - SELL_BUTTONS_W, ROW - 6);
       this.icon(row.id, SELL.x + 44, y + 28, 40);
       const color = (RARITY[item?.rarity] ?? RARITY.common).color;
       const name = cardText(this, SELL.x + 76, y + 4, `${item?.name ?? row.id} ×${row.qty}`, { size: 20, bold: true, color });
-      if (name.width > 220) name.setScale(220 / name.width);
+      // Dlouhý název: zmenšit nejvýš na 85 %, zbytek zkrátit „…“ (jinak by byl nečitelně malý).
+      if (name.width > 150) name.setScale(Math.max(0.85, 150 / name.width));
+      const base = item?.name ?? row.id;
+      for (let cut = base.length - 1; name.displayWidth > 150 && cut > 3; cut--) name.setText(`${base.slice(0, cut).trimEnd()}… ×${row.qty}`);
       this.layer.add(name);
       // Předmět pro úkol: upozornění (prodat jde, ale úkol pak chybí).
       const note = needed.has(row.id) ? ' · pro úkol' : '';
-      this.layer.add(coinAmount(this, SELL.x + 76, y + 34, row.price, { size: 17, color: note ? '#ffd76a' : '#b8a890' }, { rest: `/ ks${note}` }));
-      this.layer.add(cardButton(this, null, SELL.x + SELL.w - 340, y + 4, 150, 56, 'Prodat 1', () => this.addSell(row, 1), { size: 20 }).objects);
-      this.layer.add(cardButton(this, null, SELL.x + SELL.w - 180, y + 4, 160, 56, 'Prodat vše', () => this.addSell(row, row.qty), { size: 20 }).objects);
+      this.layer.add(coinAmount(this, SELL.x + 76, y + 34, this.cart.sellUnit(row.price), { size: 17, color: note ? '#ffd76a' : '#b8a890' }, { rest: `/ ks${note}` }));
+      this.layer.add(sellButtons(this, this.cart, { x: SELL.x + SELL.w - 20 - SELL_BUTTONS_W, y: y + 4, h: 56, itemId: row.id, qty: row.qty, onSell: (n) => this.addSell(row, n) }));
     });
     this.pager(SELL.x + 20, Y + H - 170, this.sellPage, pages, (step) => { this.sellPage += step; this.refresh(); });
+  }
+
+  // Tlačítko „Filtr: … ▾“ vpravo v nadpisu výkupu; klik rozbalí kategorie s počty kusů.
+  renderSellFilter() {
+    const label = SELL_FILTERS.find((c) => c.id === this.sellFilter)?.label ?? 'Vše';
+    const bw = 250;
+    const bx = SELL.x + SELL.w - 20 - bw;
+    const button = cardButton(this, null, bx, Y + 86, bw, 54, `Filtr: ${label} ▾`, () => this.toggleFilterMenu(bx, Y + 146, bw), { size: 20 });
+    if (this.sellFilter) button.objects[1]?.setColor?.('#ffd76a');
+    this.layer.add(button.objects);
+  }
+
+  toggleFilterMenu(x, y, w) {
+    if (this.filterMenu) { this.closeFilterMenu(); return; }
+    const rows = this.sellRows();
+    const count = (id) => rows.filter((r) => !id || sellCategory(r.id) === id).reduce((sum, r) => sum + r.qty, 0);
+    const options = [{ id: null, label: 'Vše' }, ...SELL_FILTERS];
+    const objects = [];
+    // Klik mimo nabídku ji zavře.
+    const shade = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.001).setOrigin(0).setInteractive().setDepth(50);
+    shade.on('pointerdown', () => this.closeFilterMenu());
+    objects.push(shade);
+    const bg = this.add.graphics().setDepth(51);
+    bg.fillStyle(0x0b1626, 0.97).fillRoundedRect(x - 8, y - 8, w + 16, options.length * 60 + 10, 12).lineStyle(2, 0xd6a23a, 1).strokeRoundedRect(x - 8, y - 8, w + 16, options.length * 60 + 10, 12);
+    objects.push(bg);
+    options.forEach((opt, i) => {
+      const n = count(opt.id);
+      const b = cardButton(this, null, x, y + i * 60, w, 54, `${opt.label} (${n})`, () => {
+        this.sellFilter = opt.id;
+        this.sellPage = 0;
+        this.closeFilterMenu();
+        this.refresh();
+      }, { size: 20, disabled: !n && opt.id !== null });
+      if (opt.id === this.sellFilter) b.objects[1]?.setColor?.('#ffd76a');
+      for (const o of b.objects) { o.setDepth?.(52); objects.push(o); }
+    });
+    this.filterMenu = objects;
+  }
+
+  closeFilterMenu() {
+    for (const o of this.filterMenu ?? []) o.destroy();
+    this.filterMenu = null;
   }
 
   addSell(row, qty) {

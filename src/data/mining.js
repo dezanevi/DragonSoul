@@ -8,10 +8,11 @@
 
 // Vzácnost → výtěžnost, obnova, doba těžby, násobek XP a ceny (klíče jako u předmětů).
 export const MINING_RARITY = {
-  common: { label: 'Běžná', yield: [2, 4], respawnMin: 5, seconds: 3, xp: 1, price: 1 },
-  uncommon: { label: 'Neobvyklá', yield: [1, 3], respawnMin: 15, seconds: 4, xp: 1.5, price: 2 },
-  rare: { label: 'Vzácná', yield: [1, 2], respawnMin: 45, seconds: 5, xp: 2.5, price: 4 },
-  epic: { label: 'Velmi vzácná', yield: [1, 1], respawnMin: 180, seconds: 6, xp: 4, price: 8 }
+  // Obnova: běžné a neobvyklé za 12 min, vzácné a lepší za 48 min (přání hráče).
+  common: { label: 'Běžná', yield: [2, 4], respawnMin: 12, seconds: 3, xp: 1, price: 1 },
+  uncommon: { label: 'Neobvyklá', yield: [1, 3], respawnMin: 12, seconds: 4, xp: 1.5, price: 2 },
+  rare: { label: 'Vzácná', yield: [1, 2], respawnMin: 48, seconds: 5, xp: 2.5, price: 4 },
+  epic: { label: 'Velmi vzácná', yield: [1, 1], respawnMin: 48, seconds: 6, xp: 4, price: 8 }
 };
 
 export const MINING_RULES = {
@@ -147,6 +148,18 @@ const DEPOSIT_ROWS = [
   ['N40', 'Runová skála', 'ruins', 'Skyreach Citadel', 'ruiny', 'rune_stone', ['astral_shard', 'mat_kristalovy_strep']]
 ];
 
+// Odstín skály naleziště podle hlavní suroviny (skála v lomu obarvená stejně jako ruda).
+const MATERIAL_TINT = {
+  copper_ore: 0xe0956a, iron_ore: 0x8f9cb0, tin_ore: 0x9fd6c4, silver_ore: 0xe4e8ee, gold_ore: 0xf2d36a,
+  coal: 0x5e5e68, quartz: 0xe6e0ff, salt: 0xf4c4c4, granite: 0xd9a88a, pyrite: 0xe8cf6a,
+  gem_amethyst: 0xc08ef0, gem_ruby: 0xf07a7a, gem_sapphire: 0x7fa8f5, gem_emerald: 0x7ee0a0, gem_topaz: 0xf5c66a,
+  mat_kristalovy_strep: 0x8fdcff, raw_cut_crystal: 0xbfe8ff, mat_kristalove_jadro: 0x9fd0ff
+};
+export function depositTint(depositId) {
+  const deposit = DEPOSITS.find((d) => d.id === depositId);
+  return MATERIAL_TINT[deposit?.main] ?? 0xffffff;
+}
+
 export const DEPOSITS = DEPOSIT_ROWS.map(([id, name, type, region, biome, main, sides]) => {
   const material = MINING_MATERIAL_BY_ID[main];
   return {
@@ -159,15 +172,15 @@ export const DEPOSITS = DEPOSIT_ROWS.map(([id, name, type, region, biome, main, 
 // Speciální naleziště: několik tahů z vlastní tabulky (váhy v %), nutný doplňkový nástroj.
 export const SPECIAL_DEPOSITS = [
   { id: 'S1', name: 'Krystalová geoda', type: 'crystal', special: 'geode', region: 'Stonehelm Range', biome: 'krystalové jeskyně',
-    minLevel: 35, tier: 3, tool: 'tool_crystal_tongs', draws: 3, respawnMs: 6 * 3600000,
+    minLevel: 35, tier: 3, tool: 'tool_crystal_tongs', draws: 3, respawnMs: 48 * 60000,
     table: { mat_kristalovy_strep: 40, gem_amethyst: 8, gem_topaz: 8, gem_emerald: 8, gem_sapphire: 8, gem_ruby: 8, mat_kristalove_jadro: 15, gem_diamond: 5 },
     rareFind: { id: 'uncut_gem', chance: 0.08 } },
   { id: 'S2', name: 'Runové ložisko', type: 'ruins', special: 'runic', region: 'Skyreach Citadel', biome: 'prastaré ruiny',
-    minLevel: 60, tier: 4, tool: null, draws: 3, respawnMs: 12 * 3600000,
+    minLevel: 60, tier: 4, tool: null, draws: 3, respawnMs: 48 * 60000,
     table: { rune_stone: 40, astral_shard: 30, mat_hvezdny_prach: 25, star_ore: 5 },
     rareFind: { id: 'ancient_rune_fragment', chance: 0.04 } },
   { id: 'S3', name: 'Žhavé rudné ložisko', type: 'volcano', special: 'molten', region: "Dragon's Nest", biome: 'sopky',
-    minLevel: 70, tier: 5, tool: 'tool_safety_tongs', draws: 3, respawnMs: 12 * 3600000,
+    minLevel: 70, tier: 5, tool: 'tool_safety_tongs', draws: 3, respawnMs: 48 * 60000,
     table: { obsidian: 35, crystal_flame: 30, gem_ruby: 25, dragon_iron_ore: 10 } },
   { id: 'S4', name: 'Hvězdný meteorit', type: 'ruins', special: 'meteor', region: '(náhodný region)', biome: 'místo dopadu',
     minLevel: 85, tier: 5, tool: 'tool_astral_hammer', draws: 4, respawnMs: 0,
@@ -180,6 +193,8 @@ export const DEPOSIT_BY_ID = Object.fromEntries(ALL_DEPOSITS.map((d) => [d.id, d
 
 // Krumpáče (vyrábí Kovářství; do jeho dokončení I–III prodává Hornický mistr).
 export const PICKAXES = [
+  // Dárek od Hornického mistra: základní krumpáč bez bonusů, prodá se za 1 zlatý.
+  { id: 'old_pickaxe', name: 'Starý krumpáč', tier: 1, level: 1, smithing: 0, starter: 'Hornický mistr' },
   { id: 'pick_basic', name: 'Základní důlní krumpáč', tier: 1, level: 1, smithing: 3, price: 15 },
   { id: 'pick_iron', name: 'Železný krumpáč', tier: 2, level: 16, smithing: 15, price: 80 },
   { id: 'pick_steel', name: 'Ocelový krumpáč', tier: 3, level: 31, smithing: 30, price: 250 },

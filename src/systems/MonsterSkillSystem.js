@@ -6,8 +6,20 @@ const SKILLS_BY_ID = new Map(
   skillRows.map((skill) => [skill.id, skill])
 );
 
-export const MAX_ACTIVE_SKILLS = 6;
-export const MAX_REGULAR_SKILLS = 5;
+// Starter + 4 úrovňové + podpisová = 6 běžných, + Bond = 7.
+export const MAX_ACTIVE_SKILLS = 7;
+export const MAX_REGULAR_SKILLS = 6;
+
+// Podpisová schopnost druhu (jedinečná, monsterSkillProfiles.signatures) – naučí se na této úrovni.
+export const SIGNATURE_LEVEL = 5;
+export function getSignatureSkillId(speciesId) {
+  const id = speciesSkillProfiles.signatures?.[normalizeSpeciesId(speciesId)];
+  return id && SKILLS_BY_ID.has(id) ? id : null;
+}
+// Úrovně, na kterých se druh učí schopnosti (podpisová + 10/20/40/80).
+export function skillUnlockLevels(speciesId) {
+  return getSignatureSkillId(speciesId) ? [SIGNATURE_LEVEL, 10, 20, 40, 80] : [10, 20, 40, 80];
+}
 
 const STARTER_SKILLS_BY_ELEMENT = {
   fire: 'ember_breath',
@@ -141,6 +153,9 @@ export function getSkillsLearnedAtLevel(
 ) {
   const speciesProfile = getSpeciesProfile(speciesId);
   const element = normalizeElement(elementFallback ?? speciesId);
+
+  const signature = level === SIGNATURE_LEVEL ? getSignatureSkillId(speciesId) : null;
+  if (signature) return [signature];
 
   const profileSkillId =
     speciesProfile?.levels?.[String(level)];

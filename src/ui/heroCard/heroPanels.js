@@ -8,7 +8,10 @@ import { magicStateKey, spriteState } from './heroButtonSprites.js';
 const MAGIC_CARD = { y: 437, h: 136, spriteW: 104, spriteH: 122, barY: 547, barW: 66, barH: 12 };
 import { getHeroSpeed, getHeroLuck, getHeroCharisma } from '../../systems/HeroStatsSystem.js';
 import { getEffectiveSpellPower, getTalentBonuses } from '../../systems/TalentSystem.js';
-import { getMovementMultiplier } from '../../systems/HeroStatsSystem.js';
+import {
+  getMovementMultiplier, normalizeCharisma, heroStatSources, HERO_STAT_MAX, CHARISMA_MAX_LEVEL, critChance, lootMultiplier,
+  luckGatherBonus, luckRareBonus, npcBuyMultiplier, npcSellMultiplier, ownShopMultiplier, charismaTameBonus
+} from '../../systems/HeroStatsSystem.js';
 import { gearBonus, gearBreakdown } from '../../systems/SmithingSystem.js';
 
 // Panely záložky Hrdina, které jen zobrazují data ze stavu hry.
@@ -114,11 +117,14 @@ export class HeroStats {
     if (kind === 'hero') {
       const sp = getEffectiveSpellPower(state);
       const speed = number(state.speed, 1);
-      const luck = number(state.luck, 1);
-      const charisma = number(state.charisma, 1);
+      const luck = getHeroLuck(state);
+      const charisma = getHeroCharisma(state);
+      const cha = normalizeCharisma(state);
+      const sources = (stat) => {
+        const rows = heroStatSources(state, stat).filter((r) => r.value);
+        return rows.length ? ['Zdroje:', ...rows.map((r) => `  • ${r.label}: +${r.value}`)] : ['Zdroje: zatím žádné.'];
+      };
       const speedOf = capped(2, 50);
-      const luckOf = capped(0.5, 15);
-      const charismaOf = capped(1, 25);
       const next = (now, after, cap, unit) => (now >= cap
         ? `Maximum: ${pct(cap)} ${unit} je dosažené, další body už nic nepřidají.`
         : `Po +1 bodu: ${pct(after)} ${unit}${after >= cap ? ' (maximum)' : ''}.`);
@@ -139,14 +145,21 @@ export class HeroStats {
           next(speedOf(speed), speedOf(speed + 1), 50, '%')
         ]],
         ['Štěstí', [
-          `Hodnota ${luck}.`,
-          `Teď: šance na vzácné monstrum v setkání +${pct(luckOf(luck))} % (0,5 % za bod nad 1). Zatím se v setkáních nepoužívá.`,
-          next(luckOf(luck), luckOf(luck + 1), 15, '%')
+          `Hodnota ${luck} / ${HERO_STAT_MAX} (maximum). Jen z amuletů, prstenů a pár vzácných předmětů, z jídla a lektvarů – bez úrovní.`,
+          'Kde se uplatní (za bod):',
+          `  • kritický zásah monster v souboji: ${pct(critChance(state) * 100)} % (základ 5 % + 1 %, poškození ×1,5)`,
+          `  • kořist z monster: +${pct((lootMultiplier(state) - 1) * 100)} % (2,5 %)`,
+          `  • kus navíc při sběru bylin, těžbě a rybolovu: +${pct(luckGatherBonus(state) * 100)} % (0,5 %)`,
+          `  • vzácné noční monstrum: +${pct(luckRareBonus(state) * 100)} % (0,5 %)`,
+          ...sources('luck')
         ]],
         ['Charisma', [
-          `Hodnota ${charisma}.`,
-          `Teď: sleva u obchodníků ${pct(charismaOf(charisma))} % (1 % za bod nad 1). Zatím se v obchodech nepoužívá.`,
-          next(charismaOf(charisma), charismaOf(charisma + 1), 25, '%')
+          `Hodnota ${charisma} / ${HERO_STAT_MAX} (maximum). Úroveň ${cha.level} / ${CHARISMA_MAX_LEVEL}${cha.level < CHARISMA_MAX_LEVEL ? ` (XP ${Math.floor(cha.exp)} / ${cha.next})` : ''} – roste s XP Diplomacie, 15. úrovně dosáhneš s Diplomacií 100. Zbytek do 20 dorovnají předměty, jídlo a lektvary.`,
+          'Kde se uplatní (za bod):',
+          `  • nákup u obchodníků: −${pct((1 - npcBuyMultiplier(state)) * 100)} % (1 %), výkup +${pct((npcSellMultiplier(state) - 1) * 100)} % (1 %)`,
+          `  • vlastní obchod – zákazníci a šance na prodej: +${pct((ownShopMultiplier(state) - 1) * 100)} % (1,5 %)`,
+          `  • ochočení monster: +${pct(charismaTameBonus(state) * 100)} % (0,5 %)`,
+          ...sources('charisma')
         ]]
       ];
       const [title, lines] = tips[index];

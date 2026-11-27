@@ -10,6 +10,9 @@
 // ======================================================================
 
 import { ALL_ALCHEMY, ALCHEMY_BY_ID, alchemyOutputId, alchemyXp } from '../data/alchemy.js';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { getTalentBonuses, materialSaving, talentRecipeUnlocked } from './TalentSystem.js';
 import { xpToNextFishingLevel as xpToNextLevel } from '../data/fishing.js';
 import { getItemCount, removeItem, addItem } from './InventorySystem.js';
 
@@ -31,7 +34,7 @@ export function normalizeAlchemy(state) {
 
 export const alchemyLevel = (state) => normalizeAlchemy(state) && state.professions.alchemy.level;
 export const isAlchemyKnown = (state, recipe) =>
-  ALL_ALCHEMY_KNOWN_FOR_TESTING || recipe.origin === 'base' || recipe.origin === 'game' || Boolean(state.alchemy?.learned?.[recipe.id]);
+  recipe.talent ? talentRecipeUnlocked(state, recipe.talent) : ALL_ALCHEMY_KNOWN_FOR_TESTING || recipe.origin === 'base' || recipe.origin === 'game' || Boolean(state.alchemy?.learned?.[recipe.id]);
 
 const optionsOf = (key) => key.split('|');
 export const alchemyIngredientCount = (state, key) => optionsOf(key).reduce((sum, id) => sum + getItemCount(state, id), 0);
@@ -55,6 +58,7 @@ export function brew(state, recipe, stationRank, times = 1) {
   if (!check.ok) return { ok: false, message: check.reason };
   for (const [key, qty] of Object.entries(recipe.ingredients)) {
     let left = qty * times;
+    left -= materialSaving(state, left); // talent Úsporné zpracování
     for (const id of optionsOf(key)) {
       const take = Math.min(left, getItemCount(state, id));
       if (take > 0) removeItem(state, id, take);
@@ -72,13 +76,14 @@ export function brew(state, recipe, stationRank, times = 1) {
     state.alchemy.made[recipe.id] = (state.alchemy.made[recipe.id] ?? 0) + 1;
   }
   const levelsGained = addAlchemyXp(state, xp);
+  countQuestEvent(state, `craft:alchemy:${recipe.id}`, times); // úkoly Alchymie
   return {
     ok: true, made: made - leftOver, xp, levelsGained,
     message: `Vyrobeno: ${recipe.name} ×${made - leftOver} (+${xp} XP)${leftOver ? ` – ${leftOver} ks se nevešlo do inventáře` : ''}.`
   };
 }
 
-export function addAlchemyXp(state, amount) {
+function addAlchemyXpRaw(state, amount) {
   const prof = state.professions.alchemy;
   prof.exp += amount;
   let gained = 0;
@@ -118,6 +123,21 @@ const injuredFirst = (party) =>
   party.filter((m) => m.stats && m.currentHp > 0 && m.currentHp < m.stats.vitality)
     .sort((a, b) => (b.stats.vitality - b.currentHp) - (a.stats.vitality - a.currentHp));
 
+// Alchymická zručnost: číselné účinky lektvarů (léčení, mana, regenerace, posílení, odolnost,
+// poškození vrhacích směsí) × (1 + talent). Doba trvání se nemění.
+export function potionEffect(state, effect) {
+  const p = getTalentBonuses(state).potionPotency;
+  if (!effect || !p) return effect;
+  const m = (v) => Math.round(v * (1 + p));
+  const scaleMap = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'number' ? m(v) : v])) : o);
+  const e = { ...effect };
+  for (const key of ['heal', 'healAll', 'mana', 'regenTurn', 'manaTurn']) if (typeof e[key] === 'number') e[key] = m(e[key]);
+  if (e.buffs) e.buffs = scaleMap(e.buffs);
+  if (e.resist) e.resist = scaleMap(e.resist);
+  if (e.throw?.damage) e.throw = { ...e.throw, damage: m(e.throw.damage) };
+  return e;
+}
+
 const healMonster = (monster, amount) => {
   const gained = Math.min(amount, monster.stats.vitality - monster.currentHp);
   monster.currentHp += gained;
@@ -127,11 +147,11 @@ const healMonster = (monster, amount) => {
 function setLasting(state, recipe, e, now) {
   const notes = [];
   if (e.buffs) {
-    if (state.elixir?.battlesLeft > 0) notes.push(`nahrazuje elixír ${state.elixir.name}`);
+    if (state.elixir?.battlesLeft > 0) notes.push(`nahrazuje ${state.elixir.name}`);
     state.elixir = { recipe: recipe.id, name: recipe.name, buffs: { ...e.buffs }, battlesLeft: e.battles };
   }
   if (e.immune || e.resist) {
-    if (state.potionGuard?.battlesLeft > 0) notes.push(`nahrazuje ochranu ${state.potionGuard.name}`);
+    if (state.potionGuard?.battlesLeft > 0) notes.push(`nahrazuje ${state.potionGuard.name}`);
     state.potionGuard = { recipe: recipe.id, name: recipe.name, immune: [...(e.immune ?? [])], resist: { ...(e.resist ?? {}) }, battlesLeft: e.battles };
   }
   if (e.explore) {
@@ -148,7 +168,7 @@ function setLasting(state, recipe, e, now) {
 export function useAlchemyOutside(state, recipeId, now = Date.now()) {
   normalizeAlchemy(state);
   const recipe = ALCHEMY_BY_ID[recipeId];
-  const e = recipe?.effect;
+  const e = potionEffect(state, recipe?.effect);
   if (!e) return { ok: false, message: 'Tento předmět nejde použít.' };
   const party = state.party ?? [];
   const parts = [];
@@ -171,6 +191,7 @@ export function useAlchemyOutside(state, recipeId, now = Date.now()) {
   const notes = lasting ? setLasting(state, recipe, e, now) : [];
   if (lasting) parts.push('účinek trvá');
   if (!parts.length) return { ok: false, message: 'Monstra jsou zdravá a mana plná – přípravek by přišel nazmar.' };
+  countQuestEvent(state, `use:alchemy:${recipe.id}`); // úkol Alchymie III
   return { ok: true, message: `${recipe.name}: ${parts.join(', ')}${notes.length ? ` (${notes.join(', ')})` : ''}.` };
 }
 
@@ -202,3 +223,11 @@ export function applyAlchemyAfterBattle(state) {
 }
 
 export const allAlchemyRecipes = () => ALL_ALCHEMY;
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addAlchemyXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'alchemy');
+  const result = addAlchemyXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'alchemy', before, amount);
+  return result;
+}

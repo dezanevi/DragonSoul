@@ -24,7 +24,7 @@ import { MAGIC_SCHOOLS, isMagicSchoolUnlocked } from '../systems/MagicMasterySys
 import { elementName } from '../systems/ElementSystem.js';
 import { closeStateKey } from '../ui/heroCard/tabSprites.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
-import { drawCardFrame, CARD_FIT } from '../ui/fantasyCard.js';
+import { drawCardFrame, CARD_FIT, CARD_PANEL, uiTitle } from '../ui/fantasyCard.js';
 import { rebuildTalentCard } from '../ui/newUiKit.js';
 import { talentDisplayName, TALENT_INDEX as TALENT_LOOKUP } from '../data/talents.js';
 import {
@@ -105,6 +105,8 @@ export default class TalentScene extends Phaser.Scene {
     }
     this.layer = this.add.container(0, 0);
     this.card.add(this.layer);
+    // Jednotná hlavička karet (stejně jako Dovednosti, Bestiář, Úkoly, Mapa).
+    uiTitle(this, CARD_PANEL.x + 150, CARD_PANEL.y + 38, 'Talenty', { icon: 'book', size: 34 });
 
     this.tooltip = this.createTooltip();
     this.createCloseButton();
@@ -226,7 +228,7 @@ export default class TalentScene extends Phaser.Scene {
       if (canChooseSpecialization(this.state).ok) {
         this.addButton(right - 120, HEADER.buttonY, 120, 34, 'Zvolit', () => this.confirmSpecialization(tree));
       } else {
-        status = 'Odemkne úkol Orčí hrozba';
+        status = 'Odemkne 4. úroveň hrdiny';
       }
     } else if (isMain) {
       status = isTreeComplete(this.state, tree.id) ? 'Hlavní strom – dokončen' : 'Hlavní specializace';
@@ -248,11 +250,16 @@ export default class TalentScene extends Phaser.Scene {
     const box = FINAL_BOXES[treeIndex];
     if (!done && !treeLocked) this.addGray(box);
     if (done) this.addFrame(TALENT_CARD.frameActive, box);
-    this.layer.add(
-      text(this, box.x + 92, box.y + 40, done ? tree.final.text : `Získá se automaticky po ${TREE_POINT_LIMIT} bodech. ${tree.final.text}`, {
-        size: 13, color: done ? '#f3e4bd' : '#b8c0c8', wrap: box.w - 108, strokeThickness: 2
-      })
-    );
+    // Popis se musí vejít do rámečku (dlouhý popis = menší písmo).
+    const finalText = done ? tree.final.text : `Po ${TREE_POINT_LIMIT} bodech: ${tree.final.text}`;
+    const maxH = box.h - 40 - 12;
+    let desc = null;
+    for (let size = 13; size >= 10; size--) {
+      desc?.destroy();
+      desc = text(this, box.x + 92, box.y + 40, finalText, { size, color: done ? '#f3e4bd' : '#b8c0c8', wrap: box.w - 108, strokeThickness: 2 });
+      if (desc.height <= maxH) break;
+    }
+    this.layer.add(desc);
   }
 
   renderNode(tree, talent, tierIndex, rect, treeLocked) {
@@ -285,7 +292,7 @@ export default class TalentScene extends Phaser.Scene {
     }
 
     if (talent.needsSystem) {
-      this.layer.add(text(this, rect.x + rect.w - 6, rect.y + rect.h - 6, 'brzy', {
+      this.layer.add(text(this, rect.x + rect.w - 12, rect.y + rect.h - 9, 'brzy', { // uvnitř rámečku dlaždice
         size: 11, color: '#9fb3c4', originX: 1, originY: 1, strokeThickness: 2
       }));
     }

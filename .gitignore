@@ -5,6 +5,9 @@ dist/
 # Archiv verzí (ZIPy) zůstává jen na disku
 archiv/
 
+# Hlášení chyb z vývojové hry (Pauza → Nahlásit chybu) – zůstávají jen na disku
+bug-reports/
+
 # Místní nastavení
 .claude/settings.local.json
 .vscode/

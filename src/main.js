@@ -24,9 +24,9 @@ import CookingScene, { AlchemyScene, SmithingScene, CraftingScene } from './scen
 import ProfessionsScene from './scenes/ProfessionsScene.js';
 import MerchantShopScene from './scenes/MerchantShopScene.js';
 import QuestsScene from './scenes/QuestsScene.js';
-import SoulClashScene from './scenes/SoulClashScene.js';
 import PauseScene from './scenes/PauseScene.js';
 import OwnShopScene from './scenes/OwnShopScene.js';
+import SkillToastScene from './scenes/SkillToastScene.js';
 import { tickBusiness } from './systems/DiplomacySystem.js';
 
 
@@ -115,11 +115,33 @@ const startGame = () => new Phaser.Game({
     ProfessionsScene,
     MerchantShopScene,
     QuestsScene,
-    SoulClashScene,
     PauseScene,
-    OwnShopScene
+    OwnShopScene,
+    SkillToastScene // vyskakovací okno zisku XP dovedností – vždy nad ostatními
   ]
 });
+
+// Ukazatel FPS v levém horním rohu hry (malý štítek nad plátnem, obnova 2× za sekundu).
+// Zelená ≥ 50, žlutá ≥ 30, jinak červená. Nepřekáží klikání (pointer-events: none).
+function showFpsCounter(game) {
+  const label = document.createElement('div');
+  label.id = 'fps-counter';
+  Object.assign(label.style, {
+    position: 'fixed', zIndex: 50, pointerEvents: 'none', padding: '2px 8px', borderRadius: '6px',
+    font: 'bold 14px Lora, Georgia, serif', background: 'rgba(4, 8, 12, 0.6)', border: '1px solid rgba(216, 166, 64, 0.6)'
+  });
+  document.body.appendChild(label);
+  setInterval(() => {
+    const canvas = game.canvas;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const fps = Math.round(game.loop.actualFps || 0);
+    label.style.left = `${Math.round(rect.left + 6)}px`;
+    label.style.top = `${Math.round(rect.top + 6)}px`;
+    label.style.color = fps >= 50 ? '#8fe08a' : fps >= 30 ? '#ffd76a' : '#ff8a7a';
+    label.textContent = `FPS ${fps}`;
+  }, 500);
+}
 
 fontsReady.then(() => {
   const game = startGame();
@@ -131,6 +153,7 @@ fontsReady.then(() => {
   });
   // Vlastní obchody (Diplomacie) prodávají během hraní – čas běží s herní smyčkou.
   game.events.on(Phaser.Core.Events.STEP, (time, delta) => tickBusiness(delta));
+  showFpsCounter(game);
   // Jen při vývoji (npm run dev): hra je dostupná v konzoli prohlížeče jako window.game.
   if (import.meta.env.DEV) window.game = game;
 });

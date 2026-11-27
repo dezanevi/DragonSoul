@@ -9,12 +9,13 @@
 //   SICKLES, HERB_RARE_FINDS, HERB_SPECIALIZATIONS, HERBALIST_STOCK
 
 export const HERB_RARITY = {
-  common: { label: 'Běžná', yield: [2, 4], respawnMin: 5, seconds: 2, xp: 10, price: 3, tier: 1 },
-  uncommon: { label: 'Neobvyklá', yield: [1, 3], respawnMin: 15, seconds: 2.5, xp: 18, price: 8, tier: 1 },
-  rare: { label: 'Vzácná', yield: [1, 2], respawnMin: 45, seconds: 3, xp: 30, price: 20, tier: 2 },
-  epic: { label: 'Velmi vzácná', yield: [1, 1], respawnMin: 120, seconds: 3.5, xp: 45, price: 45, tier: 3 },
-  magic: { label: 'Magická', yield: [1, 1], respawnMin: 240, seconds: 4, xp: 65, price: 90, tier: 4 },
-  legendary: { label: 'Legendární', yield: [1, 1], respawnMin: 1440, seconds: 5, xp: 100, price: 250, tier: 5 }
+  // Obnova: běžné a neobvyklé (i záhony) za 12 min, vzácné a lepší za 48 min (přání hráče).
+  common: { label: 'Běžná', yield: [2, 4], respawnMin: 12, seconds: 2, xp: 10, price: 3, tier: 1 },
+  uncommon: { label: 'Neobvyklá', yield: [1, 3], respawnMin: 12, seconds: 2.5, xp: 18, price: 8, tier: 1 },
+  rare: { label: 'Vzácná', yield: [1, 2], respawnMin: 48, seconds: 3, xp: 30, price: 20, tier: 2 },
+  epic: { label: 'Velmi vzácná', yield: [1, 1], respawnMin: 48, seconds: 3.5, xp: 45, price: 45, tier: 3 },
+  magic: { label: 'Magická', yield: [1, 1], respawnMin: 48, seconds: 4, xp: 65, price: 90, tier: 4 },
+  legendary: { label: 'Legendární', yield: [1, 1], respawnMin: 48, seconds: 5, xp: 100, price: 250, tier: 5 }
 };
 
 // Vzácnost rostliny → vzácnost předmětu (barvy v inventáři používají klíče common … legendary).
@@ -32,7 +33,7 @@ export const HERB_RULES = {
   levelXpScale: 25, // XP = základ × (1 + úroveň rostliny / 25)
   specialXp: 1.5,
   cultivatedXp: 0.5,
-  cultivatedRespawnMin: 10,
+  cultivatedRespawnMin: 12,
   firstHarvestXp: 5, // herbář: první sběr rostliny = 5× základní XP navíc
   hiddenMinutes: 30,
   specializationLevel: 25,
@@ -118,16 +119,16 @@ const SITE_ROWS = [
   ['G10', 'Zahrádka Rybářské chaty', 'Greenvale', 'shade', 'blue_herbs', 'mat_vodni_kvet'],
   ['G11', 'Zahrádka u domu', 'Greenvale', 'forest', 'forest_sage', 'bitter_root'],
   ['G12', 'Zahrádka u domu', 'Greenvale', 'meadow', 'healing_herbs', 'wayfarer_thyme'],
-  // Bylinková louka u statku (jedna velká ohrazená louka, do úrovně 10).
-  ['L01', 'Bylinková louka', 'Greenvale', 'meadow', 'healing_herbs', 'cleansing_herbs'],
-  ['L02', 'Bylinková louka – mokřina', 'Greenvale', 'wetland', 'cleansing_herbs', 'blue_herbs'],
-  ['L03', 'Bylinková louka – stín', 'Greenvale', 'shade', 'blue_herbs', 'bitter_root'],
-  ['L04', 'Bylinková louka – remízek', 'Greenvale', 'forest', 'bitter_root', 'forest_sage'],
-  ['L05', 'Bylinková louka', 'Greenvale', 'meadow', 'forest_sage', 'healing_herbs'],
-  ['L06', 'Bylinková louka', 'Greenvale', 'meadow', 'wayfarer_thyme', 'healing_herbs'],
-  ['L07', 'Bylinková louka – tůňka', 'Greenvale', 'wetland', 'mat_vodni_kvet', 'cleansing_herbs'],
-  ['L08', 'Bylinková louka – remízek', 'Greenvale', 'forest', 'mat_svitici_list', 'forest_sage'],
-  ['L09', 'Bylinková louka – kamení', 'Greenvale', 'mountain', 'mountain_root', 'bitter_root']
+  // Byliny uvnitř ohrady statku (jeden velký statek, do úrovně 10).
+  ['L01', 'Statek – bylinkový záhon', 'Greenvale', 'meadow', 'healing_herbs', 'cleansing_herbs'],
+  ['L02', 'Statek – mokřina', 'Greenvale', 'wetland', 'cleansing_herbs', 'blue_herbs'],
+  ['L03', 'Statek – stín', 'Greenvale', 'shade', 'blue_herbs', 'bitter_root'],
+  ['L04', 'Statek – remízek', 'Greenvale', 'forest', 'bitter_root', 'forest_sage'],
+  ['L05', 'Statek – bylinkový záhon', 'Greenvale', 'meadow', 'forest_sage', 'healing_herbs'],
+  ['L06', 'Statek – bylinkový záhon', 'Greenvale', 'meadow', 'wayfarer_thyme', 'healing_herbs'],
+  ['L07', 'Statek – tůňka', 'Greenvale', 'wetland', 'mat_vodni_kvet', 'cleansing_herbs'],
+  ['L08', 'Statek – remízek', 'Greenvale', 'forest', 'mat_svitici_list', 'forest_sage'],
+  ['L09', 'Statek – kamení', 'Greenvale', 'mountain', 'mountain_root', 'bitter_root']
 ];
 
 export const HERB_SITES = SITE_ROWS.map(([id, name, region, biome, main, side]) => {
@@ -143,19 +144,19 @@ export const HERB_SITES = SITE_ROWS.map(([id, name, region, biome, main, side]) 
 // Speciální naleziště: několik tahů z vlastní tabulky (váhy v %).
 export const SPECIAL_HERB_SITES = [
   { id: 'SH1', name: 'Hustý bylinný porost', special: 'thicket', region: 'Greenvale', biome: 'meadow',
-    minLevel: 10, tier: 1, draws: 3, extraYield: 1, rareChance: 0.08, respawnMs: 30 * 60000,
+    minLevel: 10, tier: 1, draws: 3, extraYield: 1, rareChance: 0.08, respawnMs: 48 * 60000,
     table: { healing_herbs: 35, cleansing_herbs: 25, forest_sage: 20, wayfarer_thyme: 20 },
     finds: ['herb_rare_seeds', 'herb_botanical_note'] },
   { id: 'SH2', name: 'Skryté lesní naleziště', special: 'hidden', region: 'Greenvale', biome: 'forest',
-    minLevel: 25, tier: 2, draws: 3, extraYield: 0, rareChance: 0.15, respawnMs: 120 * 60000,
+    minLevel: 25, tier: 2, draws: 3, extraYield: 0, rareChance: 0.15, respawnMs: 48 * 60000,
     table: { mat_svitici_list: 50, forest_sage: 45, moon_flower: 5 },
     finds: ['herb_rare_seeds', 'herb_forest_resin', 'herb_botanical_note'] },
   { id: 'SH3', name: 'Magická zahrada', special: 'garden', region: 'Mystic Isles', biome: 'magic',
-    minLevel: 45, tier: 3, draws: 2, extraYield: 0, rareChance: 0.12, respawnMs: 240 * 60000,
+    minLevel: 45, tier: 3, draws: 2, extraYield: 0, rareChance: 0.12, respawnMs: 48 * 60000,
     table: { moon_flower: 50, mat_svitici_list: 45, shadow_lily: 5 },
     finds: ['herb_pollen', 'herb_flower_essence'] },
   { id: 'SH4', name: 'Prastaré botanické naleziště', special: 'ancient', region: 'Mystic Isles', biome: 'ancient',
-    minLevel: 82, tier: 5, draws: 1, extraYield: 0, rareChance: 0.2, respawnMs: 1440 * 60000,
+    minLevel: 82, tier: 5, draws: 1, extraYield: 0, rareChance: 0.2, respawnMs: 48 * 60000,
     guaranteed: 'astral_orchid', table: { shadow_lily: 50, moon_flower: 50 },
     finds: ['mat_prastare_semeno'] }
 ];
@@ -165,6 +166,8 @@ export const HERB_SITE_BY_ID = Object.fromEntries(ALL_HERB_SITES.map((s) => [s.i
 
 // Srpy (vyrábí Kovářství). Stupeň srpu = nejvyšší vzácnost, kterou jde sbírat.
 export const SICKLES = [
+  // Dárek od Bylinkářky: základní srp bez bonusů, prodá se za 1 zlatý.
+  { id: 'old_sickle', name: 'Starý srp', tier: 1, level: 1, smithing: 0, starter: 'Bylinkářka' },
   { id: 'herb_sickle', name: 'Zahradnický srp', tier: 1, level: 1, smithing: 3, price: 30 },
   { id: 'silver_herb_sickle', name: 'Mistrný srp', tier: 2, level: 15, smithing: 26 },
   { id: 'brass_herb_gatherer', name: 'Sběrač bylin s mosaznou čepelí', tier: 3, level: 35, smithing: 50 },
@@ -172,6 +175,7 @@ export const SICKLES = [
   { id: 'star_sickle', name: 'Hvězdný srp', tier: 5, level: 80, smithing: 88 }
 ];
 export const SICKLE_EFFECTS = {
+  old_sickle: 'Sbírá běžné a neobvyklé rostliny.',
   herb_sickle: 'Sbírá běžné a neobvyklé rostliny.',
   silver_herb_sickle: 'Sbírá i vzácné rostliny; +15 % šance na +1 kus u vzácných, vzácné nálezy +2 b.',
   brass_herb_gatherer: 'Sbírá i velmi vzácné rostliny; +20 % šance na +1 kus u vzácných a velmi vzácných, obnova −10 %.',

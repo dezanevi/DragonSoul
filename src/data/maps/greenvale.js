@@ -13,9 +13,28 @@
 // Na obrazovce je pole 0,0 nahoře, osa x vede doprava dolů a osa y doleva dolů.
 // Ve hře zapni klávesou G mřížku – ukazuje souřadnice pole pod myší.
 
+// Skupina v lomu: skála na poli (x, y) a kolem ní 4 naleziště téhož druhu (S, J, Z, V).
+const oreGroup = (deposit, x, y) => [[0, -1], [0, 1], [-1, 0], [1, 0]].map(([dx, dy]) => ({ deposit, x: x + dx, y: y + dy }));
+
 export const GREENVALE_MAP = {
   id: 'Greenvale',
   name: 'Greenvale',
+  // Kultivace cest při načtení (data/maps/index.js): stromy u cesty pryč, mezi cestou a loukou tráva.
+  cultivatePaths: true,
+  // Jeskyně orčího válečníka (úkol Orčí hrozba) v útesu na okraji Jižních plání.
+  caveEntrance: { x: 7, y: 57 },
+
+  // Pojmenované oblasti (HUD „Greenvale – název“, rozcestníky). Louky setkání mají názvy
+  // v encounterZones; fallback = záložní oblast, když pole nepatří nikam konkrétně.
+  areas: [
+    { name: 'Opuštěný lom', x0: 0, y0: 114, x1: 9, y1: 121 },
+    { name: 'Lom Greenvale', x0: 56, y0: 87, x1: 81, y1: 97 },
+    { name: 'Statek', x0: 72, y0: 74, x1: 92, y1: 84 },
+    { name: 'Jeskyně orčího válečníka', x0: 5, y0: 55, x1: 9, y1: 59 },
+    { name: 'Rybářské molo', x0: 82, y0: 50, x1: 96, y1: 60 },
+    { name: 'Náměstí', x0: 55, y0: 50, x1: 67, y1: 61 },
+    { name: 'Vesnice Greenvale', x0: 38, y0: 26, x1: 92, y1: 76, fallback: true }
+  ],
 
   ground: [
     '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
@@ -115,8 +134,8 @@ export const GREENVALE_MAP = {
     '^^^,,,,,,,,,::::::::::,,,,,STSTTTSSTTSSTTSS^~~^^STTT^^^^^^^gggRgggggggggggggggR^~~~~^TSSTT..#####..TTSTSRSTSTTTSS^',
     '^^S,,,,,,,,:::.....::::,,,,STRSSSSSSTTTTTST^~~~^^^^^^~~~^^^^RR^^^gggggggggggggR^~~~~^STSTTS..#####...TSTTTTTTTSTR^',
     '^^TT,,,,,,::...SSS..::::,,.SSSSSSSTTSTTSSTS^^~~~^^~~~~~~~^^^^^^^^^ggRRggRggggR^^~~~~^SSTTTSS...#####..STSSTSSTTST^',
-    '^^SS,,,,,::..TTRRST..:::::...RSSSTSSTTTTSTS^~~~~~~~~~~~~~~^^^^^^~^^^^^STT^^^^^^~~~~~^STTSTTTTS..#####..STSSTSSSSS^',
-    '^^TTSTRT.:...STTTRSS..::::::..SRSRRTTTSSTTS^^~~~~~~~~~~~~~~^^^~~~~^^^^^T^^~~^^~~~~~~^TSSTSSTTTT..#####..STSSTTSST^',
+    '^^SS,,,,,::..TTRRST..:::::...RSSSTSSTTTTSTS^~~~~~~~~~~~~~~^^^^^^~^^^^^^^^^^^^^^~~~~~^STTSTTTTS..#####..STSSTSSSSS^',
+    '^^TTSTRT.:...STTTRSS..::::::..SRSRRTTTSSTTS^^~~~~~~~~~~~~~~^^^~~~~^^^^^^^^~~^^~~~~~~^TSSTSSTTTT..#####..STSSTTSST^',
     '^STSTTRS.:::.TTTSSSTS...:::::..STTSSTTSTSTST^~~~~~~~~~~~~~~~~~~~~~~~^^^^^~~~~~~~~~~~^^^SSSTSRTST...####.TTSSSRSST^',
     '^SSSSTST...:..TTTSTTTTS...::::...TTTRSTSTSST^^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^TSSTSTTSSST..###.STTSTSTSS^',
     '^SSTSSSSSS..:..TSSSTTTTST..:::::.STSTSSTTSSTT^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^TTTSRRTSTSTT..##..SSTTTSST^',
@@ -213,8 +232,7 @@ export const GREENVALE_MAP = {
     ['fence',82.5,52,'x'], ['fence',83.5,52,'x'], ['fence',84.5,52,'x'], ['fence',85.5,52,'x'], ['fence',86.5,52,'x'], ['fence',89,52.5,'y'],
     ['fence',82,53.5,'y'], ['fence',89,53.5,'y'], ['fence',89,54.5,'y'], ['fence',67,59.5,'y'], ['fence',67.5,59,'x'], ['fence',68.5,59,'x'],
     ['fence',69.5,59,'x'], ['fence',67,60.5,'y'], ['fence',67,61.5,'y'], ['fence',72,61.5,'y'], ['fence',67,62.5,'y'], ['fence',67,63.5,'y'],
-    ['fence',73,79.5,'y'], ['fence',73,82.5,'y'], ['fence',73,83.5,'y'], ['fence',73.5,84,'x'], ['fence',74.5,84,'x'], ['fence',75.5,84,'x'],
-    ['fence',76.5,84,'x'], ['fence',77.5,84,'x'], ['fence',78.5,84,'x'], ['bush',59.46,31.6,1], ['bush',67.65,36.7,4], 
+    ['bush',59.46,31.6,1], ['bush',67.65,36.7,4], 
     ['bush',57.46,38.61,1], ['bush',70.52,38.37,5], ['bush',47.51,39.35,4], ['bush',54.49,40.34,4], ['bush',60.47,41.61,1],
     ['bush',78.34,41.47,0], ['bush',41.59,42.45,4], ['bush',53.55,43.69,2], ['bush',58.5,44.64,2], ['plant',81.7,44.63,1], ['bush',52.29,46.65,4],
     ['plant',82.49,47.63,2], 
@@ -225,14 +243,21 @@ export const GREENVALE_MAP = {
     ['bush',52.41,71.4,5], ['plant',85.64,71.29,1],
     ['plant',87.48,72.63,2], ['stump',45.56,75.7,0], ['plant',66.29,76.65,0],
     ['bush',81.56,77.41,4], ['bush',69.28,80.62,1],
-    ['bush',72.65,82.3,1], ['bush',73.48,82.62,3], ['bush',74.57,83.63,1],
-    // Ohrada Bylinkové louky u statku (brány na východ a na jih).
-    ['fence',57.5,82,'x'], ['fence',57.5,87,'x'], ['fence',58.5,82,'x'], ['fence',58.5,87,'x'], ['fence',59.5,82,'x'], ['fence',59.5,87,'x'], ['fence',60.5,82,'x'], ['fence',60.5,87,'x'], ['fence',61.5,82,'x'], ['fence',61.5,87,'x'], ['fence',62.5,82,'x'], ['fence',62.5,87,'x'], ['fence',63.5,82,'x'], ['fence',63.5,87,'x'], ['fence',64.5,82,'x'], ['fence',65.5,82,'x'], ['fence',65.5,87,'x'], ['fence',66.5,82,'x'], ['fence',66.5,87,'x'], ['fence',67.5,82,'x'], ['fence',67.5,87,'x'], ['fence',68.5,82,'x'], ['fence',68.5,87,'x'], ['fence',57,82.5,'y'], ['fence',69,82.5,'y'], ['fence',57,83.5,'y'], ['fence',69,83.5,'y'], ['fence',57,84.5,'y'], ['fence',57,85.5,'y'], ['fence',69,85.5,'y'], ['fence',57,86.5,'y'], ['fence',69,86.5,'y'], 
-    ['fence',84.5,80,'x'], ['fence',84.5,83,'x'], ['fence',85.5,80,'x'], ['fence',85.5,83,'x'], ['fence',86.5,83,'x'], ['fence',87.5,80,'x'],
-    ['fence',87.5,83,'x'], ['fence',88.5,80,'x'], ['fence',88.5,83,'x'], ['fence',84,80.5,'y'], ['fence',89,80.5,'y'], ['fence',84,81.5,'y'],
-    ['fence',89,81.5,'y'], ['fence',84,82.5,'y'], ['fence',89,82.5,'y'], ['fence',77.5,83,'x'], ['fence',77.5,85,'x'], ['fence',78.5,83,'x'],
-    ['fence',78.5,85,'x'], ['fence',79.5,85,'x'], ['fence',80.5,83,'x'], ['fence',80.5,85,'x'], ['fence',81.5,83,'x'], ['fence',81.5,85,'x'],
-    ['fence',77,83.5,'y'], ['fence',82,83.5,'y'], ['fence',77,84.5,'y'], ['fence',82,84.5,'y'], ['plant',86.8,55.6,2], ['signpost',64.5,63.5,0],
+    // Statek Greenvale: jedna velká ohrada kolem Statku, mlýna, stáje, studny, polí a záhonů
+    // bylin (vstup od mostu na západě, brána na jih). Dřívější Bylinková louka je zrušená.
+    ['fence',76.5,75,'x'], ['fence',77.5,75,'x'], ['fence',78.5,75,'x'], ['fence',79.5,75,'x'], ['fence',80.5,75,'x'], ['fence',81.5,75,'x'],
+    ['fence',82.5,75,'x'], ['fence',83.5,75,'x'], ['fence',84.5,75,'x'], ['fence',85.5,75,'x'], ['fence',86.5,75,'x'], ['fence',87.5,75,'x'],
+    ['fence',88.5,75,'x'], ['fence',89.5,75,'x'], ['fence',90.5,75,'x'], ['fence',91,75.5,'y'], ['fence',91,76.5,'y'], ['fence',91,77.5,'y'],
+    ['fence',91,78.5,'y'], ['fence',91,79.5,'y'], ['fence',91,80.5,'y'], ['fence',91,81.5,'y'], ['fence',91,82.5,'y'], ['fence',73.5,83,'x'],
+    ['fence',74.5,83,'x'], ['fence',75.5,83,'x'], ['fence',76.5,83,'x'], ['fence',77.5,83,'x'], ['fence',78.5,83,'x'], ['fence',81.5,83,'x'],
+    ['fence',82.5,83,'x'], ['fence',83.5,83,'x'], ['fence',84.5,83,'x'], ['fence',85.5,83,'x'], ['fence',86.5,83,'x'], ['fence',87.5,83,'x'],
+    ['fence',88.5,83,'x'], ['fence',89.5,83,'x'], ['fence',90.5,83,'x'], ['fence',73,79.5,'y'], ['fence',73,80.5,'y'], ['fence',73,81.5,'y'],
+    ['fence',73,82.5,'y'],
+    // Skály nalezišť v lomu (pole x, y; obarvené podle suroviny) – kolem každé 4 naleziště.
+    ['oreRock',71,91,'N01'], ['oreRock',76,90,'N33'], ['oreRock',67,91,'N37'], ['oreRock',71,94,'N34'], ['oreRock',75,94,'N36'],
+    ['oreRock',67,94,'N02'], ['oreRock',63,91,'N39'], ['oreRock',59,91,'N03'], ['oreRock',60,93,'N27'],
+    ['oreRock',5,118,'N16'], // Opuštěný lom
+    ['plant',86.8,55.6,2], ['signpost',64.5,63.5,0],
     ['signpost',54.5,59.5,0], ['signpost',67.5,54.5,0]
   ],
 
@@ -245,21 +270,25 @@ export const GREENVALE_MAP = {
     {location: 'verdant_river', x: 36, y: 109}
   ],
 
-  // Naleziště Těžby: lom Greenvale jižně pod Bylinkovou loukou (tools/greenvale-quarry.mjs),
+  // Naleziště Těžby: lom Greenvale jižně pod statkem (tools/greenvale-quarry.mjs),
   // jen naleziště do úrovně 10. Vzácná Cínová žíla se střídá v mýtině uprostřed lomu (rareSpots).
+  // Čtyři skupiny: uprostřed skála obarvená do odstínu suroviny (decor 'oreRock'), kolem ní
+  // 4 naleziště stejného druhu (sever, jih, západ, východ).
+  // Lom obsahuje každou žílu úrovně 1–10 jednou (9 skupin); nejnižší úrovně u sjezdu na východě.
   miningSpots: [
-    {deposit: 'N27', x: 58, y: 91},
-    {deposit: 'N03', x: 61, y: 90},
-    {deposit: 'N27', x: 66, y: 90},
-    {deposit: 'N16', x: 69, y: 91},
-    {deposit: 'N27', x: 72, y: 90},
-    {deposit: 'N03', x: 60, y: 93},
-    {deposit: 'N27', x: 75, y: 91},
-    {deposit: 'N16', x: 68, y: 93},
-    {deposit: 'N27', x: 71, y: 93},
-    {deposit: 'N03', x: 74, y: 94},
-    {deposit: 'N16', x: 77, y: 92},
-    {deposit: 'N27', x: 66, y: 95}
+    ...oreGroup('N01', 71, 91), // Měděná žíla, úr. 1
+    ...oreGroup('N33', 76, 90), // Uhelná sloj, úr. 1
+    ...oreGroup('N37', 67, 91), // Žulový lom, úr. 1
+    ...oreGroup('N34', 71, 94), // Křemenná žíla, úr. 3
+    ...oreGroup('N36', 75, 94), // Solná skála, úr. 4
+    ...oreGroup('N02', 67, 94), // Železná žíla, úr. 5
+    ...oreGroup('N39', 63, 91), // Pyritová žíla, úr. 6
+    ...oreGroup('N03', 59, 91), // Cínová žíla, úr. 8
+    ...oreGroup('N27', 60, 93), // Krystalová puklina, úr. 10
+    // Opuštěný lom na jihozápadě: žíla vyřazená z hlavního lomu (nad úr. 10) a jediné
+    // vzácné naleziště od úrovně 90 (jen jedno pole, bez skály).
+    ...oreGroup('N16', 5, 118), // Ametystová dutina, úr. 18
+    {deposit: 'N11', x: 2, y: 116, rare: true} // Žíla dračího železa, úr. 92 – vzácné, jedno naleziště
   ],
 
   // Louky setkání: každá má svá monstra a rozsah úrovní (BattleScene). Pole louky (znak ,)
@@ -291,11 +320,11 @@ export const GREENVALE_MAP = {
   ],
 
   // Naleziště Sběru bylin (src/data/herbalism.js) – v Greenvale jen bylinky do úrovně 10:
-  // divoká naleziště H01–H07, zahrádky domů G01–G12 a Bylinková louka u statku (záhony Z01–Z03,
+  // divoká naleziště H01–H07, zahrádky domů G01–G12 a záhony uvnitř ohrady statku (Z01–Z03,
   // L01–L09 a Hustý bylinný porost SH1). Naleziště dalších oblastí přijdou s nimi.
   herbSpots: [
     {site: 'H01', x: 12, y: 117},
-    {site: 'H02', x: 31, y: 51},
+    {site: 'H02', x: 49, y: 72}, // Břeh řeky za kostelem – cíl úkolu Byliny od řeky (pevné místo)
     {site: 'H03', x: 6, y: 65},
     {site: 'H04', x: 6, y: 96},
     {site: 'H05', x: 22, y: 21},
@@ -313,26 +342,27 @@ export const GREENVALE_MAP = {
     {site: 'G10', x: 87, y: 53},
     {site: 'G11', x: 74, y: 60},
     {site: 'G12', x: 67, y: 63},
-    {site: 'Z01', x: 61, y: 82},
-    {site: 'Z02', x: 64, y: 82},
-    {site: 'Z03', x: 67, y: 82},
-    {site: 'L01', x: 58, y: 82},
-    {site: 'L02', x: 59, y: 84},
-    {site: 'L03', x: 62, y: 84},
-    {site: 'L04', x: 65, y: 84},
-    {site: 'L05', x: 68, y: 83},
-    {site: 'L06', x: 58, y: 86},
-    {site: 'L07', x: 60, y: 86},
-    {site: 'L08', x: 64, y: 86},
-    {site: 'L09', x: 66, y: 86},
-    {site: 'SH1', x: 68, y: 86}
+    // Záhony statku (Z) u mlýna, divoké byliny (L) a Hustý porost (SH1) – vše uvnitř ohrady statku.
+    {site: 'Z01', x: 79, y: 76},
+    {site: 'Z02', x: 80, y: 77},
+    {site: 'Z03', x: 79, y: 78},
+    {site: 'L01', x: 83, y: 81},
+    {site: 'L02', x: 85, y: 81},
+    {site: 'L03', x: 87, y: 81},
+    {site: 'L04', x: 89, y: 81},
+    {site: 'L05', x: 84, y: 82},
+    {site: 'L06', x: 86, y: 82},
+    {site: 'L07', x: 88, y: 82},
+    {site: 'L08', x: 90, y: 80},
+    {site: 'L09', x: 90, y: 82},
+    {site: 'SH1', x: 80, y: 79}
   ],
   hiddenVeinSpot: { x: 59, y: 89 }, // Skrytá žíla (mapa / Průzkumník)
-  meteorSpot: { x: 63, y: 89 }, // Hvězdný meteorit (dočasně vždy do Greenvale)
+  meteorSpot: { x: 8, y: 119 }, // Hvězdný meteorit (Těžba 85+, dočasně vždy do Greenvale) – v Opuštěném lomu, ne v hlavním
 
   // Zajímavá místa – zatím jen značky v ladicím režimu.
   points: [
-    { id: 'cave', name: 'Jeskyně', x: 15, y: 53 },
+    { id: 'cave', name: 'Jeskyně', x: 7, y: 57 },
     { id: 'encounter', name: 'Zóna setkání', x: 26, y: 57 },
     { id: 'fishing_dock', name: 'Rybářské místo (molo)', x: 93, y: 56 }
   ]

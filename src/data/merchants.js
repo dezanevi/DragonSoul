@@ -28,8 +28,7 @@ export const MARKET_FOOD_GOODS = [
 // Tržiště – zboží (Obchodník s látkami).
 export const MARKET_WARES_GOODS = [
   { id: 'fiber', price: 4, qty: 2 },
-  { id: 'leather', price: 6, qty: 1 }, // úkol Kožený řemínek (řemínek z ní na Koželužském stole)
-  { id: 'leather_strap', price: 5, qty: 1 },
+  { id: 'leather', price: 6, qty: 1 }, // úkol Kožený řemínek (řemínek z ní na Koželužském stole – koupit nejde)
   { id: 'wax', price: 3, qty: 1 },
   { id: 'hunting_fang', price: 40, qty: 1 }
 ];

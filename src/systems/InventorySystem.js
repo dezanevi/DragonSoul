@@ -4,6 +4,7 @@
 // ======================================================================
 
 import { ITEMS, getItem, SPECIES_DROPS, RENAMED_ITEMS, ITEM_CATEGORIES } from '../data/items.js';
+import { countQuestEvent } from './QuestCounters.js';
 import { equipItem, unequipItem, normalizeEquipment } from './EquipmentSystem.js';
 import { MEATS, MEAT_DROP_CHANCE, WOOD_DROP } from '../data/cooking.js';
 import { eatMeal } from './CookingSystem.js';
@@ -45,21 +46,97 @@ export function normalizeInventory(state) {
     state.flags.starterManaPotions = true;
     addItem(state, 'mana_potion', STARTER_MANA_POTIONS);
   }
+  normalizeTools(state);
   return state.inventory;
 }
+
+// ------------------------------------------------------------------ nástroje
+// Nástroje mají vlastní sloty mimo mřížku inventáře (karta Inventář, sekce Nástroje vpravo):
+// state.tools = { [slotId]: itemId | null }. Profese je najdou stejně jako dřív –
+// getItemCount počítá i sloty nástrojů. Nový nástroj jde sám do prázdného slotu svého druhu.
+const MINING_TOOL_IDS = ['tool_ore_hammer', 'tool_wedge', 'tool_crystal_tongs', 'tool_chisel', 'tool_drill', 'tool_astral_hammer', 'tool_safety_tongs'];
+const rankIn = (list) => (item) => list.indexOf(item.id);
+const listOf = (flag) => Object.values(ITEMS).filter((it) => it[flag]).map((it) => it.id);
+export const TOOL_SLOTS = [
+  { id: 'pickaxe', label: 'Krumpáč', accepts: (it) => Boolean(it.pickaxe), rank: (it) => it.pickaxe * 10 - (it.starterTool ? 1 : 0) },
+  { id: 'sickle', label: 'Srp', accepts: (it) => Boolean(it.herbTool), rank: (it) => rankIn(listOf('herbTool'))(it) },
+  { id: 'rod', label: 'Prut', accepts: (it) => Boolean(it.rod), rank: (it) => rankIn(listOf('rod'))(it) },
+  { id: 'tackle', label: 'Háček / naviják', accepts: (it) => Boolean(it.fishingMetal), rank: (it) => rankIn(listOf('fishingMetal'))(it) },
+  ...MINING_TOOL_IDS.map((id) => ({ id, label: ITEMS[id]?.name ?? id, accepts: (it) => it.id === id, rank: () => 0 })),
+  { id: 'cr_f15', label: ITEMS.cr_f15?.name ?? 'Koželužské nože', accepts: (it) => it.id === 'cr_f15', rank: () => 0 },
+  { id: 'cr_f14', label: ITEMS.cr_f14?.name ?? 'Šperkařská lupa', accepts: (it) => it.id === 'cr_f14', rank: () => 0 }
+];
+export const toolSlotFor = (item) => (item ? TOOL_SLOTS.find((s) => s.accepts(item)) ?? null : null);
+export const isTool = (item) => Boolean(toolSlotFor(item));
+
+// Prázdné sloty nástrojů se doplní nejlepším nástrojem daného druhu z inventáře.
+export function normalizeTools(state) {
+  state.tools ??= {};
+  for (const slot of TOOL_SLOTS) {
+    const current = state.tools[slot.id];
+    if (current && !ITEMS[current]) state.tools[slot.id] = null;
+    if (state.tools[slot.id]) continue;
+    let best = null;
+    (state.inventory?.slots ?? []).forEach((entry, index) => {
+      const item = getItem(entry?.id);
+      if (!item || !slot.accepts(item)) return;
+      if (!best || slot.rank(item) > slot.rank(best.item)) best = { item, index };
+    });
+    if (best) {
+      state.tools[slot.id] = best.item.id;
+      const entry = state.inventory.slots[best.index];
+      entry.qty -= 1;
+      if (entry.qty <= 0) state.inventory.slots[best.index] = null;
+    }
+  }
+  return state.tools;
+}
+
+// Nástroj z políčka inventáře do jeho slotu (obsazený slot si s ním vymění místo).
+export function equipTool(state, index) {
+  const entry = state.inventory.slots[index];
+  const item = getItem(entry?.id);
+  const slot = toolSlotFor(item);
+  if (!slot) return { ok: false, message: 'Tohle není nástroj.' };
+  state.tools ??= {};
+  const previous = state.tools[slot.id];
+  state.tools[slot.id] = item.id;
+  entry.qty -= 1;
+  if (entry.qty <= 0) state.inventory.slots[index] = null;
+  if (previous) addItem(state, previous, 1, { toTools: false });
+  return { ok: true, message: `Nástroj ${slot.label}: ${item.name}.` };
+}
+
+// Nástroj ze slotu zpět do inventáře.
+export function unequipTool(state, slotId) {
+  const id = state.tools?.[slotId];
+  if (!id) return { ok: false, message: 'Slot je prázdný.' };
+  if (!state.inventory.slots.some((s) => !s)) return { ok: false, message: 'Inventář je plný.' };
+  state.tools[slotId] = null;
+  addItem(state, id, 1, { toTools: false });
+  return { ok: true, message: `${getItem(id)?.name ?? id} je zpět v inventáři.` };
+}
+
+const toolCount = (state, id) => Object.values(state?.tools ?? {}).filter((t) => t === id).length;
 
 const slotsOf = (state) => (Array.isArray(state.inventory?.slots) ? state.inventory.slots : normalizeInventory(state).slots);
 
 export function getItemCount(state, id) {
-  return slotsOf(state).reduce((sum, slot) => sum + (slot?.id === id ? slot.qty : 0), 0);
+  return slotsOf(state).reduce((sum, slot) => sum + (slot?.id === id ? slot.qty : 0), 0) + toolCount(state, id);
 }
 
-// Přidá kusy: nejdřív do neplných hromádek, pak do prázdných políček. Vrací, co se nevešlo.
-export function addItem(state, id, qty = 1) {
+// Přidá kusy: nástroj nejdřív do prázdného slotu nástrojů, pak do neplných hromádek a do
+// prázdných políček. Vrací, co se nevešlo.
+export function addItem(state, id, qty = 1, { toTools = true } = {}) {
   const item = getItem(id);
   if (!item) return qty;
   const slots = state.inventory.slots;
   let left = qty;
+  const toolSlot = toTools && state.tools ? toolSlotFor(item) : null;
+  if (toolSlot && !state.tools[toolSlot.id] && left > 0) {
+    state.tools[toolSlot.id] = id;
+    left -= 1;
+  }
   for (const slot of slots) {
     if (left <= 0) break;
     if (slot?.id === id && slot.qty < item.stack) {
@@ -125,6 +202,11 @@ export function removeItem(state, id, qty = 1) {
     slot.qty -= take;
     left -= take;
     if (slot.qty <= 0) slots[i] = null;
+  }
+  // Zbytek ze slotů nástrojů (např. výroba, která nástroj spotřebuje).
+  for (const [slotId, toolId] of Object.entries(state.tools ?? {})) {
+    if (left <= 0) break;
+    if (toolId === id) { state.tools[slotId] = null; left -= 1; }
   }
   return true;
 }
@@ -339,5 +421,6 @@ export function equipSlot(state, index, events = null) {
   slot.qty -= 1;
   if (slot.qty <= 0) slots[index] = null;
   if (previous?.id && ITEMS[previous.id]) addItem(state, previous.id, 1);
+  countQuestEvent(state, 'equip'); // úkol Do zbroje
   return { ok: true, message: `Vybaveno: ${item.name}.` };
 }

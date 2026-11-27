@@ -120,13 +120,13 @@ export function normalizeTalentProgress(state) {
 
 export const TALENTS_CHANGED = 'talents-changed';
 
-// Specializaci (a tím talentové stromy) odemyká úkol Jeskynní sliz od starosty Edrica.
+// Specializaci (a tím talentové stromy) odemkne 4. úroveň hrdiny (QuestSystem.areTalentTreesUnlocked).
 export function canChooseSpecialization(state) {
   const progress = normalizeTalentProgress(state);
   if (!progress) return { ok: false, reason: 'Chybí stav hry.' };
   if (progress.specialization) return { ok: false, reason: 'Specializace už je zvolená.' };
   if (!areTalentTreesUnlocked(state)) {
-    return { ok: false, reason: 'Talentové stromy odemkne úkol Orčí hrozba od starosty Edrica (radnice Greenvale).' };
+    return { ok: false, reason: 'Talentové stromy se odemknou na 4. úrovni hrdiny.' };
   }
   return { ok: true };
 }
@@ -228,6 +228,15 @@ export function investTalent(state, talentId, options = {}, events = null) {
 
 // Souhrn všech účinků talentů a pasivního bonusu specializace.
 // Bonusy stejného typu se sčítají (procenta jako desetinná čísla).
+// Recept za talent (kategorie Řemeslník): jen pro specializaci Řemeslník a od dané hodnosti
+// talentu, nebo po dokončení stromu (req.final).
+export const isCraftsmanSpecialization = (state) => state?.talentProgress?.specialization === 'crafting';
+export function talentRecipeUnlocked(state, req) {
+  if (!req || !isCraftsmanSpecialization(state)) return false;
+  if (req.final) return isTreeComplete(state, req.final);
+  return getTalentRank(state, req.id) >= (req.rank ?? 1);
+}
+
 export function getTalentBonuses(state) {
   const bonus = {
     commanderAttack: 0,
@@ -249,6 +258,12 @@ export function getTalentBonuses(state) {
     otherSchoolsExpBonus: 0,
     fishingBonusChance: 0,
     miningBonusChance: 0,
+    herbBonusChance: 0,
+    materialCostReduction: 0,
+    potionPotency: 0,
+    foodDuration: 0,
+    metalGearBonus: 0,
+    nonMetalGearBonus: 0,
     focusSchool: state?.talentProgress?.focusSchool ?? null
   };
   const progress = state?.talentProgress;
@@ -283,7 +298,21 @@ export function getTalentBonuses(state) {
   // Horní limity (doladí se při vyvažování).
   bonus.manaCostReduction = Math.min(0.1, bonus.manaCostReduction);
   bonus.statusChanceReduction = Math.min(0.3, bonus.statusChanceReduction);
+  bonus.herbBonusChance = Math.min(0.25, bonus.herbBonusChance);
+  bonus.materialCostReduction = Math.min(0.1, bonus.materialCostReduction);
+  bonus.potionPotency = Math.min(0.1, bonus.potionPotency);
+  bonus.foodDuration = Math.min(0.25, bonus.foodDuration);
   return bonus;
+}
+
+// Úsporné zpracování: kolik kusů suroviny se ušetří z amount (podíl talentu, zbytek náhodně),
+// vždy se spotřebuje aspoň 1 kus.
+export function materialSaving(state, amount, random = Math.random) {
+  const r = getTalentBonuses(state).materialCostReduction;
+  if (!r || amount <= 1) return 0;
+  const exact = amount * r;
+  const saved = Math.floor(exact) + (random() < exact - Math.floor(exact) ? 1 : 0);
+  return Math.min(saved, amount - 1);
 }
 
 // Spell Power včetně talentů.

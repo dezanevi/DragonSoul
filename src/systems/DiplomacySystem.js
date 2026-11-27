@@ -7,8 +7,11 @@
 //   state.business               { clock, nextInterval, day, market: { region: { kategorie: nasycení } },
 //                                  properties: { id: obchod } }
 import { SaveSystem } from './SaveSystem.js';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { addCharismaXp, CHARISMA_XP_SHARE, ownShopMultiplier, npcBuyMultiplier } from './HeroStatsSystem.js';
 import { getItem } from '../data/items.js';
-import { itemValue } from './ItemValueSystem.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { itemValue, boughtValue } from './ItemValueSystem.js';
 import { addItem, removeItem, getItemCount } from './InventorySystem.js';
 import {
   DIPLOMACY_MAX_LEVEL, xpToNextDiplomacyLevel, DIPLOMACY_XP, diplomacyItemXp, GAME_DAY_MS, TRADE_INTERVAL_MS,
@@ -47,7 +50,7 @@ export function onDiplomacyXp(fn) {
   return () => xpListeners.delete(fn);
 }
 
-export function addDiplomacyXp(state, amount, reason = '') {
+function addDiplomacyXpRaw(state, amount, reason = '') {
   normalizeDiplomacy(state);
   const gained = Math.max(0, Math.round(amount));
   if (!gained) return { gained: 0, levelUps: 0 };
@@ -63,7 +66,9 @@ export function addDiplomacyXp(state, amount, reason = '') {
     if (prof.level >= DIPLOMACY_MAX_LEVEL) prof.exp = 0;
     prof.next = xpToNextDiplomacyLevel(prof.level);
   }
-  const result = { gained, levelUps, level: prof.level, reason };
+  // Charisma roste spolu s Diplomacií (vlastní úroveň 1–20, polovina XP).
+  const charisma = addCharismaXp(state, gained * CHARISMA_XP_SHARE);
+  const result = { gained, levelUps, level: prof.level, reason, charismaLevelUps: charisma.levelUps, charismaLevel: charisma.level };
   for (const fn of xpListeners) fn(result);
   return result;
 }
@@ -217,7 +222,7 @@ export function marketSaturation(state, region, cat) {
 export function customersPerDay(state, shop) {
   const type = PROPERTY_TYPES[shop.type];
   const region = REGION_ECONOMY[shop.region] ?? REGION_ECONOMY.Greenvale;
-  return type.customers * reputationBand(shop.reputation)[2] * region.population;
+  return type.customers * reputationBand(shop.reputation)[2] * region.population * ownShopMultiplier(state); // + Charisma
 }
 
 // Pravděpodobnost, že zákazník daného typu s potřebou kategorie koupí předmět za cenu.
@@ -228,9 +233,17 @@ export function buyChance(state, shop, itemId, price, typeId) {
   const pref = type.prefs[cat] ?? 0;
   if (!cat || !pref) return 0;
   const value = itemValue(itemId);
-  const priceFactor = Math.min(1.5, ((value * type.tolerance) / Math.max(1, price)) ** 2);
+  // Ekonomika: část hodnoty z koupitelných surovin zákazník nepřeplatí (tolerance platí jen na
+  // vlastní práci a suroviny) a nad férovou cenu šance klesá tím prudčeji, čím víc je zboží
+  // „z obchodu“ – přeprodej koupeného zboží se nevyplatí. Koupitelná část se počítá za cenu,
+  // za kterou ji hrdina koupí (sleva z Charismatu), aby se nevyplatil ani přeprodej se slevou.
+  const bought = boughtValue(itemId);
+  const share = value > 0 ? bought / value : 0;
+  const fair = bought * npcBuyMultiplier(state) + (value - bought) * type.tolerance;
+  const ratio = fair / Math.max(1, price);
+  const priceFactor = Math.min(1.5, ratio ** (ratio < 1 ? 2 + 4 * share : 2));
   const sat = saturationModifier(marketSaturation(state, shop.region, cat));
-  const p = (itemPopularity(itemId) / 100) * pref * (region.mods[cat] ?? 1) * priceFactor * sat * CALIBRATION;
+  const p = (itemPopularity(itemId) / 100) * pref * (region.mods[cat] ?? 1) * priceFactor * sat * CALIBRATION * ownShopMultiplier(state); // + Charisma
   return Math.min(MAX_BUY_CHANCE, Math.max(0, p));
 }
 
@@ -396,6 +409,7 @@ function sell(state, shop, slot, qty, typeId) {
   // Férová cena a úspěšný obchod mírně zvedají reputaci.
   if (price / value <= 1.1) changeReputation(state, shop, 0.05);
   grantTradeXp(state, [{ id: itemId, qty }], 'shopSell');
+  countQuestEvent(state, 'shopSale', qty); // úkol Účetní kniha
   for (const fn of saleListeners) fn({ shop, itemId, qty, revenue, customer: typeId });
 }
 
@@ -442,3 +456,11 @@ function processDay(state, day) {
 }
 
 export { PROPERTY_TYPES, PROPERTIES, CUSTOMER_TYPES, REGION_ECONOMY };
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addDiplomacyXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'diplomacy');
+  const result = addDiplomacyXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'diplomacy', before, result?.gained ?? 0);
+  return result;
+}

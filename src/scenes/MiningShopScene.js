@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { withSpend } from '../ui/spendConfirm.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { getItem } from '../data/items.js';
@@ -6,7 +7,7 @@ import { RARITY } from '../data/fishing.js';
 import { PICKAXES, MINING_TOOLS, MINING_SPECIALIZATIONS, MINING_RULES } from '../data/mining.js';
 import { addItem, getItemCount, removeItem, normalizeInventory } from '../systems/InventorySystem.js';
 import { normalizeMining, miningLevel, chooseSpecialization } from '../systems/MiningSystem.js';
-import { ShopCart } from '../ui/shopCart.js';
+import { ShopCart, sellButtons, SELL_BUTTONS_W, shopItemHover } from '../ui/shopCart.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
 import { CARD_GOLD, cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
 
@@ -20,7 +21,7 @@ const X = GAME_WIDTH / 2 - W / 2;
 const Y = GAME_HEIGHT / 2 - H / 2;
 
 export const GOODS = [
-  ...PICKAXES.filter((p) => p.price).map((p) => ({ id: p.id, price: p.price, qty: 1, level: p.level })),
+  ...PICKAXES.filter((p) => p.price && !p.starter).map((p) => ({ id: p.id, price: p.price, qty: 1, level: p.level })),
   ...MINING_TOOLS.filter((t) => t.price).map((t) => ({ id: t.id, price: t.price, qty: 1, level: t.level }))
 ];
 
@@ -47,14 +48,14 @@ export default class MiningShopScene extends Phaser.Scene {
 
     uiWindow(this, X, Y, W, H, { shade: 0.6 });
     uiSection(this, X + 20, Y + 84, 610, H - 188);
-    uiSection(this, X + 650, Y + 84, 660, H - 188);
-    uiSection(this, X + 1330, Y + 84, W - 1350, H - 188);
+    uiSection(this, X + 1180, Y + 84, 660, H - 188);
+    uiSection(this, X + 650, Y + 84, W - 1350, H - 188);
 
     uiTitle(this, X + 36, Y + 24, `${this.merchantName} – obchod`, { icon: 'coins', size: 34 });
     this.goldText = cardText(this, X + W - 36, Y + 32, '', { size: 24, bold: true, color: '#ffd76a', originX: 1 });
     cardText(this, X + 36, Y + 100, 'Koupit (dokud krumpáče nevyrábí Kovářství)', { size: 22, bold: true });
     cardText(this, X + 36, Y + 440, 'Specializace Těžby', { size: 22, bold: true });
-    cardText(this, X + 680, Y + 100, 'Prodat (suroviny z Těžby)', { size: 22, bold: true });
+    cardText(this, X + 1210, Y + 100, 'Prodat (suroviny z Těžby)', { size: 22, bold: true });
     this.messageText = cardText(this, X + 36, Y + H - 72, '', { size: 20, color: '#ffd76a', wrap: 1300 });
 
     this.layer = this.add.container(0, 0);
@@ -85,9 +86,10 @@ export default class MiningShopScene extends Phaser.Scene {
     GOODS.forEach((good, index) => {
       const y = Y + 140 + index * 64;
       const item = getItem(good.id);
+      shopItemHover(this, this.layer, good.id, X + 34, y, 405, 56);
       this.icon(good.id, X + 60, y + 26);
       this.layer.add(cardText(this, X + 92, y + 6, item.name, { size: 20, bold: true }));
-      this.layer.add(coinAmount(this, X + 92, y + 32, good.price, { size: 16, color: '#b8a890' }, { rest: `· Těžba ${good.level}+ · máš ${getItemCount(this.state, good.id)}` }));
+      this.layer.add(coinAmount(this, X + 92, y + 32, this.cart.buyPrice(good.price), { size: 16, color: '#b8a890' }, { rest: `· Těžba ${good.level}+ · máš ${getItemCount(this.state, good.id)}` }));
       this.layer.add(cardButton(this, null, X + 446, y + 4, 164, 54, 'Do košíku', () => { this.cart.addBuy(good); this.messageText.setText(''); this.refresh(); }, { size: 20, disabled: !this.cart.canAddBuy(good) }).objects);
     });
 
@@ -122,22 +124,22 @@ export default class MiningShopScene extends Phaser.Scene {
     for (const row of owned) row.qty -= this.cart.sellCount(row.id);
     owned.splice(0, owned.length, ...owned.filter((row) => row.qty > 0));
     if (!owned.length) {
-      this.layer.add(cardText(this, X + 680, Y + 150, 'Nemáš žádné suroviny z Těžby na prodej.', { size: 19, color: '#9aa4ae' }));
+      this.layer.add(cardText(this, X + 1210, Y + 150, 'Nemáš žádné suroviny z Těžby na prodej.', { size: 19, color: '#9aa4ae' }));
     }
     owned.slice(0, 10).forEach((row, index) => {
       const y = Y + 140 + index * 60;
       const item = getItem(row.id);
       const color = (RARITY[item.rarity] ?? RARITY.common).color;
-      this.icon(row.id, X + 704, y + 24);
-      const name = cardText(this, X + 736, y + 4, `${item.name} ×${row.qty}`, { size: 19, bold: true, color });
-      if (name.width > 210) name.setScale(210 / name.width);
+      shopItemHover(this, this.layer, row.id, X + 1208, y, 1290 - SELL_BUTTONS_W - 686, 56);
+      this.icon(row.id, X + 1234, y + 24);
+      const name = cardText(this, X + 1266, y + 4, `${item.name} ×${row.qty}`, { size: 19, bold: true, color });
+      if (name.width > 160) name.setScale(160 / name.width);
       this.layer.add(name);
-      this.layer.add(coinAmount(this, X + 736, y + 30, item.price, { size: 16, color: '#b8a890' }, { rest: '/ ks' }));
-      this.layer.add(cardButton(this, null, X + 960, y + 3, 150, 54, 'Prodat 1', () => this.addSell(row.id, 1), { size: 20 }).objects);
-      this.layer.add(cardButton(this, null, X + 1120, y + 3, 170, 54, 'Prodat vše', () => this.addSell(row.id, row.qty), { size: 20 }).objects);
+      this.layer.add(coinAmount(this, X + 1266, y + 30, this.cart.sellUnit(item.price), { size: 16, color: '#b8a890' }, { rest: '/ ks' }));
+      this.layer.add(sellButtons(this, this.cart, { x: X + 1820 - SELL_BUTTONS_W, y: y + 3, itemId: row.id, qty: row.qty, onSell: (n) => this.addSell(row.id, n) }));
     });
 
-    this.cart.render(this.layer, { x: X + 1330, y: Y + 84, w: W - 1350, h: H - 188 }, () => this.refresh());
+    this.cart.render(this.layer, { x: X + 650, y: Y + 84, w: W - 1350, h: H - 188 }, () => this.refresh());
   }
 
   addSell(itemId, qty) {
@@ -159,6 +161,13 @@ export default class MiningShopScene extends Phaser.Scene {
   }
 
   choose(id) {
+    const cur = this.state.mining?.specialization;
+    const cost = cur && cur !== id ? MINING_RULES.specializationChangeCost : 0;
+    const name = MINING_SPECIALIZATIONS.find((s) => s.id === id)?.name ?? id;
+    withSpend(this, cost, { title: `Změna specializace: ${name}` }, () => this.applyChoice(id));
+  }
+
+  applyChoice(id) {
     const result = chooseSpecialization(this.state, id);
     this.messageText.setText(result.message);
     if (result.ok) SaveSystem.save(this.state);

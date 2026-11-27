@@ -37,9 +37,41 @@ function createPlaceholderMap(regionId) {
   };
 }
 
+// Kultivace cest (ručně kreslené mapy s cultivatePaths): stromy těsně u cesty a stromy hned
+// před ní (jejich koruna by cestu na obrazovce zakryla) zmizí, louka, která cesty přímo
+// dotýká, se změní na trávu – mezi cestou a loukou je vždy pruh trávy.
+const PATH_CHARS = ':#=';
+function cultivatePaths(ground) {
+  const rows = ground.map((row) => [...row]);
+  const isPath = (x, y) => PATH_CHARS.includes(rows[y]?.[x] ?? '~');
+  const near = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+  const front = [[1, 1], [2, 1], [1, 2], [2, 2], [2, 0], [0, 2]];
+  const out = rows.map((row) => [...row]);
+  for (let y = 0; y < rows.length; y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      const c = rows[y][x];
+      if ((c === 'T' || c === 'S') && (near.some(([dx, dy]) => isPath(x + dx, y + dy)) || front.some(([dx, dy]) => isPath(x - dx, y - dy)))) out[y][x] = '.';
+      if (c === ',' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => isPath(x + dx, y + dy))) out[y][x] = '.';
+    }
+  }
+  return out.map((row) => row.join(''));
+}
+
+// Pojmenovaná oblast na poli (x, y): nejdřív map.areas (kromě záložní), pak louky setkání,
+// pak záložní oblast (fallback: true, např. Vesnice Greenvale). Nic = jen název regionu.
+export function areaAt(map, x, y) {
+  const inside = (a) => x >= a.x0 && x <= a.x1 && y >= a.y0 && y <= a.y1;
+  const areas = map.areas ?? [];
+  return areas.find((a) => !a.fallback && inside(a))?.name
+    ?? encounterZoneAt(map, x, y)?.name
+    ?? areas.find((a) => a.fallback && inside(a))?.name
+    ?? null;
+}
+
 // Převede textovou mapu na čísla dlaždic a zkontroluje, že sedí rozměry.
 export function loadWorldMap(regionId) {
-  const base = MAPS[regionId] ?? generateRegionMap(regionId) ?? createPlaceholderMap(regionId);
+  const raw = MAPS[regionId] ?? generateRegionMap(regionId) ?? createPlaceholderMap(regionId);
+  const base = raw.cultivatePaths ? { ...raw, ground: cultivatePaths(raw.ground) } : raw;
   const definition = { exits: [], ...base, exits: base.exits ?? HAND_MAP_EXITS[regionId] ?? [] };
   const height = definition.ground.length;
   const width = definition.ground[0].length;
@@ -64,6 +96,19 @@ export function loadWorldMap(regionId) {
       return tile;
     });
   });
+
+  // Vchod do jeskyně (map.caveEntrance) – nastaví se při načtení, aby ho nové vygenerování
+  // oblasti z editoru nesmazalo.
+  if (definition.caveEntrance && tiles[definition.caveEntrance.y]?.[definition.caveEntrance.x]) {
+    const { x: cx, y: cy } = definition.caveEntrance;
+    tiles[cy][cx] = TILE_BY_CHAR.get('C');
+    // Mýtina před vchodem: stromy, jejichž koruna by vchod nebo hrdinu u něj zakryla, zmizí.
+    for (let y = cy - 1; y <= cy + 3; y++) {
+      for (let x = cx - 2; x <= cx + 3; x++) {
+        if (['tree', 'spruce'].includes(tiles[y]?.[x]?.id)) tiles[y][x] = TILE_BY_CHAR.get('.');
+      }
+    }
+  }
 
   // Pole bran jsou vždy dlaždice brány.
   const gate = TILE_BY_CHAR.get('G');

@@ -414,5 +414,23 @@
       "bondSkill": "elderbloom_aegis"
     }
 
+  },
+  "signatures": {
+    "dire_wolf": "sig_hunting_lunge",
+    "wild_boar": "sig_tusk_rush",
+    "goblin": "sig_sand_toss",
+    "forest_sprite": "sig_sap_touch",
+    "giant_spider": "sig_venom_web",
+    "zephyr_hound": "sig_gale_leap",
+    "galecrest_lynx": "sig_crest_slash",
+    "briarbound_wisp": "sig_thorn_glow",
+    "hobgoblin": "sig_raider_strike",
+    "cave_worm": "sig_burrow_bite",
+    "cave_bear": "sig_bear_crush",
+    "thornroot_stag": "sig_thorn_crown",
+    "earth_elemental": "sig_rockslide",
+    "mossveil_lynx": "sig_moss_veil",
+    "air_elemental": "sig_whirlwind",
+    "orc_warrior": "sig_berserk_cleave"
   }
 }

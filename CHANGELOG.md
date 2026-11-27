@@ -23,7 +23,667 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
 
 ---
 
-## Verze 0.1 – rozpracováno
+## Verze 0.2 – 2026-11-28
+
+### Změněno – hlavní menu vpravo dole
+- Tlačítka hlavního menu jsou zase v pravém dolním rohu (okraj 60 px vpravo i dole).
+- Nové tlačítko Vypnout hru – zatím neaktivní (šedé).
+
+### Grafika – srovnání karet (připomínky ke kartám)
+- Jednotná hlavička všech karet: ikona + nadpis na stejném místě (Hrdina, Talenty, Parta, Inventář,
+  Dovednosti, Bestiář, Mapa, Úkoly); Talenty a Parta už nemají nadpis namalovaný v obrázku jiným písmem.
+- Hrdina: rámečky srovnané do mřížky (stejné okraje a mezery, horní řada na jedné výšce, pravý sloupec
+  Zlato / Oblast / Magické kameny stejně široký jako Magické školy); Dovednosti už nezasahují do Vybavení.
+- Parta: políčka monster i s rámečkem uvnitř panelu Aktivní parta, menší ikony bez přesahů (uši, rohy),
+  texty v řádku se nepřekrývají; počet „Aktivní parta 4/4 · Úschovna“ na řádku nahoře (dřív ho zakrýval
+  model monstra); panel Historie celý uvnitř detailu monstra.
+- Inventář: všechna tlačítka filtrů kreslená stejně (rámeček, ikona, popisek stejným písmem uvnitř);
+  šipky stránek bez tmavého čtverce; karta trochu menší, aby nadpis i panel Nástroje měly odstup od rámu.
+- Dovednosti a Bestiář: seznam vlevo s odstupem od rámu karty.
+- Bestiář: zvýraznění pod myší u „Výskyt“ zůstane na svém místě (dřív uskočilo do Schopností).
+- Mapa: mapa pod hlavičkou (nadpis a ikona nezasahují do rámečku mapy).
+
+### Grafika – texty a ikony uvnitř rámů karet
+- Talenty: ikony talentů, hlaviček stromů a vrcholných talentů jsou uvnitř rámečků (dřív přes okraj);
+  popis vrcholného talentu se vejde do rámečku (kratší úvod „Po 30 bodech:“, dlouhý text menším písmem);
+  štítek „brzy“ je uvnitř políčka.
+- Hrdina: ikony dovedností v panelu Dovednosti uvnitř rámečků tlačítek.
+- Inventář: sloty v panelu Nástroje jsou menší, popisky už neleží přes slot pod sebou.
+- Dovednosti, Bestiář, Úkoly a Mapa: nadpis s ikonou posunutý ze zlatého rohu rámu (Mapa má nově ikonu);
+  texty a tlačítka vpravo nahoře (Objeveno, Co dál?, Jsi v oblasti…) mimo pravý roh; legenda Mapy mimo levý
+  dolní roh; detail v Bestiáři má odstup od pravého rámu.
+- Dovednosti: přehled profese s menšími mezerami – popis poslední specializace už nepřetéká přes spodní okraj.
+- Party: historie monstra píše statistiku česky („do statistiky Síla“ místo „force“).
+
+### Změněno – ekonomika: z koupených surovin se nevydělá
+- Hodnota výrobku (`src/systems/ItemValueSystem.js`): suroviny koupitelné u obchodníků se počítají za nákupní
+  cenu bez přirážky, vlastní suroviny (nasbírané, vytěžené, kořist, vlastní mezivýrobky) s přirážkou podle
+  obtížnosti receptu – úroveň 1 → 1,1×, úroveň 100 → 1,9×. Výkup u obchodníků dál polovinou hodnoty.
+- Vyráběné předměty, které obchodníci neprodávají, mají hodnotu podle receptu i tam, kde měly v datech pevnou
+  cenu (často 2–3× nad cenou koupených surovin, např. Dřevěný talisman 26 → 8 zlata). Kovářské výrobky z vlastní
+  rudy naopak zdražily (průměrně o čtvrtinu, u těžkých receptů víc), řemeslné zlevnily (průměrně o desetinu).
+- Zboží z obchodu nemá vyšší hodnotu než jeho nákupní cena (Kůže 7 → 6).
+- Vlastní obchod: zákazník koupitelnou část zboží nepřeplatí (tolerance ceny platí jen na vlastní práci
+  a suroviny, koupená část se počítá i se slevou z Charismatu) a nad férovou cenou šance na prodej klesá tím
+  prudčeji, čím víc je zboží „z obchodu“. Simulace na den: přeprodej koupené kůže ~2 zlata, Měděná dýka z
+  vlastní rudy ~5 zlata, Pečená plotice z vlastní ryby ~70 zlata.
+
+### Přidáno – úkoly Vlastní obchod a Účetní kniha (Demo 34 a 33)
+- Vlastní obchod (Starosta Edric, po Za léčitelkou): získat Diplomacii 10 a koupit Zelený dům za 500 zlata.
+  HUD ukazuje postup Diplomacie (7 / 10), pak zlata (… / 500). Splní se i domem koupeným dřív.
+- Účetní kniha (Úřednice na radnici, po Vlastním obchodu): otevřít účetní knihu ve svém obchodě a prodat
+  zákazníkům 5 kusů zboží. Odměna 20 zlata a 100 XP Diplomacie.
+- Pořadí je obrácené oproti číslům v dokumentu – účetní kniha je až ve vlastním obchodě.
+
+### Přidáno – řemeslné linie úkolů (Demo, úkoly 11–32)
+- 17 nových úkolů: Rybolov I–III (Rybář), Těžba I–III a Kovářství II–III (Hornický mistr), Byliny II–III
+  (Bylinkářka), Vaření I–II (Trhovkyně) a III (Výčepní), Alchymie II–III (Alchymista), Výroba I–III (Řemeslnice)
+  a Do zbroje (Obchodník s látkami). Data jsou v `src/data/craftQuests.js`.
+- Odemykání: část I všech řemesel (i dosavadní Byliny od řeky, Čistá voda, Kožený řemínek) až po úkolu Za
+  léčitelkou, část II po části I téhož řemesla, část III po části II. Řemesla na sobě nezávisí. Do zbroje po
+  Koženém řemínku a Výrobě I.
+- Trh a výkup se učí v částech II (prodej Rybáři, Hornickému mistrovi, Bylinkářce, na tržišti).
+- Nový typ cíle úkolu „goals“: počítadla událostí od přijetí úkolu (`src/systems/QuestCounters.js`) – úlovky,
+  vytěžené suroviny, nasbírané byliny (statek zvlášť), vyrobené recepty, použité přípravky, prodané kusy (podle
+  předmětu, obchodu, šperky, denní poptávka Rybáře), nasazená výbava a souboj vyhraný najedený. Víc cílů = postup
+  „Část 1/2“ v HUD; nabídka úkolu je ukáže jako kroky.
+- Sledovat vede i k rybářskému místu a nalezišti Těžby; pracoviště s výrobou pro úkol má modrý „?“ a recept značku.
+- Výčepní nabízí úkol i v noci (vedle pokoje na noc), Řemeslnice má nabídku rozhovoru (úkoly).
+
+### Změněno – úpravy zadání oproti dokumentu
+- Těžba II: železná ruda místo cínu (cín je až od Těžby 8); Těžba III: Cínová žíla místo Opuštěného lomu
+  (jeho žíly jsou od úrovně 18 a 92).
+- Byliny III: 2× Vodní květ (Sběr bylin 8) místo pylu (ten je až z magických rostlin).
+- Rybolov III: neobvyklá a lepší ryba (Lín, Pstruh) – vzácné ryby v Greenvale jsou od Rybolovu 18.
+- Alchymie III: Odpuzovač zvěře – ochranné oleje proti živlům jsou od Alchymie 37.
+
+### Grafika – nadpisy karet uvnitř rámu
+- Karty Dovednosti, Bestiář a Úkoly (i Nástěnka úkolů): ikona a nadpis jsou posunuté dovnitř – už nesedí na zlatém
+  rohu a horní hraně rámu. Nápověda vpravo nahoře na Nástěnce úkolů už nezasahuje do pravého rohu.
+
+### Opraveno – karta Úkoly: hlášky v záhlaví
+- Hláška po „Co dál?“ (i po Sledovat / Nesledovat a „V této oblasti teď žádný úkol není“) se už nekreslí dole
+  přes dokončené úkoly – na 3 s nahradí nápovědu v záhlaví karty vedle tlačítka Co dál? (zlatě, dlouhá se zmenší).
+  Co dělat je vidět v rozbaleném sledovaném úkolu.
+
+### Přidáno – sledovaný úkol v HUD, cena v inventáři
+- Ve světě je vpravo nahoře (pod lištou karet) panel **Sledovaný úkol**: název, co teď dělat a ukazatel postupu
+  (např. „2 / 3“ kanců, kusy předmětu k odevzdání, krok vícekrokového úkolu; splněný úkol zeleně „Splněno – odevzdej“).
+  Obnovuje se průběžně, klik otevře kartu Úkoly, pod otevřenou kartou a v interiéru se schová.
+  Počet (kanci 2/3, druhy 3/5, XP mistrovství Vzduchu 12/40) ukazuje jen ukazatel – v textu kroku v panelu není
+  (v kartě Úkoly zůstává).
+- Náhled předmětu v inventáři ukazuje cenu: „Cena: N zlata / ks · výkup M zlata“ (výkup u obchodníka = polovina),
+  u klíčů a předmětů bez ceny „Nedá se prodat“.
+
+### Změněno – inventář: vybraný předmět
+- Vybraný předmět (ten v náhledu vlevo dole) má v mřížce zlaté podkreslení pod ikonou, ne jen rámeček.
+- Když přepneš filtr a vybraný předmět do nové kategorie nepatří, výběr se zruší a náhled ukáže „Vyber předmět“
+  (dřív v něm zůstával skrytý předmět, např. Cestovní jídlo při filtru Potiony).
+
+### Změněno – kategorie inventáře: Vybavení a Jídlo
+- Kategorie Zbroj se jmenuje **Vybavení** a patří do ní i prsteny, amulety a druhá ruka (dřív Doplňky).
+- Místo Doplňků je nová kategorie **Jídlo**: pokrmy, cestovní dávky, suroviny na vaření, maso, ryby a kuchyňské
+  mezivýrobky (pokrmy už nejsou v Potionech, suroviny na vaření v Materiálech).
+- Inventář: tlačítko Jídlo (ikona pokrmu) místo namalovaných Doplňků, popisek Vybavení; zvýraznění pod myší
+  a při zapnutí funguje jako u ostatních. Filtr výkupu na tržišti používá stejné kategorie, Databáze
+  u Surovin ukazuje i suroviny na vaření. Obchodní kategorie (poptávka ve vlastním obchodě) se nemění.
+- Drobnost: hláška při nahrazení elixíru už neopakuje slovo („nahrazuje Elixír síly“).
+
+### Přidáno – hvězdičky nových receptů i u profesí a podskupin
+- Zlatá ★ u nově odemčených receptů je teď vidět i výš: v kartě Dovednosti u profese (vlevo), u tlačítka
+  „Recepty ★“ a u podskupiny receptů (např. Tavení a díly); v oknech výroby u podskupiny a u Vše (před počtem).
+- Jakmile hráč přejede myší přes poslední nový recept podskupiny, hvězdičky u podskupiny (a případně profese
+  a Receptů) zhasnou.
+
+### Přidáno – výroba: kde se výrobek používá
+- Detail receptu v oknech výroby má sekci **Používá se v (N)**, když se výrobek používá v jiném receptu (všechny
+  výrobní profese): ikona, profese a úroveň, název receptu a potřebné množství. Klik otevře výrobek v Databázi;
+  co se nevejde, nabídne řádek „… a dalších N – všechny v Databázi“. Doba výroby a důvod, proč recept nejde vyrobit,
+  jsou teď nad touto sekcí.
+
+### Opraveno – ikony dárkových nástrojů
+- Nástroje od NPC zdarma (Starý krumpáč, Starý srp, Starý prut, Starý háček) mají ikonu prvního vyrobitelného
+  nástroje téhož druhu: Základní důlní krumpáč, Zahradnický srp a Rybářský hák (Kovářství); prut se nevyrábí,
+  takže ikona Jednoduchého prutu. Dřív se ikona kopírovala dřív, než vyrobené nástroje dostaly vlastní ikony,
+  a dárky zůstaly se starými zástupnými ikonami.
+
+### Změněno – lom Greenvale
+- Z jižního okraje lomu Greenvale zmizely stromy, které zasahovaly přes hranu jámy (pole 70–72, 97 a 71, 98 – teď skála útesu).
+- Hvězdný meteorit (Těžba 85+) se přesunul z hlavního lomu do Opuštěného lomu na jihozápadě (pole 8, 119),
+  k ostatním nalezištím nad úroveň dema (Ametystová dutina, Žíla dračího železa).
+
+### Opraveno – zkratka „zl“ v textech
+- Částky se všude píšou celým slovem („1 zlatý“, jinak „N zlata“) místo zkratky „zl“: potvrzení nákupu a platby,
+  košík, hostinec (nabídka výčepní), koupě domu, vlastní obchod (stav, tržby, statistiky, prodeje) a karta Dovednosti.
+
+### Přidáno – filtr výkupu na tržišti
+- V obchodech na tržišti má sloupec Prodat tlačítko **Filtr: … ▾**: rozbalí kategorie (Vše, Zbroj, Materiály,
+  Jídlo, Potiony, Doplňky, Ostatní) s počtem kusů na prodej; Jídlo = pokrmy, suroviny na vaření, maso, ryby
+  a kuchyňské mezivýrobky (ty pak nejsou v Potionech ani Materiálech); prázdné kategorie nejdou zvolit. Seznam pak ukáže jen
+  zvolenou kategorii (Esc nebo klik mimo nabídku ji zavře).
+- Dlouhé názvy ve výkupu se už nezmenšují do nečitelna – zkrátí se „…“ (počet kusů zůstane), celý název je v náhledu.
+
+### Přidáno – podpisové schopnosti monster z Greenvale
+- 16 druhů z Greenvale má vlastní jedinečnou (podpisovou) schopnost, kterou se naučí na úrovni 5:
+  Dire Wolf – Lovecký výpad (2 zásahy, krvácení), Wild Boar – Kančí nápor (omráčení), Goblin – Hrst písku
+  (na dálku, paralýza), Forest Sprite – Mízový dotek (vysaje 60 %), Giant Spider – Jedovatá síť (otrava + okolí),
+  Zephyr Hound – Vichřicový skok (2 zásahy na dálku), Galecrest Lynx – Hřebenový sek (+rychlost), Briarbound Wisp –
+  Trnitá záře (okolí, krvácení), Hobgoblin – Nájezdnický úder (+útok), Cave Worm – Kousnutí z hlubin (vysaje 40 %),
+  Cave Bear – Medvědí drtič (omráčení), Thornroot Stag – Trnová koruna (okolí, krvácení), Earth Elemental – Lavina
+  kamení (okolí 60 %), Mossveil Lynx – Mechový závoj (+obrana), Air Elemental – Smršť (3 zásahy), Orc Warrior –
+  Zuřivý sek (+útok).
+- Nové mechaniky schopností v souboji: více zásahů, vysátí života, zásah nepřátel vedle cíle (nejvýš 2) a posílení
+  útočníka po zásahu. Rychlý souboj a odhad počítají více zásahů a vysátí.
+- Monstra, která už úroveň 5 mají (i Dire Wolf z nové hry), dostanou podpisovou schopnost na začátku souboje.
+  Monstrum má teď až 7 schopností (6 běžných + Bond).
+- Bestiář ukazuje podpisovou schopnost zlatě s ★ a štítkem „podpisová“; se 7 schopnostmi má seznam hustší řádky,
+  aby se vešel do panelu.
+
+### Přidáno – zlatá hvězdička u nově odemčených receptů
+- Recepty, které zpřístupní nová úroveň výrobní dovednosti (Vaření, Alchymie, Kovářství, Řemeslnictví), mají
+  v seznamu zlatou pulzující hvězdičku – v kartě Dovednosti → Recepty i v oknech výroby. Zmizí, jakmile hráč
+  přejede myší přes řádek receptu (pamatuje se v uložené hře).
+
+### Grafika – karta Dovednosti
+- Tlačítko „Zpět (Enter)“ a nadpis vpravo nahoře jsou posunuté dovnitř okna – tlačítko už nepřekrývá zlatý roh rámu.
+
+### Změněno – vyskakovací okno XP: nahoře, odemčené recepty
+- Okno zisku XP vyjede shora a zastaví se nahoře uprostřed, hned pod lištou karet; texty (+XP, Nová úroveň,
+  Odemkl jsi…) jsou pod dlaždicí. Po chvíli zajede zpět nahoru.
+- Okno je menší (asi o třetinu, i s texty).
+- Když nová úroveň výrobní dovednosti (Vaření, Alchymie, Kovářství, Řemeslnictví) zpřístupní recepty, nad oknem
+  se ukáže „Odemkl jsi X předmětů“ (správný tvar: 1 předmět, 2–4 předměty, 5+ předmětů).
+
+### Přidáno – vyskakovací okno zisku XP v dovednostech
+- Při zisku XP v dovednosti (Sběr bylin, Alchymie, Těžba, Rybolov, Vaření, Kovářství, Řemeslnictví, Diplomacie)
+  vyjede uprostřed dole dlaždice té dovednosti z karty Hrdiny s „+N XP“; ukazatel se plynule posune o získané XP.
+  Při nové úrovni se naplní, zazáří, ukáže „Nová úroveň!“ a pokračuje od nuly. Více zisků čeká ve frontě
+  (stejná dovednost se sečte), okno je vždy nad ostatními okny.
+- Hromadná výroba (okna výroby): XP z celé várky se ukáže jednou, až po dokončení – i po přerušení (Esc)
+  nebo zavření okna.
+
+### Grafika – Dovednosti v kartě Hrdiny
+- Dlaždice dovedností mají vyšší rámeček a ukazatel úrovně je o kousek menší – už nesedí na spodním okraji rámu.
+
+### Přidáno – výroba: jen recepty se surovinami
+- Okna výroby (Vaření, Alchymie, Kovářství, Řemeslnictví) mají vlevo dole přepínač **☐ Jen co vyrobím**:
+  zapnutý ukáže jen recepty, které jde teď vyrobit aspoň 1× (suroviny, úroveň i pracoviště); počty u kategorií
+  se přepočítají. Volba se pamatuje pro všechna okna výroby. Když nic nejde vyrobit, seznam to napíše.
+
+### Přidáno – Štěstí a Charisma hrdiny
+- **Charisma**: vlastní úroveň 1–15 s XP – roste se vším XP Diplomacie (rozhovory, obchod, úkoly), 15. úrovně
+  dosáhneš přesně s Diplomacií 100. Zbytek do maxima 20 dorovnají předměty, jídlo a lektvary.
+- **Štěstí**: jen z předmětů, jídla a lektvarů (bez úrovní), nejvýš 20.
+- Účinky za bod – Štěstí: kritický zásah monster +1 % (základ 5 % pro všechny, poškození ×1,5, i v rychlém
+  souboji a odhadu), kořist z monster +2,5 %, kus navíc při sběru bylin, těžbě a rybolovu +0,5 %,
+  vzácné noční monstrum +0,5 %. Charisma: nákup u obchodníků −1 %, výkup +1 % (ceny v nabídkách i v košíku),
+  vlastní obchod – zákazníci a šance na prodej +1,5 %, ochočení +0,5 %.
+- Všechny amulety a prsteny mají Štěstí nebo Charisma podle obtížnosti (1 bod do úr. 19, +1 za 20 úrovní,
+  nejvýš 5); nalezené a úkolové kusy mají obě. Navíc pár vzácných kusů: Srdce Greenvale, Amulet větrného drápu,
+  Astrální fokus, Pegasí boty, Čelenka hvězdného mudrce, Plášť z dračí kůže, Stínová dýka, Sekera orčího válečníka.
+- Opakující se jídla (20 receptů se stejným účinkem jako jiný recept) dávají místo toho Štěstí nebo Charisma na
+  4–5 soubojů (Masový vývar zůstal – snídaně v hostinci). Lektvary: Elixír štěstěny (dřív Elixír divoké síly),
+  Lektvar výmluvnosti (dřív Lektvar svítícího listu), Štěstí navíc v Lektvaru štěstí lovce a Elixíru velkého lovu.
+- Karta Hrdiny: Štěstí a Charisma ukazují skutečnou hodnotu; hover říká maximum, úroveň a XP Charismatu,
+  kde se statistika uplatní (s aktuálními čísly) a ze kterých předmětů / posílení pochází.
+- Popisy výbavy, jídla a lektvarů ukazují Štěstí a Charisma jako body hrdiny („Hrdina: Štěstí +2“).
+
+### Změněno – úkol Nový společník: Mágův krystal na Skalní stráni
+- Nový předmět **Mágův krystal** (ikona jako Basic Soul Crystal): Mág ho dá 2× při přijetí úkolu Nový společník.
+  Ochočuje jako Basic Soul Crystal, ale jen v souboji na **Skalní stráni** (jinde nejde použít).
+- Když Mágovy krystaly dojdou (i vyplýtvané nepovedeným ochočením), v dalším souboji na Skalní stráni se doplní
+  (2×, zpráva v záznamu souboje) – úkol nejde zablokovat. Po odevzdání úkolu si zbylé Mág vezme zpět.
+- Úkol (text, rozhovor Mága, tečky na mapě) vede na Skalní stráň. V souboji po vyplýtvání posledního krystalu
+  nebo bez použitelného krystalu hra poradí, kde se Mágův krystal doplní / že funguje jen na Skalní stráni.
+
+### Grafika – horní lišta karet
+- Z horní lišty zmizel podklad, který tlačítka karet spojoval – tlačítka stojí samostatně (svět, interiéry i karty).
+
+### Grafika – schody do lomu
+- Sjezdy do lomu mají kamenné schody (5 stupňů se světlým nášlapem a boční skalní líce) místo mezery
+  ve skalní stěně. Každý sjezd má jedno schodiště rovně ve směru cesty.
+
+### Opraveno – tržiště otevře obchod bez probliknutí
+- Při dalším vstupu na tržiště se obchod otevře hned (ve stejném snímku jako interiér) a interiér se
+  nevysouvá – dřív se nejdřív ukázal interiér a obchod naskočil až po animaci.
+
+### Opraveno – nepřátelé obcházejí spojence
+- V taktickém boji nepřátelské monstrum, kterému cestu blokuje jiné monstrum nebo překážka, už nestojí:
+  hledá skutečnou cestu kolem (i přes krok, který ho vzdušnou čarou nepřiblíží) k volnému poli vedle cíle.
+  Když je cíl úplně obklopený, zařadí se co nejblíž (do fronty za spojence).
+
+### Přidáno – jídlo k odpočinku, potvrzení útraty
+- Hostinec přes den nabízí dvě volby: **Odpočinek (5 zl)** a **Odpočinek s jídlem (10 zl)** –
+  jídlo je stejný masový vývar jako snídaně k noclehu (regenerace po soubojích). Najetí myší ukáže popis volby.
+- Nové potvrzovací okno před každou platbou zlatem: kolik zaplatíš a zlato před → po (Enter = zaplatit, Esc = zrušit).
+  Platí pro nocleh a odpočinek, nákup v košíku všech obchodů (s prodejem ukáže i příjem), koupi domu,
+  změnu specializace Těžby / Sběru bylin a úhradu dluhu vlastního obchodu. Prodej bez nákupu se nepotvrzuje.
+
+### Přidáno – talenty Řemesla dokončeny, kategorie Řemeslník
+- Napojené talenty (dřív „čeká na systém“): Bylinkářská ruka (+šance na bylinku navíc, max 25 %),
+  Trpělivost rybáře, Úsporné zpracování (šance ušetřit suroviny při výrobě, max 10 %, vždy se spotřebuje aspoň 1 kus),
+  Alchymická zručnost (silnější lektvary, max +10 %), Mistr kuchyně (jídlo trvá déle, max +25 %),
+  Kovářský mistr / Zručný řemeslník (+bonusy kovové / nekovové výbavy), Vzácné směsi, Mistrovská výroba, Legendární řemeslník.
+- Nová kategorie receptů **Řemeslník** v Kovářství, Řemeslnictví a Alchymii (i v kartě Dovednosti) – vidí ji jen hráč se specializací Řemeslník.
+- 13 receptů ze vzácné kořisti Greenvale, odemykají se hodnostmi talentů (1./3./5.):
+  - Kovářství: Gobliní lovecký nůž, Orčí kroužková košile, Štít orčího bojovníka, Meč z vlčích tesáků, Sekera orčího válečníka (epická).
+  - Řemeslnictví: Vesta z divoké kůže, Amulet větrného drápu, Boty zephyrova běhu, Zbroj vůdce smečky,
+    **Srdce Greenvale** (legendární amulet – po dokončení celého stromu Řemesla).
+  - Alchymie: Slizový protijed, Elixír divokého kance, Lektvar větrného běžce.
+- Talenty Kouzelníka (Kamenné stezky, Zlaté rozpouštění, Šetrnost cestovatele) zůstávají na později.
+
+### Změněno – účinky v HUD
+- Každá ikona účinku (jídlo, elixír, ochrana, lektvary, výztuha) má přes roh štítek trvání:
+  „3b“ = 3 souboje, „3min“ = 3 minuty.
+- Při najetí myší se nad panelem ukáže štítek s názvem, trváním a popisem účinku
+  (jídlo podle receptu, ostatní podle popisu předmětu).
+
+### Změněno – Databáze, inventář, odevzdání úkolu
+- **Databáze:** u předmětu s víc než 5 místy získání je odkaz „… a dalších N míst – zobrazit
+  všechna ▸“. Seznam se rozbalí přímo na místě – prvních 5 zůstane, kde bylo, zbytek se rozbalí
+  dolů přes ostatní obsah (když se nevejde, druhým sloupcem). Recepty jdou rozkliknout; sbalí
+  ho Skrýt ▴, klik mimo nebo Esc.
+- **Inventář:** lišta se zlatem je kratší (jen na částku) a tlačítko Seřadit je hned za ní
+  (dřív vpravo dole vedle Zavřít). Sekce Nástroje má stejný zlatý rámeček jako ostatní.
+- **Odevzdání úkolu:** první věta poděkování už neproblikne – rozhovor posune jen klik, který
+  v něm začal (dřív puštění myši po kliknutí na Odevzdat hned přeskočilo první větu).
+
+### Změněno – obnova nalezišť a noční vzácná monstra
+- **Obnova:** běžné a neobvyklé žíly i byliny (a záhony na statku) se obnoví za 12 minut,
+  vzácné a lepší (i speciální naleziště a vzácné místo v lomu) za 48 minut. Dřív 5–15 minut,
+  vzácné 45 minut až 24 hodin.
+- Odpočty obnovy a texty postav jsou v herním čase (1 minuta hraní = 1 herní hodina):
+  „obnova za 11 h 20 min“, běžné žíly a záhony „dvanáct hodin“, vzácné „dva dny“
+  (`TimeSystem.formatGameDuration`).
+- **Noc (23:00–05:00):** každé setkání na louce má 15% šanci, že jedno monstrum nahradí
+  nejvzácnější druh oblasti (vzácný, jinak neobvyklý – Greenvale: Zephyr Hound, Verdant Forest:
+  Pollen Oracle nebo Thornroot Stag) o úroveň výš než louka. V přehledu souboje má ★ a
+  „vzácné v noci“. Ve dne se neobjeví.
+
+### Změněno – obchod se sám otevře jen na tržišti
+- Navštívený obchod se po vstupu otevře sám jen na tržišti (Tržiště – potraviny, Tržiště – zboží).
+  U Bylinkářky, Rybáře a Hornického mistra se ukáže nabídka postavy (úkol, obchod, rozhovor).
+
+### Opraveno – každá žíla v lomu odpočívá zvlášť
+- Obnova vytěženého naleziště se počítá pro konkrétní žílu (oblast + pole), ne pro celý druh.
+  Po vytěžení jedné měděné žíly jdou ostatní měděné žíly v lomu těžit dál.
+
+### Změněno – odměny úkolů s jednotkou XP
+- Odměny v rozhovorech a v kartě Úkoly uvádějí XP: „25 zlata a 200 XP Alchymie“ místo
+  „zkušenosti v Alchymii (200)“; u hrdiny „30 XP hrdiny navíc“.
+
+### Změněno – tutoriál souboje se přizpůsobí zkušenému hráči
+- Když hráč udělá krok do 1,8 s od zvýraznění (nebo dřív, než se ukáže), tutoriál zrychlí:
+  další zvýraznění bez pauzy (dřív 650 ms), rychlejší přechod (110 ms), slabší ztmavení
+  a kratší texty Mága. Pomalejší hráč má dál plné vysvětlení. Bez tlačítka Přeskočit.
+- Air Elemental v tutoriálu stojí ve stejné řadě jako vlk, takže vlk při útoku doběhne přímo
+  před něj (dřív skončil šikmo a vypadalo to jako útok zdálky).
+- Útok zblízka (všechny souboje): při přesunu a útoku má přednost pole přímo před cílem a výpad
+  k cíli je delší (50 % vzdálenosti místo 35 %).
+
+### Opraveno – plynulé přijímání a odevzdávání úkolů
+- Mezi okny (nabídka postavy → rozhovor → nabídka úkolu → odevzdání) už nic neproblikne:
+  nabídka s Odevzdat po přijetí splněného úkolu naváže hned (dřív se zpožděním 150 ms)
+  a tlačítko Zavřít interiéru se vrací až 250 ms po zavření posledního okna, plynule.
+- Air Elemental v tutoriálu souboje má úroveň 5 (dřív 1).
+
+### Přidáno – modrý „?“ nad pracovištěm pro úkol
+- Když má hráč pro probíhající úkol něco vyrobit (aktuální krok = výroba), ukáže se modrý „?“
+  nad pracovištěm, kde to jde: alchymistický stůl, výheň a kovadlina, kuchyně a ohniště,
+  koželužský a šperkařský stůl, Soul Crystal Workbench. Řemeslnictví podle přesného pracoviště
+  receptu, ostatní profese aspoň stejně dobré pracoviště; každá výroba označí jen jedno pracoviště
+  v místnosti.
+
+### Změněno – košík uprostřed obchodu
+- Ve všech obchodech (obchodníci na tržišti, Bylinkářka, Rybář, Hornický mistr) je košík
+  prostřední tabulkou: Koupit | Košík | Prodat.
+
+### Opraveno – název návnady v rybolovu
+- Název zvolené návnady (např. „Kořeněná návnada (5 ks)“) se celý vejde mezi šipky: šipky jsou
+  od sebe dál (300 px na název, delší název se zmenší) a mají čitelnou velikost 54 × 54.
+  Účinek návnady je vpravo za šipkou.
+
+### Změněno – připomínky z testování (tutoriál, souboj, úkoly)
+- **Tutoriál souboje:** panel Mága už neproblikává prázdný (během pauzy je schovaný celý).
+  První útok vlka dá Air Elementalovi vždy krvácení (KRV) a Mág vysvětlí, co dělá; krvácení
+  elementála nezabije. Pořadí: zásah → kouzlo Vzduchu → ochočení.
+- **Magie Vzduchu** je odemčená hned od začátku nové hry (dřív při přijetí úvodního úkolu).
+- **Animace ochočení:** zlaté světlo a jiskry, monstrum se stáhne do krystalu, který zapulzuje;
+  při neúspěchu se monstrum vytrhne a krystal se roztříští.
+- Texty: tečky ve světě jsou **modré**, ne zlaté.
+- Hlášky ve světě (nový úkol, splněný pasivní úkol…) jsou nad panelem party (HUD), ne přes něj.
+- **Po přijetí úkolu** se interiér zavře a ve světě vyskočí hláška o novém úkolu. Výjimka: když
+  je další krok v téže budově (např. výroba na alchymistickém stole – suroviny hráč už má),
+  zůstane uvnitř, pracoviště ukáže modrý „?“ a hláška řekne, co dělat. Jinak vyjde ven a sledovaný
+  úkol ho vede k dalšímu kroku (např. na tržiště). Když hráč už
+  splňuje vše pro odevzdání, místo odchodu se hned ukáže nabídka postavy s Odevzdat úkol.
+  Totéž po úvodním úkolu u Mága.
+- **Zavřít** interiéru se během rozhovoru, nabídek a obchodu schová (neprosvítá pod panelem).
+- Okna výroby (řemesla) se vždy otevřou na filtru **Vše**.
+- **Volba souboje:** při najetí myší na Bojovat / Bez mřížky / Simulovat / Útěk se ukáže,
+  co volba dá a co ne.
+- **Rychlý souboj:** monstrum hráče na tahu má zlatý zářivý obrys; jméno, životy a stavy jsou
+  vpravo od monster.
+- **Zkušenosti monster:** omdlelé monstrum XP (ani tréninkový bod a důvěru) nedostane; křivka
+  úrovní je jako u hrdiny (úroveň × 20, upravená růstem druhu).
+- **Bestiář a úkoly** počítají každé zabité monstrum hned při omdlení (i když se souboj prohraje),
+  ne vyhraná setkání.
+- **Silnější nepřátelé:** fyzický útok divokých monster 80 % jejich Síly (dřív 40 %,
+  `ENEMY_ATTACK_SHARE`). Rovnocenný souboj se vyhrává, silnější a početnější nepřátelé jsou nebezpeční.
+- **Dárky od NPC** (starý prut, háček, krumpáč, srp) mají ikonu nejnižšího vyrobeného nástroje.
+- **Navádění** jako v tutoriálu (ztmavení a světlé okno): po splnění Prvního lovu na Úkoly → Co dál?,
+  po odemknutí talentů (4. úroveň) na Talenty.
+- **Volba druhého živlu:** při najetí myší souhrn školy (kouzla, silná a slabá proti čemu).
+- **Karta Úkoly:** hotové úkoly se nerozbalují a jsou mimo tabulku probíhajících, oddělené tlustou
+  zlatou čarou (Dokončené úkoly); seznam se posouvá kolečkem myši, vpravo posuvník.
+
+### Změněno – první dva úkoly se přijmou samy
+- **Krotitelova zkouška** se přijme sama po rozhovoru s Mágem (bez okna Přijmout / Odmítnout),
+  Soul Crystal hráč dostane hned. **Za léčitelkou** se zadává sám už dřív. Volba přijetí je
+  až od třetího úkolu (Léčivé byliny pro Lioru).
+
+### Přidáno – základní úkoly Dema (2, 5–9)
+- **Zápisky krotitele** (pasivní, Mág): zadá se sám po Krotitelově zkoušce, splní a odmění se sám
+  (10 zl), až hráč pozná 5 druhů monster – ve světě vyskočí hláška.
+- **První lov** (Lovec u stolu v hostinci, po Za léčitelkou): poraz 3× Wild Boar, zlaté tečky vedou
+  na nejbližší louku, kde divočáci žijí (cíl `meadow` umí `species`). 15 zl + 30 XP hrdiny.
+- **Nový společník** (Mág, po Prvním lovu): ochoč další monstrum. 20 zl.
+- **Výcvik** (Strážný na radnici, po Novém společníkovi): rozděl tréninkový bod v Party. 10 zl.
+- **Píseň živlů** (Mág, po Prvním lovu): použij kouzlo hrdiny v souboji. 20 zl.
+- **Druhá škola** (Mág, po Písni živlů): Vzduch na 2. úroveň mistrovství, pak si u Mága vybereš
+  druhý živel (Oheň, Voda, Země, Světlo, Stín) – odemkne školu i první kouzla. 25 zl.
+- Orčí hrozbu starosta nabídne až po základních úkolech 1–9 (bez pasivního).
+- Úkoly mají obecné cíle podle stavu hry (`objectiveCheck` + výchozí hodnota při přijetí,
+  `objectiveText` s postupem, např. „2/3“). Mág má nabídku se všemi svými úkoly, značka „!“ / „?“
+  nad ním ukazuje kterýkoli z nich. Souboj počítá seslaná kouzla (`flags.spellsCast`).
+
+### Změněno – úkoly v Demu: odměny a odemykání (záložka „Demo – úkoly“)
+- **Odměny úkolů:** každý splněný úkol dá hrdinovi 15 XP (`QUEST_HERO_XP`) a dál 50 XP Diplomacie.
+  `rewardXp` umí všechny profese (rybolov, těžba, byliny, vaření, alchymie, kovářství, výroba),
+  `diplomacy` (navíc) a `hero` (navíc), i víc odměn najednou (pole).
+- **Odemykání:** úkol s `requires` jde přijmout až po uvedených úkolech (řemeslné linie I → II → III,
+  Orčí hrozba po Krotitelově zkoušce, Za léčitelkou a Léčivých bylinách). Dřívější podmínka
+  „všechny ostatní úkoly oblasti“ je zrušená.
+- **Talenty** se odemknou na 4. úrovni hrdiny. **Orčí hrozba** dá 30 zl, 30 XP hrdiny navíc a otevře
+  cestu do Verdant Forest (les už není otevřený od začátku). Starší uložené hry s poraženým orkem
+  si talenty i les nechají.
+- Odměny hotových úkolů podle seznamu: Léčivé byliny 100 XP bylin, Byliny od řeky 200,
+  Čistá voda 200 XP alchymie, Kožený řemínek 200 XP kovářství. Liora při odevzdání bylin
+  řekne o odpočinku a přenocování v hostinci.
+- **Zelený dům** stojí 500 zl (dřív symbolicky 1 zl). Dočasný Strážný na radnici už nedává
+  XP Diplomacie, jen promluví.
+
+### Přidáno – nabídka rozhovoru u postav
+- Postava s více možnostmi ukáže volbu ve spodním panelu rozhovoru (jméno postavy a tlačítka
+  po třech v řadě, výška 62, písmo 22, klávesy 1–9, Esc = odejít): Bylinkářka, Rybář, Hornický mistr (obchod + rozhovor, u Bylinkářky i úkol),
+  Liora (úkol, vyléčit partu, úschovna monster), Starosta (úkol, dům na prodej, rozhovor),
+  Trhovkyně a Obchodník s látkami (obchod + rozhovor), Alchymista a Učednice (úkol + rozhovor).
+- Úkol je v nabídce první (Nový úkol / Úkol / Odevzdat úkol), nový a splněný má zlaté písmo.
+- Bez nabídky zůstává první návštěva s dárkem (srp, prut, krumpáč), úkol Za léčitelkou
+  (splní se rozhovorem) a postavy s jedinou možností.
+
+### Změněno – balance poškození monster
+- **Rozdíl úrovní:** každá úroveň útočníka nad cílem +6 % poškození technik monster, pod cílem
+  −6 %, nejvýš ±50 % (`DamageCalculator.levelDamageMultiplier`). Platí v ručním souboji
+  i v simulaci, kouzla hrdiny a házené přípravky beze změny.
+- Přesila silnějších nepřátel bez přípravy prohrává (2× úr. 5 proti 4× úr. 10: rychlý souboj 0 %),
+  s jídlem, výbavou a taktikou je vyhratelná (odhad ručního boje bez taktiky: +20 % statů ≈ 22 %,
+  +35 % ≈ 70 %). Slabší nepřátelé naopak padají rychleji.
+
+### Přidáno – den a noc
+- **Herní čas** (`systems/TimeSystem.js`, uložený v `state.time` = den + minuta): 1 minuta hraní
+  = 1 herní hodina. Den 05:00–23:00 (18 min), noc 23:00–05:00 (6 min). Čas běží ve světě
+  a v interiérech, ne pod kartami, v pauze, obchodech a soubojích. Nová hra začíná v 05:00 (úsvit),
+  staré uložené hry také.
+- **Tma:** od 21:00 se stmívá, ve 23:00 je noc, od 04:00 se rozednívá, v 05:00 je šero a v 07:00
+  plný den. Hrdina nosí stále lucernu: pole do vzdálenosti 8 polí jsou světlá (poslední 2 pole
+  plynule slábnou), vše se kreslí hranatě po celých polích. Za hranou tma plynule houstne až do
+  úplné tmy na okraji obrazovky (podle přiblížení). HUD a výzvy zůstávají světlé.
+- **Hodiny:** v horním řádku tabulky HUD vpravo („Den 1 · 05:00 · Úsvit“), v interiéru vpravo dole.
+- **Hostinec:** výčepní podle denní doby nabízí přenocování (20:00–05:00, 10 zl, spí se do
+  úsvitu, se snídaní) nebo odpočinek přes den (5 zl, +2 hodiny, bez snídaně). Obojí vyléčí
+  partu a obnoví manu. Výčepní čas nezmiňuje.
+
+### Změněno – hlavní obrazovka
+- Tlačítka hlavního menu jsou z herního UI (modrá tlačítka jako v pauze a na kartách, 68 px,
+  písmo 26) s ikonou vlevo, bez panelu pod nimi. Nedostupné volby jsou šedé.
+- Sloupec tlačítek je vystředěný pod drahokamem v logu (x 1021), mezery 10 px, spodní tlačítko končí u paty vodopádu (y 840).
+- Odstraněny cvičné souboje: prototyp Soul Clash (`SoulClashScene.js`) je smazaný celý.
+- Enter = Pokračovat (je-li rozehraná hra), jinak Nová hra. Hlášky jsou na panelu nové sady.
+
+### Změněno – lokace v HUD (vratka)
+- Název lokace už není samostatný štítek nad panelem: průhledná tabulka panelu party se
+  o řádek zvětšila nahoru a lokace je v jejím horním řádku (jedna společná tabulka).
+
+### Opraveno – hláška „Co dál?“
+- Delší hláška na kartách (např. po „Co dál?“) roste nahoru a nevyleze pod kartu.
+  Karta Úkoly se po „Co dál?“ zavře až po 2,4 s, aby šla hláška přečíst.
+
+### Přidáno – hlášení chyb (bug report)
+- **Pauza → Nahlásit chybu:** okno s polem pro popis (Odeslat Ctrl+Enter, Esc zpět). K popisu
+  se samo přidá oblast, interiér, pole, úroveň, sledovaný úkol, velikost okna a prohlížeč.
+- Hlášení se vždy uloží v prohlížeči (`aurion-bug-reports`); tlačítko **Stáhnout reporty**
+  je stáhne jako soubor .md. Při vývoji (`npm run dev`) se navíc zapíše do složky
+  `bug-reports/` (soubor .json + souhrn `REPORTY.md`) přes plugin ve `vite.config.js`.
+  Na GitHub Pages žádný server není – hlášení zůstane jen v prohlížeči hráče.
+- Složka `bug-reports/` je v `.gitignore`. Hlášení se přenáší do dokumentu „Dragon Souls –
+  Bug reporty“ (`systems/BugReportSystem.js`).
+
+### Změněno – sledování úkolu vede po cestách
+- Zlaté tečky sledovaného úkolu vedou po cestách, dokud to jde, i když to není nejkratší
+  trasa: pole mimo cestu stojí 12× víc než cesta (dřív 3×), z cesty sejdou až na posledním
+  úseku k cíli. Z náměstí k jeskyni 63 z 67 polí po cestě, do lomu 50 z 53, do Opuštěného
+  lomu 100 ze 105 (`TRAIL_OFFROAD_COST` ve `WorldScene.js`).
+
+### Změněno – geny monster podle povahy druhu
+- Geny (0–15, hráči se dál nezobrazují) se u nově získaných monster losují podle archetypu
+  druhu: obránce (golemové, strážci, želvy, medvěd, Earth Elemental…) vyšší zbroj, vitalita
+  a síla, nižší rychlost; šelma (vlk, rys, liška, kanec…) vyšší rychlost a síla, nižší zbroj;
+  létavec, kouzelník, hromotluk, drak, had / vodní tvor a hmyz mají vlastní rozložení, ostatní
+  podle živlu. Každý jedinec má dál náhodný rozptyl ±5 (originalita). Průměr na 300 losech:
+  Earth Elemental zbroj 10,8 / síla 11,1 / rychlost 4,1; Dire Wolf rychlost 11 / síla 11 /
+  zbroj 3,7 (`MonsterSystem.rollGenes`, `geneArchetype`). Už chycená monstra se nemění.
+
+### Přidáno – karta Party: bonusy statistik zeleně
+- U statistik monstra je jako v kartě hrdiny zeleně „+N“: o kolik je statistika v souboji
+  vyšší díky velitelskému bonusu (statistiky hrdiny / 5 + talenty), důvěře (Bond), talentu
+  Vůdce smečky, jídlu, elixíru a výbavě / výztuze hrdiny. Tooltip řádku vypíše hodnotu
+  v souboji a odkud bonus je. Výpočet je stejný jako v souboji (`systems/MonsterStatBonus.js`).
+
+### Změněno – simulace podle pravidel rychlého souboje
+- Simulace souboje (Simulovat) i šance na výhru v okně před bojem se počítají podle pravidel
+  rychlého souboje bez mřížky: všichni na dosah, útok na dálku bez postihu a nepřátelé míří
+  přednostně na monstra s útoky na dálku (mezi nimi na nejzraněnější), jinak na monstrum
+  s nejnižším podílem HP (`BattleSimulationSystem.pickTarget`). Bez přehrávání průběhu.
+
+### Opraveno a změněno – Orčí válečník: jeskyně u Jižních plání, bez povolení
+- **Jeskyně orčího válečníka chyběla** (vchod se ztratil při předělání oblasti v editoru,
+  úkol Orčí hrozba nešel splnit). Nový vchod je v útesu na okraji Jižních plání (7/57)
+  s mýtinou před ním; nastavuje se při načtení mapy (`caveEntrance`), takže ho další úprava
+  oblasti v editoru nesmaže. Oblast „Jeskyně orčího válečníka“ v HUD, tečky úkolu vedou k ní.
+- **Lovecké povolení je zrušené:** úkol Orčí hrozba dává jen talentové stromy, Verdant Forest
+  je otevřený od začátku. Texty úkolu a starosty upravené.
+
+### Změněno – tutoriál souboje, modifikátor nástrojů
+- **Tutoriál (Krotitelova zkouška):** po každém kroku krátká pauza (0,65 s), pak se zatmavení,
+  zlatý rámeček i text Mága objeví naráz s plynulým nástupem (dřív se text měnil hned
+  a zatmavení zvlášť).
+- **Modifikátor vyrobených nástrojů podle stupně:** krumpáče +1 až +6, srpy +1 až +5, pruty
+  +1 až +3, háčky / naviják / bodec +1 až +4; staré nástroje od NPC +0. Každý bod: šance na
+  kus navíc +2 % (Těžba, Sběr bylin), doba těžby / sběru −3 %, u Rybolovu čekání −3 % (prut
+  i háček se sčítají). Modifikátor je v popisu předmětu a zeleně „+N“ u slotu Nástroje.
+
+### Změněno – oblast Greenvale: cesty, rozcestníky, názvy oblastí, Opuštěný lom
+- **Opuštěný lom** (malý štěrkový lom na jihozápadě): Ametystová dutina (úr. 18, vyřazená
+  z hlavního lomu) jako skála se 4 žilami a jediné vzácné naleziště **Žíla dračího železa**
+  (úr. 92, fialový kruh, jen jedno pole). Hlavní lom má dál všechny žíly úr. 1–10.
+- **Kultivované cesty:** stromy těsně u cesty a hned před ní (koruna by cestu zakryla) zmizí
+  a mezi cestou a loukou je vždy pruh trávy. Děje se při načtení mapy (`cultivatePaths`
+  v `data/maps/index.js`), takže to přežije i nové vygenerování oblasti z editoru.
+- **Rozcestníky:** rozcestí mimo náměstí se najdou samy; stojí u nich ukazatel a když k němu
+  hrdina dojde (do 3 polí), ukáže se nad ním, kam která cesta vede (šipka + první
+  pojmenovaná oblast na větvi). V Greenvale jich je 5.
+- **Názvy oblastí a poloha v HUD:** ve štítku nad středem spodního panelu party (dřív vlevo
+  nahoře pod FPS) je „Greenvale – název“ (Opuštěný lom,
+  Lom Greenvale, Statek, Jeskyně, Rybářské molo, Náměstí, louky setkání, Vesnice Greenvale);
+  mimo pojmenované oblasti jen „Greenvale“ (`map.areas`, `areaAt`).
+
+### Přidáno – sloty Nástroje a základní nástroje od NPC
+- **Karta Inventář má vpravo sekci Nástroje** s vlastními sloty mimo mřížku inventáře:
+  Krumpáč, Srp, Prut, Háček / naviják, 7 pomocných nástrojů Těžby (kladivo na rudu, klín,
+  kleště na krystaly, majzlík, vrták, kladivo na astrální kámen, ochranné kleště) a 2 řemeslné
+  (Koželužské nože, Šperkařská lupa). Karta je posunutá doleva, aby byla i se sekcí vystředěná.
+- Nástroj ve slotu platí stejně jako dřív (profese ho najdou). Do prázdného slotu se při
+  otevření inventáře přesune nejlepší nástroj daného druhu, nový nástroj jde do prázdného
+  slotu sám. Klik na slot = výběr jiného nástroje z inventáře nebo „Sundat“; dvojklik na
+  nástroj v inventáři ho dá do slotu (výměna). Najetí myší ukáže popis vlevo dole.
+- **Základní nástroje od NPC:** Hornický mistr dává Starý krumpáč, Bylinkářka Starý srp,
+  Rybář Starý prut a Starý háček. Jsou běžné, bez bonusů (stupeň I) a obchodník je vykoupí
+  za 1 zlatý. Krumpáče, srpy a pruty z obchodů a Kovářství zůstávají beze změny.
+
+### Výkon – bloky stromů uvnitř lesa
+- Stromy uvnitř lesa (všech 8 sousedních polí neprůchozích – hrdina k nim nedojde) se
+  nekreslí jednotlivě: stromy ve stejném pruhu 4 hloubkových řad a krátkém úseku (~8 polí)
+  se spečou do jednoho obrázku. V Greenvale je to 1 902 stromů ve 179 blocích; okrajové
+  stromy (1 070) zůstávají samostatné, takže hrdina za ně zajde správně.
+- Bloky vznikají až u kamery (viditelné hned, v rezervě nejvýš 3 za snímek) a daleko mimo
+  záběr se uvolní – v paměti grafické karty bývá ~20–40 MB.
+- Měření v nejhustším lese: 1 096 stromových obrázků na obrazovce → 148 stromů + 38 bloků,
+  čas snímku 2,38 → 2,12 ms (stejně jako bez stromů); chůze lesem průměr 2,27 ms, 99 % snímků
+  pod 3,7 ms. Vypnutí: `FOREST_BLOCKS = false` ve `WorldScene.js`. Stromy v blocích nejdou
+  posouvat editorem terénu (Alt+F8).
+
+### Změněno – ikony monster jen s hlavou
+- Ikony monster ukazují jen hlavu (dřív celé tělo): seznam a náhled výskytu v Bestiáři,
+  seznam i portrét v kartě Party a dolní panel party. Hlava se vyřízne z prvního snímku
+  automaticky (nejvyšší výběžek obrysu na přední straně těla); u 36 druhů, kde by výřez
+  trefil křídlo, hřbet, ocas nebo krystaly, je poloha hlavy zadaná ručně (`HEAD_HINTS`
+  v `battle/monsterAnimations.js`). Velké obrázky (pódium Bestiáře, model v Party, souboj,
+  přehled po boji) zůstávají celé.
+
+### Změněno – Bestiář: Výskyt místo Pozorováno
+- V Záznamu druhu je místo „Pozorováno“ políčko **Výskyt** s počtem luk, kde se druh objevuje
+  (louky setkání ve všech regionech). Klik otevře **náhled mapy** regionu (stejná mapa jako
+  v kartě Mapa): louky jsou zlatě orámované s názvem a na každé pomalu bliká obrázek monstra.
+  Pod mapou seznam luk s úrovněmi monster (vzácná louka označená). Druh bez určené louky ukáže
+  mapu své oblasti s poznámkou. Zavře Esc, tlačítko nebo klik mimo okno.
+
+### Změněno – lom: skály se 4 nalezišti
+- **Lom obsahuje každou žílu úrovně 1–10 jednou** (dřív jen 3 druhy a Ametystová dutina úr. 18
+  navíc). 9 skupin: skála obarvená do odstínu suroviny a kolem ní 4 naleziště stejného druhu
+  (sever, jih, západ, východ) – celkem 36 nalezišť. Nejnižší úrovně u sjezdu na východě:
+  Měděná žíla (1), Uhelná sloj (1), Žulový lom (1), Křemenná žíla (3), Solná skála (4),
+  Železná žíla (5), Pyritová žíla (6), Cínová žíla (8), Krystalová puklina (10).
+  Skála blokuje své pole. Zápis `oreGroup('Nxx', x, y)` v `greenvale.js`; generátor oblasti
+  (`tools/greenvale-region.mjs`) lom už nepřepisuje. Nová dekorace `oreRock` v mapě, odstíny `depositTint` v `data/mining.js`.
+
+### Změněno – jeden velký statek místo Bylinkové louky
+- **Bylinková louka je zrušená** (ohrada západně od statku zmizela, zůstává tráva).
+- **Statek je jedna velká ohrada** kolem Statku, větrného mlýna, stáje, studny a polí
+  (x 73–91, y 75–83): vstup od mostu na západě, brána na jih. Staré malé ohrady statku jsou pryč.
+- Všech 13 nalezišť z louky je uvnitř statku: záhony Z01–Z03 u mlýna, divoké byliny L01–L09
+  a Hustý bylinný porost SH1 na polích u stáje. Všechna jsou dostupná (ověřeno). Naleziště
+  L01–L09 se jmenují „Statek – …“ místo „Bylinková louka – …“.
+
+### Změněno – úkoly: Co dál?, Liora místo Písně větrů
+- **Co dál?** – šedé tlačítko v rámečku vpravo nahoře v kartě Úkoly. Najde nejbližší úkol
+  v oblasti (probíhající → jeho cíl, nepřijatý nebo splněný → zadavatel; vzdálenost od hrdiny
+  stejně jako tečky ve světě), začne ho sledovat a kartu zavře, aby byly vidět zlaté tečky.
+- **Úkol Píseň větrů je zrušený** (Mág → Bard → Mág). Magii Vzduchu dál odemyká úvodní úkol;
+  Mág a Bard mají jen rozhovor.
+- **Za léčitelkou** (nový): po dokončení Krotitelovy zkoušky se zadá sám – zajít za Liorou do
+  Domu léčitelky (modrý „?“). Splní se rozhovorem s Liorou, která monstra vyléčí. Starší
+  uložené hry ho dostanou při dalším rozhovoru s Mágem.
+- **Léčivé byliny pro Lioru** (nový): Liora pak nabídne úkol (okno Přijmout / Odmítnout) –
+  obstarat 3× Léčivé byliny u Bylinkářky (koupit nebo nasbírat) a přinést jí je.
+  Odměna 15 zlata a zkušenosti ve Sběru bylin. Byliny jsou v obchodě Bylinkářky označené.
+
+### Změněno – nabídka úkolu s Přijmout / Odmítnout
+- Po rozhovoru se zadavatelem se úkol už nepřijme sám: otevře se okno **„Nový úkol: …“**
+  s tabulkou Zadavatel, Náplň (stručně, např. „Nasbírej čisticí byliny u řeky…“), Kroky
+  a Odměna a tlačítky **Přijmout (Enter)** / **Odmítnout (Esc)**. Odmítnutý úkol jde přijmout
+  později – zadavatel má dál „!“. Platí pro všechny úkoly (Mág – Krotitelova zkouška a Píseň
+  větrů, Alchymista, Učednice, Bylinkářka, Starosta). Soul Crystal od Mága až po přijetí,
+  u Bylinkářky se po rozhodnutí otevře obchod (`InteriorScene.showQuestOffer`, `brief` v QUESTS).
+
+### Změněno – obchodování: souhrn, rychlý vstup, náhled předmětu
+- **Souhrn po obchodu:** po „Potvrdit obchod“ se uprostřed ukáže okno „Obchod uzavřen“
+  (jako hláška u dokončeného úkolu) – zeleně koupené, červeně prodané předměty, zlato
+  před → po a XP Diplomacie. Hráč ho musí odkliknout („Rozumím“, Enter, mezerník, Esc);
+  obchod zůstává otevřený (`showTradeSummary`).
+- **Navštívený obchod se otevře hned:** když hráč obchod v interiéru už jednou otevřel,
+  příště se po vstupu otevře rovnou bez rozhovoru (tržiště, Bylinkářka, Rybář, Hornický
+  mistr). Neplatí, když u postavy čeká úkol („!“ / „?“) – pak nejdřív rozhovor
+  (`InteriorScene.autoOpenShop`, `flags.visitedShops`).
+- **Náhled předmětu v obchodech:** najetí myší na ikonu nebo název (nákup i výkup) ukáže
+  okénko s názvem, bonusy a popisem; klik otevře Databázi v kartě Dovednosti nad obchodem.
+  Obchod se jen pozastaví – po zavření Databáze pokračuje i s košíkem (`shopItemHover`).
+
+### Změněno – oblékání v Inventáři, Kniha kouzel pod portrétem
+- **Inventář:** pravý klik na slot výbavy otevře stejné okno jako v kartě Hrdina – předměty
+  pro tento slot (klik = obléct), u obsazeného slotu „Sundat“, bez předmětů „Nemáš žádné
+  vybavení.“ Esc nebo klik mimo okno ho zavře. Společný kód `ui/heroCard/equipPicker.js`.
+- **Karta Hrdina:** tlačítko „Kniha kouzel (K)“ je pod portrétem hrdiny (dřív vpravo od
+  Zavřít). Klik na školu magie i klávesa K knihu otevírají dál.
+
+### Opraveno a doplněno – vratky
+- **Po první porážce se každý další boj vyhodnotil jako prohra** (hrdina se probouzel
+  u léčitelky i po výhře). Příznak porážky se teď na začátku každého souboje vynuluje.
+- **Ukazatel FPS** v levém horním rohu hry (zelená ≥ 50, žlutá ≥ 30, jinak červená).
+- **Jména:** ikonka přejmenování ✎ (Party, vlastní obchod) je bez zlatého rámu – jen znak,
+  pod myší zezlátne.
+- **Diplomacie – DOČASNĚ:** Strážný na radnici dá při rozhovoru XP do Diplomacie až na úroveň 10
+  (koupě domu). Před nahráním na GitHub rozhodnout, jestli zůstane (`grantGuardTrainingXp`).
+- **Bestiář:** ve Schopnostech je fialově Bond schopnost druhu, v pravém sloupci pod kořistí
+  vysvětlení důvěry (0–100, +2 za vítězství, Bond schopnost na 100, bonusy útok / obrana / rychlost).
+- Obchodník s látkami už v pozdravu nezmiňuje řemínky.
+
+### Změněno – karta Dovednosti a výroba v budově
+- **Karta Řemesla se jmenuje Dovednosti** (záložka v horní liště i nadpis karty). Talentový
+  strom „Řemesla“ se nemění.
+- **V budově jde vyrobit vše** z dané profese, co umí kterékoli pracoviště v ní, ať hráč klikne
+  na kterýkoli objekt. V Řemeslné dílně jdou u Koželužského stolu i u Šicího stroje vyrobit
+  i šperkařské recepty (a naopak). Okno má pak v nadpisu název budovy („Řemeslnictví – Řemeslná
+  dílna“). Soul Crystaly zůstávají u Soul Crystal Workbench v Hvězdárně (jiná budova).
+  (`InteriorScene.openCooking` posílá `stations`, `CookingScene.stationFor`.)
+
+### Změněno – souboj bez mřížky: klik na monstrum
+- Bez mřížky se cíl vybírá kliknutím přímo na postavu monstra (jako postavy v interiérech),
+  ne na políčko pod ní. Pod kurzorem se monstrum zvýrazní bílým prstencem, kurzor se změní
+  na ruku a ukáže se tooltip; klik do prázdné trávy nic nedělá. Při překryvu vyhrává monstrum
+  vpředu (`BattleScene.unitAtPointer`). Souboj na mřížce beze změny.
+
+### Přidáno – Prodat X
+- Ve výkupu všech obchodů (obchodníci na tržišti, Bylinkářka, Rybář, Hornický mistr) je mezi
+  „Prodat 1“ a „Prodat vše“ tlačítko **Prodat X**. Otevře okno s volbou množství: číslo se píše
+  na klávesnici, šipky ↑ ↓ mění o 1, tlačítka −10 / −1 / +1 / +10 / Max; pod číslem je, kolik
+  hráč dostane (u Rybáře včetně denní poptávky). Enter vloží zvolené kusy do košíku, Esc zruší
+  (`askQuantity` v `ui/nameInput.js`, `sellButtons` v `ui/shopCart.js`).
+
+### Změněno – úkoly v obchodech a oknech výroby
+- **Stav po koupi:** předmět pro úkol zůstává v obchodě označený i po koupi, dokud úkol běží.
+  Štítek ukazuje skutečný stav po potvrzení obchodu (např. 1/1, 3/1), splněný zeleně s ✓.
+- **Kožený řemínek už nejde koupit** u Obchodníka s látkami – vyrábí se z kůže (úkol Kožený řemínek).
+- **Recepty pro úkoly:** v oknech výroby (Vaření, Alchymie, Kovářství, Řemeslnictví) je recept,
+  jehož výrobek chce probíhající úkol, nahoře, ve zlatém rámečku se štítkem stavu.
+- **Víc úkolů najednou:** když běží víc úkolů, štítek ukazuje název úkolu v jeho barvě (zlatá,
+  modrá, růžová, zelená). Předmět pro dva úkoly (např. Čistá voda pro Čistou vodu i Byliny od
+  řeky) má dva štítky; zásoba se dělí v pořadí úkolů (`questMarkList`, `questMarkObjects`).
+
+### Změněno – Taverna: levnější nocleh se snídaní
+- **Pokoj na noc u Výčepní stojí 10 zlata** (dřív 15). Kromě vyléčení party a obnovení many
+  dostane hráč ke snídani účinek **Masového vývaru se zeleninou**: po každém z příštích
+  4 soubojů +10 HP monstrům v partě. Nahradí případný jiný aktivní pokrm a je vidět v HUD
+  u Účinků (`InteriorScene.rentRoom`, `ROOM_MEAL`).
+- Snídaně je zmíněná v dialogu: v popisku Výčepní („pokoj na noc se snídaní (10 zl)“),
+  v odpovědi po zaplacení, při nedostatku zlata a v radě Lovce u stolu.
+
+### Opraveno – úkol Byliny od řeky
+- **Naleziště H02 Břeh řeky je zpět za kostelem** (49, 72, `data/maps/greenvale.js`). Při
+  náhodném rozmístění divokých bylin se přesunulo jinam a úkol Bylinkářky „Byliny od řeky“
+  (nasbírat Čisticí byliny na Břehu řeky) nešel splnit. Generátor oblasti
+  (`tools/greenvale-region.mjs`) teď naleziště z úkolů (`QUEST_HERB_SITES`) nepřesouvá, ostatní
+  divoké byliny zůstávají náhodně. Jiné úkoly na přesunutá naleziště neodkazují.
 
 ### Výkon – svět Greenvale
 Změřeno v Greenvale u náměstí: čas snímku 3,28 → 2,42 ms (−26 %), vykreslení 2,78 → 2,09 ms.

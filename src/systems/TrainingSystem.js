@@ -3,6 +3,9 @@ import {
   getMonsterSpecies
 } from './MonsterSystem.js';
 
+// Česky do historie monstra (dřív se psalo id statistiky, např. „force“).
+const TRAINING_STAT_LABELS = { vitality: 'Vitalita', force: 'Síla', armor: 'Zbroj', aether: 'Magická síla', resolve: 'Magická obrana', tempo: 'Rychlost', precision: 'Přesnost' };
+
 const STAT_NAMES = [
   'vitality',
   'force',
@@ -84,7 +87,7 @@ export function addTrainingPoints(monster, stat, amount = 1) {
 
   monster.history ??= [];
   monster.history.push(
-    `Získalo ${allowed} tréninkový bod do statistiky ${stat}.`
+    `Získalo ${allowed} ${allowed === 1 ? 'tréninkový bod' : allowed < 5 ? 'tréninkové body' : 'tréninkových bodů'} do statistiky ${TRAINING_STAT_LABELS[stat] ?? stat}.`
   );
 
   if (monster.history.length > 50) {

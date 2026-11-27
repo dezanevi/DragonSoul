@@ -889,6 +889,261 @@
     "range": 2,
     "statusEffect": { "id": "paralysis", "chance": 0.15, "duration": 1 },
     "description": "Goblin použije lest, která může cíl ochromit."
+  },
+  {
+    "id": "sig_hunting_lunge",
+    "name": "Lovecký výpad",
+    "element": "verdant",
+    "category": "physical",
+    "power": 6,
+    "accuracy": 0.92,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "hits": 2,
+    "statusEffect": {
+      "id": "bleed",
+      "chance": 0.3,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Dire Wolfa: dvojité kousnutí (2 zásahy), každé může způsobit krvácení."
+  },
+  {
+    "id": "sig_tusk_rush",
+    "name": "Kančí nápor",
+    "element": "earth",
+    "category": "physical",
+    "power": 10,
+    "accuracy": 0.85,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "statusEffect": {
+      "id": "stun",
+      "chance": 0.25,
+      "duration": 1
+    },
+    "description": "Podpisová schopnost Wild Boara: plnou silou naběhne do cíle a může ho omráčit."
+  },
+  {
+    "id": "sig_sand_toss",
+    "name": "Hrst písku",
+    "element": "earth",
+    "category": "physical",
+    "power": 6,
+    "accuracy": 0.95,
+    "maxUses": 20,
+    "range": 3,
+    "signature": true,
+    "statusEffect": {
+      "id": "paralysis",
+      "chance": 0.35,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Goblina: hodí písek do očí na dálku – cíl může ochrnout."
+  },
+  {
+    "id": "sig_sap_touch",
+    "name": "Mízový dotek",
+    "element": "verdant",
+    "category": "magical",
+    "power": 7,
+    "accuracy": 0.95,
+    "maxUses": 20,
+    "range": 3,
+    "signature": true,
+    "drain": 0.6,
+    "description": "Podpisová schopnost Forest Sprite: vysaje sílu cíle – 60 % poškození si vyléčí."
+  },
+  {
+    "id": "sig_venom_web",
+    "name": "Jedovatá síť",
+    "element": "verdant",
+    "category": "physical",
+    "power": 6,
+    "accuracy": 0.9,
+    "maxUses": 20,
+    "range": 3,
+    "signature": true,
+    "splash": 0.4,
+    "statusEffect": {
+      "id": "poison",
+      "chance": 1,
+      "duration": 3
+    },
+    "description": "Podpisová schopnost Giant Spider: otráví cíl a zasáhne i nepřátele vedle něj (40 %)."
+  },
+  {
+    "id": "sig_gale_leap",
+    "name": "Vichřicový skok",
+    "element": "air",
+    "category": "physical",
+    "power": 6,
+    "accuracy": 0.9,
+    "maxUses": 20,
+    "range": 3,
+    "signature": true,
+    "hits": 2,
+    "description": "Podpisová schopnost Zephyr Hounda: bleskový dvojitý výpad (2 zásahy) i z dálky."
+  },
+  {
+    "id": "sig_crest_slash",
+    "name": "Hřebenový sek",
+    "element": "air",
+    "category": "physical",
+    "power": 9,
+    "accuracy": 0.92,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "selfBuff": {
+      "stat": "speed",
+      "amount": 3,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Galecrest Lynx: sek, po kterém je rys na 2 tahy rychlejší."
+  },
+  {
+    "id": "sig_thorn_glow",
+    "name": "Trnitá záře",
+    "element": "verdant",
+    "category": "magical",
+    "power": 8,
+    "accuracy": 0.92,
+    "maxUses": 20,
+    "range": 3,
+    "signature": true,
+    "splash": 0.5,
+    "statusEffect": {
+      "id": "bleed",
+      "chance": 0.3,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Briarbound Wisp: záře trnů zasáhne cíl i nepřátele vedle něj (50 %), může způsobit krvácení."
+  },
+  {
+    "id": "sig_raider_strike",
+    "name": "Nájezdnický úder",
+    "element": "earth",
+    "category": "physical",
+    "power": 10,
+    "accuracy": 0.88,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "selfBuff": {
+      "stat": "attack",
+      "amount": 3,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Hobgoblina: úder s bojovým řevem – útok na 2 tahy +3."
+  },
+  {
+    "id": "sig_burrow_bite",
+    "name": "Kousnutí z hlubin",
+    "element": "earth",
+    "category": "physical",
+    "power": 9,
+    "accuracy": 0.9,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "drain": 0.4,
+    "description": "Podpisová schopnost Cave Worma: vyrazí ze země a vysaje 40 % poškození jako zdraví."
+  },
+  {
+    "id": "sig_bear_crush",
+    "name": "Medvědí drtič",
+    "element": "earth",
+    "category": "physical",
+    "power": 13,
+    "accuracy": 0.8,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "statusEffect": {
+      "id": "stun",
+      "chance": 0.3,
+      "duration": 1
+    },
+    "description": "Podpisová schopnost Cave Beara: drtivé objetí, které může cíl omráčit."
+  },
+  {
+    "id": "sig_thorn_crown",
+    "name": "Trnová koruna",
+    "element": "verdant",
+    "category": "physical",
+    "power": 12,
+    "accuracy": 0.88,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "splash": 0.5,
+    "statusEffect": {
+      "id": "bleed",
+      "chance": 0.3,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Thornroot Stag: rozmáchlý úder parohy – zasáhne i nepřátele vedle cíle (50 %)."
+  },
+  {
+    "id": "sig_rockslide",
+    "name": "Lavina kamení",
+    "element": "earth",
+    "category": "magical",
+    "power": 10,
+    "accuracy": 0.88,
+    "maxUses": 20,
+    "range": 3,
+    "signature": true,
+    "splash": 0.6,
+    "description": "Podpisová schopnost Earth Elementala: zasype cíl kamením, okolní nepřátelé dostanou 60 %."
+  },
+  {
+    "id": "sig_moss_veil",
+    "name": "Mechový závoj",
+    "element": "verdant",
+    "category": "physical",
+    "power": 8,
+    "accuracy": 0.92,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "selfBuff": {
+      "stat": "defense",
+      "amount": 4,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Mossveil Lynx: úder ze závoje mechu – obrana na 2 tahy +4."
+  },
+  {
+    "id": "sig_whirlwind",
+    "name": "Smršť",
+    "element": "air",
+    "category": "magical",
+    "power": 5,
+    "accuracy": 0.95,
+    "maxUses": 20,
+    "range": 4,
+    "signature": true,
+    "hits": 3,
+    "description": "Podpisová schopnost Air Elementala: tři rychlé poryvy větru (3 zásahy) na dálku."
+  },
+  {
+    "id": "sig_berserk_cleave",
+    "name": "Zuřivý sek",
+    "element": "fire",
+    "category": "physical",
+    "power": 12,
+    "accuracy": 0.85,
+    "maxUses": 20,
+    "range": 1,
+    "signature": true,
+    "selfBuff": {
+      "stat": "attack",
+      "amount": 3,
+      "duration": 2
+    },
+    "description": "Podpisová schopnost Orc Warriora: zuřivý sek – každý zásah ho rozpálí (útok +3 na 2 tahy)."
   }
 ]
-

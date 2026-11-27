@@ -369,10 +369,87 @@ export function createAnimatedBody(scene, speciesId, side) {
   return sprite;
 }
 
-// Hlava z prvního snímku idle animace, nebo null.
+// Hlava z prvního snímku idle animace, nebo null. Ruční ořez (def.head) má přednost; jinak se
+// hlava najde automaticky (autoHeadCanvas) a uloží pod stejným klíčem.
 export function monsterHeadKey(scene, speciesId) {
   const key = headKey(speciesId);
-  return scene.textures.exists(key) ? key : null;
+  if (scene.textures.exists(key)) return key;
+  const still = monsterStillKey(scene, speciesId);
+  if (!still) return null;
+  const facesRight = Object.values(MONSTER_ANIMATIONS[speciesId] ?? {}).some((def) => def?.facesRight);
+  const source = scene.textures.get(still).getSourceImage();
+  const canvas = HEAD_HINTS[speciesId] ? hintHeadCanvas(source, HEAD_HINTS[speciesId]) : autoHeadCanvas(source, facesRight);
+  if (!canvas) return null;
+  scene.textures.addCanvas(key, canvas);
+  return key;
+}
+
+// Ruční poloha hlavy tam, kde automatický ořez trefí křídlo, hřbet, ocas nebo krystaly:
+// [střed x, střed y] jako podíl šířky / výšky obrázku a strana čtverce jako podíl výšky.
+const HEAD_HINTS = {
+  aurelion: [0.9, 0.12, 0.3], barkplate_pangolin: [0.87, 0.5, 0.42], briarbound_wisp: [0.5, 0.55, 0.55],
+  chimera: [0.74, 0.55, 0.32], cinderback_salamander: [0.88, 0.4, 0.45], comet_tail_fox: [0.84, 0.25, 0.36],
+  crystal_golem: [0.5, 0.48, 0.28], crystal_spider: [0.5, 0.52, 0.5], dire_wolf: [0.82, 0.52, 0.46],
+  cave_bear: [0.82, 0.36, 0.46], gargoyle: [0.72, 0.38, 0.28], griffin: [0.82, 0.42, 0.28],
+  harpy: [0.45, 0.2, 0.22], hippogriff: [0.88, 0.45, 0.3], manticore: [0.85, 0.5, 0.3],
+  nythrakar: [0.7, 0.18, 0.26], pearlback_tortoise: [0.86, 0.6, 0.4], pegasus: [0.75, 0.3, 0.32],
+  giant_spider: [0.55, 0.38, 0.38], roc: [0.77, 0.52, 0.24], skyribbon_serpent: [0.72, 0.3, 0.3],
+  sootveil_moth: [0.57, 0.22, 0.28], sphinx: [0.6, 0.25, 0.3], whistlewing_bat: [0.55, 0.38, 0.55],
+  starwake_moth: [0.82, 0.38, 0.24], stormneedle_manta: [0.88, 0.45, 0.6], sunshard_beetle: [0.78, 0.65, 0.42],
+  thornroot_stag: [0.67, 0.42, 0.22], thunderkite: [0.88, 0.62, 0.26], moon_stag: [0.67, 0.35, 0.26],
+  wild_boar: [0.82, 0.6, 0.5], wyvern: [0.8, 0.35, 0.28], sporeback_toad: [0.55, 0.6, 0.45],
+  prism_herald: [0.57, 0.36, 0.24], phoenix: [0.66, 0.3, 0.22], frostmourn: [0.82, 0.15, 0.3]
+};
+
+function hintHeadCanvas(source, [fx, fy, fs]) {
+  const W = source.width;
+  const H = source.height;
+  if (!W || !H) return null;
+  const side = Math.round(Math.min(W, H, H * fs));
+  const sx = Math.round(Math.min(Math.max(0, W * fx - side / 2), W - side));
+  const sy = Math.round(Math.min(Math.max(0, H * fy - side / 2), H - side));
+  const out = document.createElement('canvas');
+  out.width = side;
+  out.height = side;
+  out.getContext('2d').drawImage(source, sx, sy, side, side, 0, 0, side, side);
+  return out;
+}
+
+// Automatický ořez hlavy: hlava je nejvyšší výběžek obrysu. U širokých monster (čtyřnožci,
+// hadi…) se hledá jen v přední části těla (podle směru pohledu), u vysokých v prostřední části.
+// Výřez je čtverec kolem vrcholu hlavy, sahá kousek nad ni a dolů zhruba přes obličej.
+function autoHeadCanvas(source, facesRight) {
+  const W = source.width;
+  const H = source.height;
+  if (!W || !H) return null;
+  const probe = document.createElement('canvas');
+  probe.width = W;
+  probe.height = H;
+  const ctx = probe.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0);
+  const data = ctx.getImageData(0, 0, W, H).data;
+  const tops = new Array(W).fill(Infinity);
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) if (data[(y * W + x) * 4 + 3] > 40) { tops[x] = y; break; }
+  }
+  const wide = W > H * 1.15;
+  const from = wide ? (facesRight ? Math.floor(W * 0.4) : 0) : Math.floor(W * 0.15);
+  const to = wide ? (facesRight ? W - 1 : Math.ceil(W * 0.6)) : Math.ceil(W * 0.85);
+  let minTop = Infinity;
+  for (let x = from; x <= to; x++) minTop = Math.min(minTop, tops[x]);
+  if (!Number.isFinite(minTop)) return null;
+  // Střed hlavy: sloupce, jejichž vrchol je blízko nejvyššího bodu.
+  const near = [];
+  for (let x = from; x <= to; x++) if (tops[x] <= minTop + H * 0.1) near.push(x);
+  const cx = near.reduce((s, x) => s + x, 0) / near.length;
+  const side = Math.round(Math.min(W, H, Math.max(H * 0.5, W * 0.34)));
+  const sx = Math.round(Math.min(Math.max(0, cx - side / 2), W - side));
+  const sy = Math.round(Math.min(Math.max(0, minTop - side * 0.06), H - side));
+  const out = document.createElement('canvas');
+  out.width = side;
+  out.height = side;
+  out.getContext('2d').drawImage(probe, sx, sy, side, side, 0, 0, side, side);
+  return out;
 }
 
 // První snímek idle animace (celé monstrum bez pohybu), nebo null.

@@ -28,6 +28,21 @@ export function calculateElementalDamage(
   };
 }
 
+// Rozdíl úrovní monster: každá úroveň útočníka nad cílem +6 % poškození, pod cílem −6 %,
+// nejvýš ±50 %. Přesila silnějších monster tak bolí víc a slabší nepřátelé méně;
+// jídlo, výbava a taktika rozdíl dorovnávají. Platí pro techniky monster (ruční souboj
+// i simulace), ne pro kouzla hrdiny.
+export const LEVEL_DAMAGE_STEP = 0.06;
+export const LEVEL_DAMAGE_CAP = 0.5;
+
+export function levelDamageMultiplier(attacker, target) {
+  const a = Number(attacker?.monster?.level ?? attacker?.level);
+  const t = Number(target?.monster?.level ?? target?.level);
+  if (!Number.isFinite(a) || !Number.isFinite(t)) return 1;
+  const shift = Math.max(-LEVEL_DAMAGE_CAP, Math.min(LEVEL_DAMAGE_CAP, (a - t) * LEVEL_DAMAGE_STEP));
+  return 1 + shift;
+}
+
 export function calculatePhysicalDamage(attacker, target) {
   if (!attacker || !target) {
     throw new Error('Pro výpočet poškození chybí útočník nebo cíl.');

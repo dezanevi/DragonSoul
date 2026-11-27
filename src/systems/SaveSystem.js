@@ -8,7 +8,7 @@ import {
 } from './RegionSystem.js';
 import { normalizeHeroStats } from './HeroProgressionSystem.js';
 import spellRows from '../data/spells.json';
-import { normalizeMagicSchools } from './MagicMasterySystem.js';
+import { normalizeMagicSchools, unlockMagicSchool } from './MagicMasterySystem.js';
 import { HERO_ATTRIBUTE_DEFAULTS, normalizeHeroAttributes } from './HeroStatsSystem.js';
 import {
   createInitialTalentProgress,
@@ -17,6 +17,7 @@ import {
 import { INVENTORY_SIZE, normalizeInventory } from './InventorySystem.js';
 import { getItem } from '../data/items.js';
 import { normalizeFishing } from './FishingSystem.js';
+import { normalizeTime } from './TimeSystem.js';
 import { normalizeCooking } from './CookingSystem.js';
 import { normalizeAlchemy } from './AlchemySystem.js';
 import { normalizeMining } from './MiningSystem.js';
@@ -76,7 +77,7 @@ function createStartingInventory() {
 export const SaveSystem = {
  createNew(playerName = 'Arion') {
   const normalizedPlayerName = normalizePlayerName(playerName);
-    return {
+    const state = {
       version: SAVE_VERSION,
       chapter: 1,
       playerName: normalizedPlayerName,
@@ -102,10 +103,11 @@ magicPower: 0,
       // Rychlost, Štěstí, Charisma – viz HeroStatsSystem.js.
       ...HERO_ATTRIBUTE_DEFAULTS,
 gold: 25,
+      time: { day: 1, minute: 5 * 60 }, // nová hra začíná úsvitem (TimeSystem.js)
 
       // starterManaPotions: 50 lektvarů many je už v počátečním inventáři.
       // introPending: Mág v Hvězdárně sám zadá úvodní úkol.
-      flags: { starterManaPotions: true, introPending: true },
+      flags: { starterManaPotions: true, introPending: true, questsV2: true },
 talentProgress: createInitialTalentProgress(1),
 
       party: [createStarterDireWolf()],
@@ -124,9 +126,12 @@ talentProgress: createInitialTalentProgress(1),
         boots: null
       },
 
-      spellbook: [], // kouzla přidá odemčení školy (úkol Píseň větrů)
+      spellbook: [], // kouzla přidá odemčení školy
       magicMastery: createStartingMagicMastery()
     };
+    // První kouzlo (magie Vzduchu) hned od začátku hry – Mág ho ukáže v tutoriálu souboje.
+    unlockMagicSchool(state, 'air');
+    return state;
   },
 
   load() {
@@ -159,6 +164,7 @@ talentProgress: createInitialTalentProgress(1),
         if (equipped && !getItem(equipped.id)) data.equipment[slot] = null;
       }
       normalizeFishing(data);
+      normalizeTime(data);
       normalizeCooking(data);
       normalizeAlchemy(data);
       normalizeMining(data);
@@ -170,6 +176,15 @@ data.unlockedRegions = normalizeUnlockedRegions(
   data.unlockedRegions,
   data.region
 );
+      // Úkoly v2 (Demo): talenty odemyká 4. úroveň hrdiny, ne Orčí hrozba. Starší hry, kde je
+      // orc už poražený, si talenty nechají (jednorázový převod při prvním načtení).
+      data.flags ??= {};
+      if (!data.flags.questsV2) {
+        if (data.flags.greenvaleHunterPermitGranted) data.flags.talentTreesUnlocked = true;
+        data.flags.questsV2 = true;
+      }
+      // Verdant Forest otevírá úkol Orčí hrozba – starší hry s poraženým orkem ho mají dál.
+      if (data.flags?.greenvaleHunterPermitGranted && !data.unlockedRegions.includes('Verdant Forest')) data.unlockedRegions.push('Verdant Forest');
 
 
       if (data.party.length > 4) {

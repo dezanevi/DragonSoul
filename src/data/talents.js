@@ -72,36 +72,36 @@ export const TALENT_TREES = [
       {
         name: 'Základy sběru',
         talents: [
-          { id: 'herbalist_hand', name: 'Bylinkářská ruka', text: '+5 % šance na dodatečnou surovinu při sběru bylin za hodnost (nejvýš +25 %).', effect: { herbBonusChance: 0.05 }, needsSystem: 'sběr bylin' },
+          { id: 'herbalist_hand', name: 'Bylinkářská ruka', text: '+5 % šance na dodatečnou surovinu při sběru bylin za hodnost (nejvýš +25 %).', effect: { herbBonusChance: 0.05 } },
           { id: 'prospector', name: 'Zkušený prospektor', text: '+5 % šance na dodatečnou surovinu při těžbě za hodnost (nejvýš +25 %).', effect: { miningBonusChance: 0.05 } }
         ]
       },
       {
         name: 'Cestovní řemesla',
         talents: [
-          { id: 'angler_patience', name: 'Rybářská trpělivost', text: '+4 % šance na kvalitnější nebo bonusový úlovek za hodnost (nejvýš +20 %).', effect: { fishingBonusChance: 0.04 }, needsSystem: 'rybolov' },
-          { id: 'thrifty_processing', name: 'Úsporné zpracování', text: '−2 % materiálové ceny výroby za hodnost (nejvýš −10 %, vždy aspoň 1 kus suroviny).', effect: { materialCostReduction: 0.02 }, needsSystem: 'výroba' }
+          { id: 'angler_patience', name: 'Rybářská trpělivost', text: '+4 % šance na kvalitnější nebo bonusový úlovek za hodnost (nejvýš +20 %).', effect: { fishingBonusChance: 0.04 } },
+          { id: 'thrifty_processing', name: 'Úsporné zpracování', text: '−2 % materiálové ceny výroby za hodnost (nejvýš −10 %, vždy aspoň 1 kus suroviny).', effect: { materialCostReduction: 0.02 } }
         ]
       },
       {
         name: 'Výroba',
         talents: [
-          { id: 'alchemy_skill', name: 'Alchymická zručnost', text: '+2 % k účinku lektvarů vyrobených hrdinou za hodnost (nejvýš +10 %).', effect: { potionPotency: 0.02 }, needsSystem: 'alchymie' },
-          { id: 'master_chef', name: 'Mistr kuchyně', text: '+5 % k délce trvání účinků jídel za hodnost (nejvýš +25 %).', effect: { foodDuration: 0.05 }, needsSystem: 'vaření' }
+          { id: 'alchemy_skill', name: 'Alchymická zručnost', text: '+2 % k účinku lektvarů vyrobených hrdinou za hodnost (nejvýš +10 %).', effect: { potionPotency: 0.02 } },
+          { id: 'master_chef', name: 'Mistr kuchyně', text: '+5 % k délce trvání účinků jídel za hodnost (nejvýš +25 %).', effect: { foodDuration: 0.05 } }
         ]
       },
       {
         name: 'Odborná výroba',
         talents: [
-          { id: 'master_smith', name: 'Kovářský mistr', text: 'Odemyká kovové recepty na 1., 3. a 5. hodnosti; +2 % ke statistikám vyrobeného kovového vybavení za hodnost.', effect: { metalGearBonus: 0.02 }, needsSystem: 'kovářství' },
-          { id: 'skilled_crafter', name: 'Zručný řemeslník', text: 'Odemyká nekovové recepty na 1., 3. a 5. hodnosti; +2 % ke statistikám vyrobeného nekovového vybavení za hodnost.', effect: { nonMetalGearBonus: 0.02 }, needsSystem: 'řemeslnictví' }
+          { id: 'master_smith', name: 'Kovářský mistr', text: 'Odemyká kovové recepty na 1., 3. a 5. hodnosti; +2 % ke statistikám vyrobeného kovového vybavení za hodnost.', effect: { metalGearBonus: 0.02 } },
+          { id: 'skilled_crafter', name: 'Zručný řemeslník', text: 'Odemyká nekovové recepty na 1., 3. a 5. hodnosti; +2 % ke statistikám vyrobeného nekovového vybavení za hodnost.', effect: { nonMetalGearBonus: 0.02 } }
         ]
       },
       {
         name: 'Mistrovské recepty',
         talents: [
-          { id: 'rare_mixtures', name: 'Vzácné směsi', text: 'Otevírá výjimečné alchymistické recepty na 1., 3. a 5. hodnosti.', effect: {}, needsSystem: 'recepty' },
-          { id: 'masterwork', name: 'Mistrovská výroba', text: 'Otevírá vyšší řady kovářských a řemeslnických receptů na 1., 3. a 5. hodnosti.', effect: {}, needsSystem: 'recepty' }
+          { id: 'rare_mixtures', name: 'Vzácné směsi', text: 'Otevírá výjimečné alchymistické recepty na 1., 3. a 5. hodnosti.', effect: {} },
+          { id: 'masterwork', name: 'Mistrovská výroba', text: 'Otevírá vyšší řady kovářských a řemeslnických receptů na 1., 3. a 5. hodnosti.', effect: {} }
         ]
       }
     ],
@@ -109,8 +109,7 @@ export const TALENT_TREES = [
       id: 'legendary_crafter',
       name: 'Legendární řemeslník',
       text: 'Odemyká unikátní legendární recepty, které nejsou dostupné běžným postupem.',
-      effect: {},
-      needsSystem: 'recepty'
+      effect: {}
     }
   },
   {

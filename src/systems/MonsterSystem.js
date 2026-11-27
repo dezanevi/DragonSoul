@@ -3,6 +3,7 @@ import {
   getSkill,
   getStarterSkillId,
   getSkillsLearnedAtLevel,
+  skillUnlockLevels,
   learnSkill
 } from './MonsterSkillSystem.js';
 
@@ -133,7 +134,8 @@ function clampLevel(level) {
 
 function experienceRequired(level, growth) {
   const multiplier = GROWTH_MULTIPLIER[growth] ?? 1;
-  return Math.max(10, Math.floor((level + 1) * (level + 1) * multiplier));
+  // Stejná křivka jako hrdina (úroveň × 20), upravená rychlostí růstu druhu.
+  return Math.max(10, Math.floor(level * 20 * multiplier));
 }
 
 function stablePotential(instanceId) {
@@ -283,6 +285,44 @@ export function migrateMonsterStats(monster) {
 }
 
 
+// Geny (0–15, hráči se nezobrazují) podle povahy druhu (archetyp z druhu, jinak z živlu):
+// silné stránky archetypu mají vyšší střed genů (+), slabé nižší (−). Earth Elemental tak
+// dostane spíš vyšší zbroj a sílu a nižší rychlost, vlk vyšší rychlost a sílu a nižší zbroj.
+// Každý jedinec má dál náhodný rozptyl ±5, takže si monstra zachovají originalitu.
+const GENE_ARCHETYPES = {
+  tank: { up: ['armor', 'vitality', 'force'], down: ['tempo'] },
+  beast: { up: ['tempo', 'force'], down: ['armor'] },
+  flyer: { up: ['tempo', 'precision'], down: ['armor', 'vitality'] },
+  caster: { up: ['aether', 'resolve'], down: ['armor', 'force'] },
+  brute: { up: ['force', 'vitality'], down: ['tempo', 'resolve'] },
+  dragon: { up: ['force', 'aether', 'vitality'], down: ['precision'] },
+  serpent: { up: ['vitality', 'aether'], down: ['armor'] },
+  bug: { up: ['armor', 'precision'], down: ['vitality'] }
+};
+const ARCHETYPE_RULES = [
+  ['tank', /golem|guardian|tortoise|pangolin|treant|bear|behemoth|earth_elemental|rock_|iron_|stone_|crystal_golem|ice_golem/],
+  ['dragon', /aurelion|ignaroth|nythrakar|frostmourn|wyvern|dawncoil|basilisk|drake|dragon/],
+  ['flyer', /bat|kestrel|harpy|roc$|pegasus|phoenix|moth|kite|owl|griffin|hippogriff|thunderkite|seraph|gargoyle/],
+  ['beast', /wolf|hound|lynx|fox|boar|stag|cerberus|chimera|manticore|cockatrice|sphinx|unicorn|stalker/],
+  ['brute', /orc|ogre|minotaur|cyclops|troll|demon|balor|fiend|hobgoblin|goblin|zombie|skeleton|death_knight/],
+  ['serpent', /serpent|eel|kraken|leviathan|hydra|manta|merfolk|siren|spawn/],
+  ['bug', /spider|beetle|worm|toad|slime|jelly|scarab/],
+  ['caster', /wisp|elemental|sprite|nymph|lich|mage|wraith|ghost|imp|succubus|incubus|oracle|herald|lantern|djinn|vampire|weaver|dryad|shaman/]
+];
+const ELEMENT_ARCHETYPE = { earth: 'tank', air: 'flyer', fire: 'brute', water: 'serpent', verdant: 'beast', light: 'caster', dark: 'caster' };
+export function geneArchetype(species) {
+  const rule = ARCHETYPE_RULES.find(([, re]) => re.test(species.id));
+  return rule?.[0] ?? ELEMENT_ARCHETYPE[String(species.element).toLowerCase()] ?? null;
+}
+export function rollGenes(species, random = Math.random) {
+  const type = GENE_ARCHETYPES[geneArchetype(species)] ?? { up: [], down: [] };
+  return Object.fromEntries(STAT_NAMES.map((stat) => {
+    const center = type.up.includes(stat) ? 11 : type.down.includes(stat) ? 4 : 7.5;
+    const value = Math.round(center + (random() * 10 - 5));
+    return [stat, Math.max(0, Math.min(15, value))];
+  }));
+}
+
 export function createMonster(speciesId, level = 1) {
   const species = getMonsterSpecies(speciesId);
 
@@ -296,9 +336,7 @@ export function createMonster(speciesId, level = 1) {
     `monster-${Date.now().toString(36)}-` +
     Math.random().toString(36).slice(2, 8);
 
-  const geneticPotential = Object.fromEntries(
-    STAT_NAMES.map((stat) => [stat, randomInt(15)])
-  );
+  const geneticPotential = rollGenes(species);
 
   const trainingPoints = Object.fromEntries(
     STAT_NAMES.map((stat) => [stat, 0])
@@ -338,7 +376,7 @@ export function createMonster(speciesId, level = 1) {
     history: [`Získáno jako ${species.name}, úroveň ${safeLevel}.`]
   };
 
-  for (const unlockLevel of [10, 20, 40, 80]) {
+  for (const unlockLevel of skillUnlockLevels(species.id)) {
     if (safeLevel < unlockLevel) continue;
 
     const skillIds = getSkillsLearnedAtLevel(

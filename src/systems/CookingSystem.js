@@ -12,6 +12,9 @@ import {
   ALL_COOKING, COOKING_BY_ID, outputItemId, cookingXp, hasLastingEffect
 } from '../data/cooking.js';
 import { xpToNextFishingLevel as xpToNextLevel } from '../data/fishing.js';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { getTalentBonuses, materialSaving } from './TalentSystem.js';
 import { getItemCount, removeItem, addItem } from './InventorySystem.js';
 import { professionXpMultiplier } from './AlchemySystem.js';
 
@@ -65,6 +68,7 @@ export function cook(state, recipe, stationRank, times = 1) {
   if (!check.ok) return { ok: false, message: check.reason };
   for (const [key, qty] of Object.entries(recipe.ingredients)) {
     let left = qty * times;
+    left -= materialSaving(state, left); // talent Úsporné zpracování
     for (const id of optionsOf(key)) {
       const take = Math.min(left, getItemCount(state, id));
       if (take > 0) removeItem(state, id, take);
@@ -84,6 +88,7 @@ export function cook(state, recipe, stationRank, times = 1) {
     state.cooking.cooked[recipe.id] = (state.cooking.cooked[recipe.id] ?? 0) + 1;
   }
   const levelsGained = addCookingXp(state, xp);
+  countQuestEvent(state, `craft:cooking:${recipe.id}`, times); // úkoly Vaření
   return {
     ok: true,
     made: made - leftOver,
@@ -94,7 +99,7 @@ export function cook(state, recipe, stationRank, times = 1) {
   };
 }
 
-export function addCookingXp(state, amount) {
+function addCookingXpRaw(state, amount) {
   const prof = state.professions.cooking;
   prof.exp += amount;
   let gained = 0;
@@ -160,11 +165,12 @@ export function eatMeal(state, recipeId, now = Date.now()) {
     state.meal = {
       recipe: recipe.id,
       name: recipe.name,
-      battlesLeft: e.regen || e.manaRegen || e.buffs ? e.battles ?? 0 : 0,
+      // Mistr kuchyně: delší trvání (souboje zaokrouhleně, minuty přesně).
+      battlesLeft: e.regen || e.manaRegen || e.buffs ? Math.round((e.battles ?? 0) * (1 + getTalentBonuses(state).foodDuration)) : 0,
       regen: e.regen ?? 0,
       manaRegen: e.manaRegen ?? 0,
       buffs: { ...(e.buffs ?? {}) },
-      travelUntil: e.move || e.explore ? now + (e.minutes ?? 0) * 60000 : 0,
+      travelUntil: e.move || e.explore ? now + (e.minutes ?? 0) * 60000 * (1 + getTalentBonuses(state).foodDuration) : 0,
       move: e.move ?? 0,
       explore: e.explore ?? 0
     };
@@ -212,3 +218,11 @@ export function mealExploreStep(state) {
 }
 
 export const allCookingRecipes = () => ALL_COOKING;
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addCookingXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'cooking');
+  const result = addCookingXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'cooking', before, amount);
+  return result;
+}

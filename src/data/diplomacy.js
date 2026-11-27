@@ -89,7 +89,7 @@ export const PROPERTIES = {
     name: 'Zelený dům u náměstí',
     region: 'Greenvale',
     type: 'small_shop',
-    price: 1, // dočasně – ekonomika se doladí později
+    price: 500, // první obchod: hráč na něj vydělá úkoly v Demu (záložka „Demo – úkoly“)
     seller: 'Starosta Edric'
   }
 };
@@ -130,7 +130,7 @@ export function economicCategory(itemOrId) {
   const item = typeof itemOrId === 'string' ? getItem(itemOrId) : itemOrId;
   if (!isTradeable(item)) return null;
   const id = item.id;
-  if (item.category === 'materials' && item.rarity === 'legendary') return 'legendary';
+  if ((item.category === 'materials' || item.category === 'food') && item.rarity === 'legendary' && !item.use) return 'legendary';
   if (item.use?.type === 'meal' || id === 'travel_ration') return 'meals';
   if (item.category === 'potions') return 'potions';
   if (id.startsWith('meat_') || id.startsWith('cm_') || FOOD_IDS.has(id)) return 'food';
@@ -141,6 +141,8 @@ export function economicCategory(itemOrId) {
   if (TOOL_KEYS.some((k) => item[k])) return 'tools';
   if (item.mining) return id.startsWith('gem_') || id.includes('crystal') || RARE_RARITY.has(item.rarity) ? 'rareMaterials' : 'ores';
   if (id.startsWith('sm_') || id === 'iron_clasp') return 'metals';
+  // Šperky a fokusy (dřív kategorie Doplňky, teď ve Vybavení) zůstávají ekonomicky šperky.
+  if (item.slot === 'amulet' || item.slot === 'ring' || (item.slot === 'shield' && item.crafting)) return 'jewelry';
   if (item.category === 'armor' || id.startsWith('smith_D')) return 'gear';
   if (item.category === 'accessories' || id.startsWith('cr_cut_')) return 'jewelry';
   if (/_crystal$/.test(id)) return 'soulCrystals';

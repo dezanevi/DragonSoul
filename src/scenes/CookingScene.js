@@ -19,10 +19,14 @@ import { CRAFTING_CATEGORIES, CRAFTING_STATIONS, CRAFTING_ORIGINS, ALL_CRAFTING,
 import {
   normalizeCrafting, isCraftingKnown, canCraft, craftItem, craftingMaxBatches, craftingIngredientCount, craftingLevel, craftingStationOk
 } from '../systems/CraftingSystem.js';
-import { recipeOutput } from '../systems/ProfessionDatabase.js';
+import { recipeOutput, itemUses, RECIPE_BOOKS } from '../systems/ProfessionDatabase.js';
 import { cardText, cardButton, uiWindow, uiTitle, uiProgressBar } from '../ui/fantasyCard.js';
 import { arrowKey } from '../ui/inventorySprites.js';
-import { tileRow, darkPanel, headingLine, itemIcon, framedIcon, rarityColor, roundBox } from '../ui/craftLook.js';
+import { tileRow, darkPanel, headingLine, itemIcon, framedIcon, rarityColor, roundBox, questMarkObjects } from '../ui/craftLook.js';
+import { questCraftList } from '../systems/QuestSystem.js';
+import { beginSkillXpBatch, endSkillXpBatch } from '../systems/SkillXpEvents.js';
+import { isNewRecipe, seeRecipe, newRecipeCount } from '../systems/NewRecipeSystem.js';
+import { newRecipeStar } from '../ui/craftLook.js';
 
 // Výrobní profese, které okno umí (Vaření = scéna Cooking, Alchymie = scéna Alchemy).
 const PROFESSIONS = {
@@ -78,14 +82,16 @@ export default class CookingScene extends Phaser.Scene {
     this.state = data.state;
     this.returnScene = data.returnScene ?? 'World';
     this.stationRank = data.station ?? 1;
+    // Všechna pracoviště téže profese v budově (InteriorScene.openCooking) – vyrábět jde vše,
+    // co umí kterékoli z nich, i když hráč klikl na jiné.
+    this.stations = (data.stations?.length ? data.stations : [this.stationRank]).map(Number);
     // Ohniště: palivo (1× Dřevo) se zaplatí až s prvním uvařeným receptem.
     this.fuel = data.fuel ?? null;
     this.fuelPaid = false;
     this.closing = false;
     this.cfg.normalize(this.state);
-    // Filtr: Vše, nebo kategorie (pracoviště Řemeslnictví začne svou kategorií).
-    this.category = this.cfg.stationCategory?.[this.stationRank] ?? this.category ?? 'all';
-    if (this.category !== 'all' && !this.cfg.categories.some((c) => c.id === this.category)) this.category = 'all';
+    // Filtr: okno výroby se vždy otevře na Vše (přání hráče, i u pracovišť Řemeslnictví).
+    this.category = 'all';
     this.subOpen = false; // vysouvací panel podfiltrů (Kovářství: sady podle kovu)
     this.subfilter = null;
     this.working = null;
@@ -151,9 +157,27 @@ export default class CookingScene extends Phaser.Scene {
 
   // sub = podfiltr kategorie (Kovářství: sada podle kovu / vzácné), jinak všechny.
   recipesOf(category, sub = null) {
+    // Recepty pro probíhající úkoly jsou nahoře (označené v seznamu).
+    const quest = (r) => Number(Boolean(this.questRow(r)));
     return this.cfg.all
-      .filter((r) => (category === 'all' || r.category === category) && (!sub || r.set === sub) && this.visible(r))
-      .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'cs'));
+      .filter((r) => (category === 'all' || r.category === category) && (!sub || r.set === sub) && this.visible(r) && (!this.onlyCraftable() || this.craftable(r)))
+      .sort((a, b) => quest(b) - quest(a) || a.level - b.level || a.name.localeCompare(b.name, 'cs'));
+  }
+
+  // Přepínač „Jen co vyrobím“ (pamatuje se pro všechna okna výroby): jen recepty, které jde
+  // teď vyrobit aspoň 1× – úroveň, pracoviště i suroviny.
+  onlyCraftable() {
+    return Boolean(this.state.flags?.craftOnlyAvailable);
+  }
+
+  craftable(recipe) {
+    return this.cfg.can(this.state, recipe, this.stationFor(recipe), 1).ok;
+  }
+
+  // Označení úkolu u receptu: výrobek je potřeba pro probíhající úkol (questCraftList).
+  questRow(recipe) {
+    const id = recipeOutput(this.cfg.prof, recipe)?.id;
+    return id ? questCraftList(this.state)[id] ?? null : null;
   }
 
   shown() {
@@ -172,9 +196,17 @@ export default class CookingScene extends Phaser.Scene {
     this.refresh();
   }
 
+  // Pracoviště, na kterém se recept v této budově vyrobí: Řemeslnictví má různá pracoviště
+  // (přesná shoda), ostatní profese stupně (nejvyšší v budově).
+  stationFor(recipe) {
+    if (this.cfg.stationOk) return this.stations.find((s) => this.cfg.stationOk(recipe, s)) ?? this.stationRank;
+    return Math.max(this.stationRank, ...this.stations);
+  }
+
   status(recipe) {
     if (this.cfg.level(this.state) < recipe.level) return { color: '#8d8378', label: `úr. ${recipe.level}`, dim: true };
-    const wrongStation = this.cfg.stationOk ? !this.cfg.stationOk(recipe, this.stationRank) : this.stationRank < recipe.station;
+    const station = this.stationFor(recipe);
+    const wrongStation = this.cfg.stationOk ? !this.cfg.stationOk(recipe, station) : station < recipe.station;
     if (wrongStation) return { color: '#8a7f6a', label: this.cfg.stations[recipe.station].name, dim: true };
     if (this.cfg.batches(this.state, recipe) > 0) return { color: '#7fd67a', label: `×${this.cfg.batches(this.state, recipe)}` };
     return { color: '#f3e4bd', label: 'chybí suroviny' };
@@ -195,11 +227,23 @@ export default class CookingScene extends Phaser.Scene {
     // Kategorie s podfiltry (Zbroje a štíty ›) otevře vysouvací panel se sadami (renderFly);
     // zvolená sada se ukáže v názvu kategorie.
     const subLabel = (c) => this.cfg.subfilters?.[c.id]?.find((s) => s.id === this.subfilter)?.label;
-    const filters = [{ id: 'all', label: 'Vše' }, ...this.cfg.categories.map((c) => ({
+    // Kategorie se specializací (Řemeslník) jen pro hráče s tou specializací.
+    const categories = this.cfg.categories.filter((c) => !c.specialization || this.state.talentProgress?.specialization === c.specialization);
+    const filters = [{ id: 'all', label: 'Vše' }, ...categories.map((c) => ({
       ...c,
       label: this.cfg.subfilters?.[c.id] ? (c.id === this.category && subLabel(c) ? `${c.label}: ${subLabel(c)}` : `${c.label} ›`) : c.label
     }))];
-    const step = Math.min(62, Math.floor((H - 130) / filters.length));
+    const step = Math.min(62, Math.floor((H - 210) / filters.length)); // dole přepínač Jen co vyrobím
+    const only = this.onlyCraftable();
+    const toggle = cardButton(this, null, X + 24, Y + H - 96, 262, 60, `${only ? '☑' : '☐'} Jen co vyrobím`, () => {
+      this.state.flags ??= {};
+      this.state.flags.craftOnlyAvailable = !only;
+      this.selectedId = null;
+      this.page = 0;
+      this.refresh();
+    }, { size: 20 });
+    if (only) toggle.objects[1]?.setColor?.('#7fd67a');
+    this.filterLayer.add(toggle.objects);
     filters.forEach((filter, i) => {
       const y = Y + 96 + i * step;
       const active = filter.id === this.category;
@@ -222,8 +266,12 @@ export default class CookingScene extends Phaser.Scene {
       const color = active ? '#ffe7ae' : count ? '#e8dcc0' : '#6c7480';
       const label = cardText(this, X + 46, y + (step - 6) / 2, filter.label, { size: 19, bold: true, color, originY: 0.5 });
       const num = cardText(this, X + 272, y + (step - 6) / 2, String(count), { size: 18, bold: true, color: count ? '#ffd76a' : '#6c7480', originX: 1, originY: 0.5 });
-      if (label.width > 196 - num.width) label.setScale((196 - num.width) / label.width);
+      // Podskupina (nebo Vše) s nově odemčenými recepty: zlatá hvězdička před počtem.
+      const fresh = newRecipeCount(this.state, this.cfg.prof, filter.id === 'all' ? null : filter.id) > 0;
+      const starW = fresh ? 26 : 0;
+      if (label.width > 196 - num.width - starW) label.setScale((196 - num.width - starW) / label.width);
       this.filterLayer.add([label, num]);
+      if (fresh) this.filterLayer.add(cardText(this, X + 272 - num.width - 8, y + (step - 6) / 2, '★', { size: 20, bold: true, color: '#ffd23a', originX: 1, originY: 0.5 }));
     });
   }
 
@@ -274,7 +322,7 @@ export default class CookingScene extends Phaser.Scene {
     if (!this.selectedId || !recipes.some((r) => r.id === this.selectedId)) this.selectedId = recipes[0]?.id ?? null;
     if (!recipes.length) {
       this.listLayer.add(cardText(this, LIST.x + LIST.w / 2, Y + 130,
-        `Žádný naučený recept do úrovně ${this.cfg.level(this.state) + RANGE}.`, { size: 20, color: '#9fb3c8', originX: 0.5, wrap: LIST.w - 40, align: 'center' }));
+        this.onlyCraftable() ? 'Na žádný recept teď nemáš suroviny. Vypni „Jen co vyrobím“ vlevo dole.' : `Žádný naučený recept do úrovně ${this.cfg.level(this.state) + RANGE}.`, { size: 20, color: '#9fb3c8', originX: 0.5, wrap: LIST.w - 40, align: 'center' }));
     }
     recipes.forEach((recipe, i) => {
       const y = Y + 96 + i * ROW_H;
@@ -286,14 +334,33 @@ export default class CookingScene extends Phaser.Scene {
         this.refresh();
       }));
       const output = recipeOutput(this.cfg.prof, recipe);
+      const questRow = this.questRow(recipe);
+      if (questRow) {
+        const g = this.add.graphics();
+        roundBox(g, LIST.x + 2, y + 2, LIST.w - 4, h - 4, 0x3a2a12, 0.35, 0xd8a640, 1, 2.5, 8);
+        this.listLayer.add(g);
+      }
       const icon = output ? itemIcon(this, output.id, LIST.x + 32, y + h / 2, 38) : null;
       if (icon) this.listLayer.add(icon.setAlpha(st.dim ? 0.45 : 1));
       const label = cardText(this, LIST.x + LIST.w - 16, y + h / 2, st.label, { size: 17, bold: true, color: st.color, originX: 1, originY: 0.5 });
-      const name = cardText(this, LIST.x + 62, y + h / 2, `${recipe.level}  ${recipe.name}`, { size: 20, bold: true, color: st.color, originY: 0.5 });
-      // Dlouhý název se zmenší, aby nepřekryl stav vpravo.
-      const room = LIST.w - 62 - label.width - 30;
+      let tagW = 0;
+      if (questRow) {
+        const mark = questMarkObjects(this, LIST.x, y, LIST.w, h, questRow, cardText, LIST.x + LIST.w - 28 - label.width, 170, false);
+        this.listLayer.add(mark.objects);
+        tagW = mark.width + 14;
+      }
+      // Nově odemčený recept: zlatá hvězdička, dokud přes něj hráč nepřejede myší.
+      const fresh = isNewRecipe(this.state, this.cfg.prof, recipe.id);
+      const nameX = LIST.x + 62 + (fresh ? 28 : 0);
+      const name = cardText(this, nameX, y + h / 2, `${recipe.level}  ${recipe.name}`, { size: 20, bold: true, color: st.color, originY: 0.5 });
+      // Dlouhý název se zmenší, aby nepřekryl stav (a štítek úkolu) vpravo.
+      const room = LIST.w - (nameX - LIST.x) - label.width - 30 - tagW;
       if (name.width > room) name.setScale(room / name.width);
       this.listLayer.add([name, label]);
+      if (fresh) this.listLayer.add(newRecipeStar(this, LIST.x + 74, y + h / 2, { x: LIST.x, y, w: LIST.w, h }, () => {
+        seeRecipe(this.state, this.cfg.prof, recipe.id);
+        if (!newRecipeCount(this.state, this.cfg.prof, recipe.category)) this.time.delayedCall(280, () => { if (this.sys.isActive()) this.renderFilters(); });
+      }));
     });
 
     // Stránky: zlaté šipky jako v inventáři.
@@ -378,12 +445,45 @@ export default class CookingScene extends Phaser.Scene {
     }
     y += 6;
     add(`Původ receptu: ${this.cfg.origins[recipe.origin] ?? recipe.origin}`, { size: 16, color: '#8f9aa6' });
-
-    const one = this.cfg.can(this.state, recipe, this.stationRank, 1);
+    const one = this.cfg.can(this.state, recipe, this.stationFor(recipe), 1);
     this.cookButton.setDisabled(!one.ok || Boolean(this.working));
-    this.cook5Button.setDisabled(!this.cfg.can(this.state, recipe, this.stationRank, 5).ok || Boolean(this.working));
+    this.cook5Button.setDisabled(!this.cfg.can(this.state, recipe, this.stationFor(recipe), 5).ok || Boolean(this.working));
     add(`Doba výroby: ${this.craftSeconds(recipe).toFixed(1).replace('.', ',')} s za kus`, { size: 16, color: '#8f9aa6' });
     if (!one.ok) add(one.reason, { size: 18, color: '#ff9a8a' });
+
+    // Kde se výrobek dál používá (recepty všech výrobních profesí) – klik = Databáze.
+    const uses = output ? itemUses(output.id) : [];
+    if (uses.length) {
+      y += 4;
+      heading(`Používá se v (${uses.length})`);
+      const bottom = Y + H - 250; // nad hláškou a ukazatelem výroby
+      const lineH = 32;
+      const room = Math.max(1, Math.floor((bottom - y) / lineH));
+      const shown = uses.length > room ? uses.slice(0, room - 1) : uses;
+      for (const use of shown) {
+        const target = recipeOutput(use.prof, use.recipe);
+        const icon = target ? itemIcon(this, target.id, x + 18, y + 14, 26) : null;
+        if (icon) this.detailLayer.add(icon);
+        const text = `${RECIPE_BOOKS[use.prof]?.title ?? use.prof} ${use.recipe.level}: ${use.recipe.name} (${use.qty}×)  ›`;
+        const line = cardText(this, x + 42, y + 2, text, { size: 18, color: '#cfe2f5' });
+        if (line.width > w - 42) line.setScale((w - 42) / line.width);
+        line.setInteractive({ useHandCursor: true });
+        line.on('pointerover', () => line.setColor('#ffe7ae'));
+        line.on('pointerout', () => line.setColor('#cfe2f5'));
+        line.on('pointerdown', () => this.openDatabase(target?.id ?? output.id));
+        this.detailLayer.add(line);
+        y += lineH;
+      }
+      if (shown.length < uses.length) {
+        const more = cardText(this, x + 42, y + 2, `… a dalších ${uses.length - shown.length} – všechny v Databázi  ›`, { size: 18, color: '#9fc4e6' });
+        more.setInteractive({ useHandCursor: true });
+        more.on('pointerover', () => more.setColor('#ffe7ae'));
+        more.on('pointerout', () => more.setColor('#9fc4e6'));
+        more.on('pointerdown', () => this.openDatabase(output.id));
+        this.detailLayer.add(more);
+        y += lineH;
+      }
+    }
   }
 
   // Kolikrát jde vybraný recept vyrobit ze surovin v inventáři (aspoň 1).
@@ -415,7 +515,7 @@ export default class CookingScene extends Phaser.Scene {
     this.minusButton.setDisabled(this.customQty <= 1);
     this.plusButton.setDisabled(this.customQty >= this.qtyLimit());
     this.maxButton.setDisabled(!recipe);
-    this.customButton.setDisabled(!recipe || Boolean(this.working) || !this.cfg.can(this.state, recipe, this.stationRank, this.customQty).ok);
+    this.customButton.setDisabled(!recipe || Boolean(this.working) || !this.cfg.can(this.state, recipe, this.stationFor(recipe), this.customQty).ok);
   }
 
   // Doba výroby jednoho kusu (s): těžší recepty déle, mezivýrobky rychleji.
@@ -429,7 +529,7 @@ export default class CookingScene extends Phaser.Scene {
     if (this.working) return;
     const recipe = this.cfg.all.find((r) => r.id === this.selectedId);
     if (!recipe) return;
-    const check = this.cfg.can(this.state, recipe, this.stationRank, times);
+    const check = this.cfg.can(this.state, recipe, this.stationFor(recipe), times);
     if (!check.ok) {
       this.messageText.setText(check.reason);
       return;
@@ -445,6 +545,8 @@ export default class CookingScene extends Phaser.Scene {
       }
     }
     this.working = { recipe, times, done: 0, made: 0, xp: 0, levels: 0, elapsed: 0, total: this.craftSeconds(recipe) * 1000 };
+    // XP z celé várky se ohlásí najednou (vyskakovací okno dovednosti) až po skončení / přerušení.
+    beginSkillXpBatch(this.cfg.prof);
     this.setBusy(true);
   }
 
@@ -464,7 +566,7 @@ export default class CookingScene extends Phaser.Scene {
     this.messageText.setText(`${this.cfg.make === 'Uvařit' ? 'Vaříš' : 'Vyrábíš'}: ${w.recipe.name} ${w.done + 1}/${w.times} · ${Math.max(0, left).toFixed(1).replace('.', ',')} s (Esc = přerušit)`);
     if (w.elapsed < w.total) return;
     w.elapsed = 0;
-    const result = this.cfg.craft(this.state, w.recipe, this.stationRank, 1);
+    const result = this.cfg.craft(this.state, w.recipe, this.stationFor(w.recipe), 1);
     if (!result.ok) { this.finishWork(result.message); return; }
     if (this.fuel && !this.fuelPaid) {
       removeItem(this.state, this.fuel, 1);
@@ -483,6 +585,7 @@ export default class CookingScene extends Phaser.Scene {
     const w = this.working;
     this.working = null;
     this.setBusy(false);
+    endSkillXpBatch(this.cfg.prof);
     if (!w) return;
     let message = w.done ? `Hotovo: ${w.recipe.name} ×${w.made}${w.xp ? ` (+${w.xp} XP)` : ''}.` : '';
     if (interrupted) message = `Přerušeno. ${message}`;
@@ -503,6 +606,7 @@ export default class CookingScene extends Phaser.Scene {
     if (this.closing) return;
     this.closing = true;
     this.working = null; // rozdělaná výroba se přeruší (vyrobené kusy zůstávají)
+    endSkillXpBatch(this.cfg.prof);
     SaveSystem.save(this.state);
     this.scene.stop();
     this.scene.resume(this.returnScene);

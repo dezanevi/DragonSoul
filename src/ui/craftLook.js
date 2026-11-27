@@ -65,15 +65,38 @@ export function itemIcon(scene, itemId, x, y, size) {
   return image;
 }
 
-// Označení předmětu, který hráč potřebuje koupit pro úkol (obchody): zlatý rámeček řádku,
-// zlaté „!“ a štítek „Úkol: máš / potřeba“. Vrací pole objektů.
-// tagRight = pravý okraj štítku (vlevo od tlačítka Koupit).
-export function questBuyMark(scene, x, y, w, h, row, cardText, tagRight = x + w - 14) {
-  const g = scene.add.graphics();
-  roundBox(g, x, y, w, h, 0x3a2a12, 0.55, LOOK.gold, 1, 2.5, 10);
-  const bang = cardText(scene, x + 10, y + h / 2, '!', { size: 30, bold: true, color: '#ffd23a', originX: 0.5, originY: 0.5, strokeThickness: 5 });
-  const tag = cardText(scene, tagRight, y + h / 2, `Úkol: ${Math.min(row.have, row.need)}/${row.need}`, { size: 19, bold: true, color: '#ffd76a', originX: 1, originY: 0.5 });
-  return [g, bang, tag];
+// Označení předmětu pro úkol (obchody, okna výroby): zlatý rámeček řádku, zlaté „!“ a štítek
+// „Úkol: máš/potřeba“ (skutečný stav, např. 3/1; splněno zeleně s ✓). Předmět pro víc úkolů
+// má štítek pro každý úkol s jeho názvem a barvou; když běží víc úkolů (row.named), má název
+// a barvu úkolu i štítek s jediným úkolem. row = { named, quests: [{ title, need, have, color }] }.
+// tagRight = pravý okraj štítků, maxW = nejširší štítek. Vrací { objects, width }.
+export function questMarkObjects(scene, x, y, w, h, row, cardText, tagRight = x + w - 14, maxW = 220, frame = true) {
+  const objects = [];
+  if (frame) {
+    const g = scene.add.graphics();
+    roundBox(g, x, y, w, h, 0x3a2a12, 0.55, LOOK.gold, 1, 2.5, 10);
+    objects.push(g, cardText(scene, x + 10, y + h / 2, '!', { size: 30, bold: true, color: '#ffd23a', originX: 0.5, originY: 0.5, strokeThickness: 5 }));
+  }
+  const quests = row.quests ?? [];
+  const single = quests.length === 1 && !row.named;
+  const size = quests.length === 1 ? 19 : 16;
+  const lineH = Math.min(22, (h - 6) / Math.max(1, quests.length));
+  let width = 0;
+  quests.forEach((q, i) => {
+    const done = q.have >= q.need;
+    const text = `${single ? 'Úkol:' : q.title} ${q.have}/${q.need}${done ? ' ✓' : ''}`;
+    const color = single ? (done ? '#8fe08a' : '#ffd76a') : q.color;
+    const cy = y + h / 2 + (i - (quests.length - 1) / 2) * lineH;
+    const tag = cardText(scene, tagRight, cy, text, { size, bold: true, color, originX: 1, originY: 0.5 });
+    if (tag.width > maxW) tag.setScale(maxW / tag.width);
+    width = Math.max(width, tag.displayWidth);
+    objects.push(tag);
+  });
+  return { objects, width };
+}
+
+export function questBuyMark(scene, x, y, w, h, row, cardText, tagRight = x + w - 14, maxW = 220) {
+  return questMarkObjects(scene, x, y, w, h, row, cardText, tagRight, maxW).objects;
 }
 
 // Ikona v rámečku barvy vzácnosti. Vrací pole objektů.
@@ -83,4 +106,25 @@ export function framedIcon(scene, itemId, cx, cy, size) {
   roundBox(g, cx - half, cy - half, half * 2, half * 2, 0x05080c, 0.85, hexColor(rarityColor(getItem(itemId))), 0.9, 2, 10);
   const icon = itemIcon(scene, itemId, cx, cy, size);
   return [g, icon].filter(Boolean);
+}
+
+// Zlatá hvězdička u nově odemčeného receptu (pulzuje). Zmizí, když hráč najede myší na řádek
+// area { x, y, w, h }; onSeen() si to zapamatuje. Hlídá se pohyb myši, takže řádek pod
+// hvězdičkou zůstává klikatelný. Vrací objekty k přidání do vrstvy.
+export function newRecipeStar(scene, cx, cy, area, onSeen) {
+  const star = scene.add.text(cx, cy, '★', {
+    fontFamily: 'Lora, Georgia, serif', fontSize: '30px', color: '#ffd23a', stroke: '#5a3a00', strokeThickness: 4
+  }).setOrigin(0.5);
+  scene.tweens.add({ targets: star, scale: { from: 1, to: 1.2 }, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  const inside = (p) => p.x >= area.x && p.x <= area.x + area.w && p.y >= area.y && p.y <= area.y + area.h;
+  const onMove = (pointer) => {
+    if (!star.active || !inside(pointer)) return;
+    scene.input.off('pointermove', onMove);
+    onSeen?.();
+    scene.tweens.killTweensOf(star);
+    scene.tweens.add({ targets: star, alpha: 0, scale: 1.7, duration: 260, onComplete: () => star.destroy() });
+  };
+  scene.input.on('pointermove', onMove);
+  star.once('destroy', () => scene.input.off('pointermove', onMove));
+  return [star];
 }

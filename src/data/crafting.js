@@ -1,3 +1,4 @@
+import { statPart, monsterBonus, heroStatSuffix } from './heroStatLabels.js';
 // Řemeslnictví podle zadání „Řemeslnictví“ (návrh: dokument „Řemeslnictví – návrh systému“).
 // Šperky, nekovové vybavení, fokusy a talismany, brašny a cestovní vybavení, Soul Crystaly.
 // Kovové díly (stříbrný / zlatý ingot, drát, uzávěr…) dodává Kovářství, drahokamy a krystaly Těžba.
@@ -38,14 +39,16 @@ export const CRAFTING_CATEGORIES = [
   { id: 'C', label: 'Fokusy a talismany' },
   { id: 'D', label: 'Brašny a cesty' },
   { id: 'E', label: 'Soul Crystaly' },
-  { id: 'F', label: 'Ostatní' }
+  { id: 'F', label: 'Ostatní' },
+  { id: 'T', label: 'Řemeslník', specialization: 'crafting' } // recepty za talenty stromu Řemesla
 ];
 
 export const CRAFTING_ORIGINS = {
   base: 'Odemkne se úrovní Řemeslnictví',
   crafter: 'Řemeslnice (návrh)',
   found: 'Nalezený recept (návrh)',
-  quest: 'Úkol (návrh)'
+  quest: 'Úkol (návrh)',
+  talent: 'Talent stromu Řemesla (specializace Řemeslník)'
 };
 
 export const CRAFTING_CLASSES = [
@@ -228,7 +231,49 @@ const OTHER = [
     { story: { item: DRAGON_CRYSTAL_STORY_ITEM, text: 'Jen s Dračí pečetí (příběh).' } })
 ];
 
-export const CRAFTING_RECIPES = [...AMULETS, ...RINGS, ...FOCI, ...TRAVEL, ...CRYSTALS, ...OTHER];
+// --------------------------------------------------- T. Řemeslník (recepty za talenty)
+// Jen pro specializaci Řemeslník (talent: { id, rank } nebo { final }). Vzácná kořist z Greenvale.
+const TR = (no, id, name, slot, level, station, ingredients, bonus, talent, rarity = 'rare') =>
+  R(no, id, name, 'T', level, station, 1, ingredients, g(slot, bonus), 'talent', { talent, rarity });
+const TALENT_RECIPES = [
+  // Zručný řemeslník – nekovová výbava na 1., 3. a 5. hodnosti
+  TR(201, 'T01', 'Vesta z divoké kůže', 'armor', 3, LEATHER, { mat_divoka_kuze: 2, leather: 1 }, { defense: 2, maxHp: 2 }, { id: 'skilled_crafter', rank: 1 }, 'uncommon'),
+  TR(202, 'T02', 'Amulet větrného drápu', 'amulet', 6, JEWELER, { mat_vetrny_drap: 2, [K.cord]: 1 }, { speed: 3 }, { id: 'skilled_crafter', rank: 3 }),
+  TR(203, 'T03', 'Boty zephyrova běhu', 'boots', 9, LEATHER, { mat_zephyrova_kozesina: 2, mat_vetrny_drap: 1, mat_bojovnikuv_kozeny_remen: 1 }, { speed: 3, defense: 1 }, { id: 'skilled_crafter', rank: 5 }),
+  // Mistrovská výroba – 3. hodnost: zbroj vůdce smečky
+  TR(204, 'T04', 'Zbroj vůdce smečky', 'armor', 10, LEATHER, { mat_direwolfi_kozesina: 3, mat_divoka_kuze: 2, mat_bojovnikuv_kozeny_remen: 1 }, { defense: 5, attack: 1 }, { id: 'masterwork', rank: 3 }),
+  // Legendární řemeslník (dokončený strom Řemesla) – unikátní amulet ze vzácné kořisti celé oblasti
+  TR(205, 'T05', 'Srdce Greenvale', 'amulet', 10, JEWELER,
+    { mat_vlci_tesak: 1, mat_vetrny_drap: 1, mat_divoka_kuze: 1, mat_orci_zelezny_ulomek: 1, mat_vetrny_krystal: 1, [K.cord]: 1 },
+    { attack: 3, aether: 3, defense: 3, resolve: 3, speed: 2, maxHp: 3 }, { final: 'crafting' }, 'legendary')
+];
+
+// ----------------------------------------------- Štěstí a Charisma v amuletech a prstenech
+// Každý amulet a prsten má Štěstí nebo Charisma (ploché body hrdiny), škálované podle obtížnosti:
+// 1 bod do úrovně 19, +1 za každých 20 úrovní (úr. 80+ = 5 bodů). Nalezené a úkolové kusy
+// (těžko získatelné) mají navíc i druhou statistiku o bod nižší.
+const HERO_STAT_THEME = {
+  A02: 'charisma', A11: 'charisma', A13: 'luck', A16: 'luck', A20: 'luck', A22: 'luck',
+  B02: 'luck', B07: 'charisma', B12: 'luck', B18: 'luck', B22: 'luck'
+};
+[...AMULETS, ...RINGS].forEach((r, i) => {
+  const bonus = r.effect?.bonus;
+  if (!bonus) return;
+  const value = Math.min(5, 1 + Math.floor(r.level / 20));
+  const stat = HERO_STAT_THEME[r.id] ?? (i % 2 ? 'charisma' : 'luck');
+  bonus[stat] = value;
+  if (r.origin === 'found' || r.origin === 'quest') bonus[stat === 'luck' ? 'charisma' : 'luck'] = Math.max(1, value - 1);
+});
+// Pár vzácných a těžko získatelných kusů mimo šperky (+ recepty za talenty Řemeslníka).
+for (const [id, extra] of [
+  ['T02', { luck: 2 }], ['T05', { luck: 3, charisma: 3 }],
+  ['C20', { luck: 3 }], ['F11', { luck: 2 }], ['F12', { charisma: 3 }], ['F20', { charisma: 3, luck: 2 }]
+]) {
+  const r = [...TALENT_RECIPES, ...FOCI, ...OTHER].find((t) => t.id === id);
+  if (r?.effect?.bonus) Object.assign(r.effect.bonus, extra);
+}
+
+export const CRAFTING_RECIPES = [...AMULETS, ...RINGS, ...FOCI, ...TRAVEL, ...CRYSTALS, ...OTHER, ...TALENT_RECIPES];
 export const ALL_CRAFTING = [...CRAFTING_INTERMEDIATES, ...CRAFTING_RECIPES];
 export const CRAFTING_BY_ID = Object.fromEntries(ALL_CRAFTING.map((r) => [r.id, r]));
 
@@ -255,7 +300,7 @@ const EXPLORE = {
 };
 
 export function describeCraftGear(e) {
-  const parts = Object.entries(e.bonus ?? {}).map(([k, v]) => `${STAT[k]} +${v} %`);
+  const parts = Object.entries(monsterBonus(e.bonus)).map(([k, v]) => statPart(STAT, k, v));
   for (const [k, v] of Object.entries(e.elementDamage ?? {})) parts.push(`útoky ${ELEMENT[k]} +${v} %`);
   for (const [k, v] of Object.entries(e.resist ?? {})) parts.push(`odolnost ${ELEMENT[k]} ${v} %`);
   return parts.join(', ');
@@ -263,7 +308,7 @@ export function describeCraftGear(e) {
 
 export function describeCrafting(e) {
   if (!e) return 'Mezivýrobek pro další recepty.';
-  if (e.slot) return `${SLOT[e.slot]}: ${describeCraftGear(e)} všem monstrům v partě (velitelský bonus).`;
+  if (e.slot) return `${SLOT[e.slot]}: ${describeCraftGear(e)} všem monstrům v partě (velitelský bonus).${heroStatSuffix(e.bonus)}`;
   if (e.bag) return `Použij: inventář bude mít ${e.bag} stránek po 40 políčkách (trvale).`;
   if (e.travel) {
     const parts = Object.entries(e.explore).map(([k, v]) => EXPLORE[k]?.(v) ?? k);

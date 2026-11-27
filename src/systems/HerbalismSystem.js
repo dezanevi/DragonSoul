@@ -16,12 +16,18 @@
 // Kořist se do inventáře nedává tady – potvrdí ji hráč v okně kořisti.
 // ======================================================================
 
+import { formatGameDuration } from './TimeSystem.js';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { luckGatherBonus } from './HeroStatsSystem.js';
+import { getTalentBonuses } from './TalentSystem.js';
 import {
   HERB_RARITY, HERB_RULES, HERB_BY_ID, HERB_SITES, HERB_SITE_BY_ID, SICKLES, HERB_TIER_LABEL, HERB_SPECIALIZATIONS,
   FLOWER_HERBS, POLLEN_RARITIES, HERBALIST_STOCK, xpToNextHerbLevel
 } from '../data/herbalism.js';
 import { getItemCount } from './InventorySystem.js';
 import { exploreBonus, professionXpMultiplier } from './AlchemySystem.js';
+import { TOOL_MOD, toolModOf } from '../data/items.js';
 
 const DAY = 86400000;
 const FOREST = new Set(['forest']);
@@ -71,12 +77,8 @@ export function herbSiteStatus(state, site, now = Date.now()) {
   return until > now ? { ready: false, until } : { ready: true, until: 0 };
 }
 
-export const formatHerbWait = (ms) => {
-  const minutes = Math.ceil(ms / 60000);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours} h ${minutes % 60} min`;
-};
+// Odpočet obnovy v herním čase (TimeSystem: 1 minuta hraní = 1 herní hodina).
+export const formatHerbWait = (ms) => formatGameDuration(ms);
 
 // Může hráč naleziště sbírat? { ok, reason }
 export function checkHerbSite(state, site, { now = Date.now() } = {}) {
@@ -88,7 +90,7 @@ export function checkHerbSite(state, site, { now = Date.now() } = {}) {
     return { ok: false, reason: owned ? `${owned.name} vyžaduje Sběr bylin ${owned.level}.` : 'Potřebuješ srp – dostaneš ho od Bylinkářky v Greenvale.' };
   }
   if (sickle.tier < site.tier) {
-    const need = SICKLES.find((s) => s.tier === site.tier);
+    const need = SICKLES.find((s) => s.tier === site.tier && !s.starter);
     return { ok: false, reason: `Potřebuješ ${need.name} (stupeň ${HERB_TIER_LABEL[need.tier]}) nebo lepší.` };
   }
   if (site.special === 'hidden' && !activeHiddenHerbs(state, now)) return { ok: false, reason: 'Skryté naleziště se ukáže jen po Botanickém zápisu.' };
@@ -108,6 +110,7 @@ export function herbSeconds(state, site) {
   seconds *= 1 - HERB_RULES.secondsPerLevel * Math.max(0, herbLevel(state) - (herb?.level ?? site.minLevel));
   seconds *= 1 - 0.05 * tiersAbove(state, site);
   if (bestSickle(state)?.id === 'mithril_sickle' || bestSickle(state)?.id === 'star_sickle') seconds *= 0.85;
+  seconds *= 1 - TOOL_MOD.timePerPoint * toolModOf(bestSickle(state)?.id); // modifikátor srpu
   return Math.max(HERB_RULES.minSeconds, seconds);
 }
 
@@ -120,6 +123,9 @@ export function herbExtraChance(state, site, herbId = site.main) {
   if (herb?.rarity === 'epic' && ['brass_herb_gatherer', 'mithril_sickle', 'star_sickle'].includes(sickle)) chance += 0.2;
   const spec = HERB_SPECIALIZATIONS.find((s) => s.id === herbSpecialization(state));
   if (spec?.herbs.includes(herbId) && !site.cultivated) chance += 0.35;
+  chance += TOOL_MOD.extraPerPoint * toolModOf(sickle); // modifikátor srpu
+  chance += getTalentBonuses(state).herbBonusChance; // talent Bylinkářská ruka
+  chance += luckGatherBonus(state); // Štěstí
   return Math.min(0.6, chance + exploreBonus(state, 'herbExtra', 0));
 }
 
@@ -251,6 +257,11 @@ export function harvestHerbSite(state, site, { random = Math.random, now = Date.
     h.log[id] = (h.log[id] ?? 0) + (loot.get(id) ?? 0);
   }
   h.sites[site.id] = (h.sites[site.id] ?? 0) + 1;
+  // Úkoly Sběru bylin: nasbírané rostliny, ze statku (záhony Z, ohrada L) zvlášť.
+  for (const [id, qty] of loot) {
+    countQuestEvent(state, `herb:${id}`, qty);
+    if (/^[ZL]\d/.test(site.id)) countQuestEvent(state, 'herb:farm', qty);
+  }
 
   // Obnova: srp III a lepší −10 %, Elementální bylinář −20 % u elementálních rostlin.
   let respawn = site.respawnMs;
@@ -273,7 +284,7 @@ export function harvestHerbSite(state, site, { random = Math.random, now = Date.
   };
 }
 
-export function addHerbXp(state, amount) {
+function addHerbXpRaw(state, amount) {
   const prof = state.professions.herbalism;
   prof.exp += amount;
   let gained = 0;
@@ -358,4 +369,12 @@ export function chooseHerbSpecialization(state, id) {
   state.herbalism.specialization = id;
   state.herbalism.specChanges += cost ? 1 : 0;
   return { ok: true, message: `Specializace Sběru bylin: ${spec.name}${cost ? ` (−${cost} zlata)` : ''}.` };
+}
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addHerbXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'herbalism');
+  const result = addHerbXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'herbalism', before, amount);
+  return result;
 }

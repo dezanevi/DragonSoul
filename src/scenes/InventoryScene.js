@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { ITEM_CATEGORIES, getItem } from '../data/items.js';
+import { itemValue, sellPrice } from '../systems/ItemValueSystem.js';
+import { goldText } from '../ui/goldText.js';
 import {
   INVENTORY_PAGE_SIZE,
   INVENTORY_PAGES,
@@ -19,7 +21,11 @@ import {
   INVENTORY_CHANGED
 } from '../systems/InventorySystem.js';
 import { EQUIPMENT_SLOT_IDS, RARITIES, normalizeEquipment } from '../systems/EquipmentSystem.js';
-import { cardText, cardButton, openCardModal, drawCardFrame, CARD_FIT } from '../ui/fantasyCard.js';
+import { openEquipPicker } from '../ui/heroCard/equipPicker.js';
+import { cardText, cardButton, openCardModal, drawCardFrame, nineImage, CARD_FIT, CARD_PANEL, COIN_KEY, uiTitle } from '../ui/fantasyCard.js';
+import { TOOL_SLOTS, isTool, equipTool, unequipTool, normalizeTools } from '../systems/InventorySystem.js';
+import { openHeroPicker } from '../ui/heroCard/heroPicker.js';
+import { darkPanel, roundBox } from '../ui/craftLook.js';
 import { COOKING_BY_ID, hasLastingEffect } from '../data/cooking.js';
 import { activeMeal } from '../systems/CookingSystem.js';
 import { activeReinforcement } from '../systems/SmithingSystem.js';
@@ -35,7 +41,6 @@ import {
   menuRowKey,
   equipKey,
   slotKey,
-  categoryKey,
   arrowKey,
   itemIconKey
 } from '../ui/inventorySprites.js';
@@ -47,12 +52,22 @@ import {
 
 const CARD_W = 1536;
 const CARD_H = 1024;
-// Obsah karty zmenšený do panelu karty Mapa (ui/fantasyCard.js CARD_FIT).
-const { SCALE, OFFSET_X, OFFSET_Y } = CARD_FIT;
+// Obsah karty zmenšený do panelu karty Mapa (ui/fantasyCard.js CARD_FIT). Karta je posunutá
+// doleva, vpravo vedle ní je sekce Nástroje – obojí dohromady je v panelu vystředěné.
+// Trochu menší a níž než ostatní karty: nad štítkem Vybavení musí být místo pro jednotnou hlavičku karty.
+const SCALE = CARD_FIT.SCALE * 0.95;
+const OFFSET_Y = CARD_FIT.OFFSET_Y + 24;
+const TOOLS_W = 262; // s odstupem od pravého rámu karty
+const TOOLS_GAP = 16;
+const OFFSET_X = CARD_PANEL.x + (CARD_PANEL.w - (CARD_W * SCALE + TOOLS_GAP + TOOLS_W)) / 2;
+const TOOLS = { x: OFFSET_X + CARD_W * SCALE + TOOLS_GAP, y: OFFSET_Y + 132 * SCALE, w: TOOLS_W, h: 760 * SCALE };
 const CLOSE_AREA = { x: 628, y: 914, w: 275, h: 78 };
 const CLOSE_IMAGE_WIDTH = 310;
-// Souřadnice podkladu (karta je na obrazovce zmenšená ~0,77×): 74 px → ~57 px na obrazovce.
-const SORT_AREA = { x: 1187, y: 916, w: 280, h: 74 };
+// Lišta zlata a Seřadit (souřadnice podkladu; karta je na obrazovce zmenšená, 64 px → ~60 px).
+// GOLD_COVER zakryje širokou lištu z obrázku podkladu, GOLD_BAR je nová kratší lišta.
+const GOLD_COVER = { x: 690, y: 786, w: 762, h: 68 };
+const GOLD_BAR = { x: 697, y: 790, w: 290, h: 60 };
+const SORT_AREA = { x: 1005, y: 787, w: 250, h: 66 };
 
 // Rozložení podkladu (souřadnice obrázku 1536 × 1024).
 const GRID = { cols: [674, 775, 875, 974, 1073, 1173, 1274, 1374], rows: [143, 246, 349, 452, 556], w: 93, h: 96 };
@@ -66,10 +81,12 @@ const EQUIP_SLOTS = {
   legs: { x: 504, y: 357, w: 101, h: 82 },
   boots: { x: 504, y: 451, w: 101, h: 82 }
 };
+// Filtry inventáře: popisek a ikona (jednotně, viz customCategoryButton).
+const CATEGORY_LABELS = { armor: 'Vybavení', materials: 'Materiály', potions: 'Potiony', food: 'Jídlo', keys: 'Klíče', other: 'Ostatní' };
+const CATEGORY_ICON_KEYS = { armor: 'armor', materials: 'crystal', potions: 'potion', food: 'item:meal_V001', keys: 'key', other: 'chest' };
 const CATEGORY_RECTS = [939, 1028, 1118, 1207, 1296, 1385].map((x) => ({ x, y: 678, w: 83, h: 89 }));
 const ARROW_RECTS = { left: { x: 677, y: 688, w: 38, h: 66 }, right: { x: 868, y: 688, w: 38, h: 66 } };
 const PAGE_TEXT = { x: 791, y: 721, plate: { x: 728, y: 696, w: 128, h: 50 } };
-const GOLD_TEXT = { x: 790, y: 817 };
 const INFO = { x: 57, y: 637, w: 569, h: 241 };
 const MENU_SCALE = 0.32;
 
@@ -143,6 +160,8 @@ export default class InventoryScene extends Phaser.Scene {
     drawCardFrame(this, undefined, { blocker: false });
     this.card = this.add.container(OFFSET_X, OFFSET_Y).setScale(SCALE);
     this.card.add(this.add.image(0, 0, INVENTORY_CARD).setOrigin(0));
+    // Jednotná hlavička karet (stejně jako Dovednosti, Bestiář, Úkoly, Mapa).
+    uiTitle(this, CARD_PANEL.x + 150, CARD_PANEL.y + 38, 'Inventář', { icon: 'bag', size: 34 });
     // Klik na podklad karty zavře nabídku.
     this.card.add(this.add.zone(0, 0, CARD_W, CARD_H).setOrigin(0).setInteractive().on('pointerdown', () => this.closeMenu()));
 
@@ -151,6 +170,13 @@ export default class InventoryScene extends Phaser.Scene {
     const p = PAGE_TEXT.plate;
     plate.fillStyle(0x0a1628, 1).fillRect(p.x, p.y, p.w, p.h);
     this.card.add(plate);
+
+    // Sekce Nástroje vpravo od karty (souřadnice obrazovky).
+    normalizeTools(this.state);
+    // Stejný zlatý rámeček jako ostatní sekce (panel nové sady UI); bez textury tmavý panel.
+    if (!nineImage(this, 'nu-panel', TOOLS.x, TOOLS.y, TOOLS.w, TOOLS.h, 0.45)) darkPanel(this, TOOLS.x, TOOLS.y, TOOLS.w, TOOLS.h);
+    cardText(this, TOOLS.x + TOOLS.w / 2, TOOLS.y + 14, 'Nástroje', { size: 24, bold: true, color: '#ffe7ae', originX: 0.5 });
+    this.toolsLayer = this.add.container(0, 0);
 
     this.equipLayer = this.add.container(0, 0);
     this.card.add(this.equipLayer);
@@ -190,7 +216,8 @@ export default class InventoryScene extends Phaser.Scene {
     this.onKey = (event) => {
       if (event.repeat) return;
       if (event.code === 'Escape') {
-        if (this.modal) this.closeModal();
+        if (this.heroPicker) this.heroPicker.close();
+        else if (this.modal) this.closeModal();
         else if (this.menu) this.closeMenu();
         else if (this.moving !== null) { this.moving = null; this.render(); this.flash('Přesun zrušen.', '#c9d3dd'); }
         else this.closeCard();
@@ -208,10 +235,9 @@ export default class InventoryScene extends Phaser.Scene {
     // Filtry kategorií: modrá pod myší, zapnutý filtr zůstane modrý.
     this.categoryImages = ITEM_CATEGORIES.map((category, i) => {
       const r = CATEGORY_RECTS[i];
-      const image = this.textures.exists(categoryKey(category.id, 'hover'))
-        ? this.add.image(r.x + r.w / 2, r.y + r.h / 2, categoryKey(category.id, 'hover')).setDisplaySize(r.w + 4, r.h + 4).setVisible(false)
-        : null;
-      if (image) this.card.add(image);
+      // Všechna tlačítka filtrů kreslí karta stejně (rámeček, ikona, popisek uvnitř) – namalovaná
+      // v podkladu měla různé písmo a oříznuté popisky.
+      const image = this.customCategoryButton(r, CATEGORY_LABELS[category.id] ?? category.label, CATEGORY_ICON_KEYS[category.id]);
       const zone = this.add.zone(r.x, r.y, r.w, r.h).setOrigin(0).setInteractive({ useHandCursor: true });
       zone.on('pointerover', () => image?.setVisible(true));
       zone.on('pointerout', () => image?.setVisible(this.filter === category.id));
@@ -219,6 +245,9 @@ export default class InventoryScene extends Phaser.Scene {
         this.closeMenu();
         this.filter = this.filter === category.id ? null : category.id;
         this.page = 0;
+        // Vybraný předmět, který nový filtr skryje: zrušit výběr (náhled ukáže „Vyber předmět“).
+        const picked = this.selected !== null ? getItem(this.state.inventory.slots[this.selected]?.id) : null;
+        if (picked && this.filter && picked.category !== this.filter) this.selected = null;
         this.moving = null;
         this.render();
         this.flash(this.filter ? `Filtr: ${category.label}` : 'Filtr vypnut – všechny předměty.', '#8fd3ff');
@@ -243,11 +272,47 @@ export default class InventoryScene extends Phaser.Scene {
     }
 
     this.pageText = cardText(this, PAGE_TEXT.x, PAGE_TEXT.y, '', { size: 36, bold: true, color: '#f3e4bd', originX: 0.5, originY: 0.5, strokeThickness: 5 });
-    this.goldText = cardText(this, GOLD_TEXT.x, GOLD_TEXT.y, '', { size: 32, bold: true, color: '#ffd76a', originY: 0.5, strokeThickness: 5 });
+    // Lišta zlata: široká lišta z podkladu se zakryje a místo ní je kratší lišta (jen na částku),
+    // hned za ní tlačítko Seřadit (souřadnice karty).
+    const goldCover = this.add.graphics();
+    goldCover.fillStyle(0x001a33, 1).fillRect(GOLD_COVER.x, GOLD_COVER.y, GOLD_COVER.w, GOLD_COVER.h);
+    this.card.add(goldCover);
+    const goldBar = nineImage(this, 'nu-slot', GOLD_BAR.x, GOLD_BAR.y, GOLD_BAR.w, GOLD_BAR.h, 0.5);
+    if (goldBar) this.card.add(goldBar);
+    if (this.textures.exists(COIN_KEY)) {
+      const coin = this.add.image(GOLD_BAR.x + 34, GOLD_BAR.y + GOLD_BAR.h / 2, COIN_KEY);
+      coin.setScale(44 / Math.max(coin.width, coin.height));
+      this.card.add(coin);
+    }
+    this.goldText = cardText(this, GOLD_BAR.x + 66, GOLD_BAR.y + GOLD_BAR.h / 2, '', { size: 32, bold: true, color: '#ffd76a', originY: 0.5, strokeThickness: 5 });
     this.card.add([this.pageText, this.goldText]);
 
     this.info = this.add.container(0, 0);
     this.card.add(this.info);
+  }
+
+  // Vlastní tlačítko kategorie přes namalované (ikona předmětu + popisek). Vrací objekt
+  // s setVisible(zvýraznění), stejně jako obrázek „hover“ u ostatních tlačítek.
+  customCategoryButton(r, label, iconSource) {
+    // Podklad zakryje namalované tlačítko, rám = stejný díl jako políčka (nu-slot), zvýraznění modře.
+    const cover = this.add.graphics();
+    cover.fillStyle(0x0a1a30, 1).fillRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
+    const g = this.add.graphics();
+    const frame = nineImage(this, 'nu-slot', r.x - 2, r.y - 2, r.w + 4, r.h + 4, 0.42);
+    // Ikona: díl nové sady (nu-icon-…), jinak ikona předmětu (item:…).
+    const key = iconSource?.startsWith('item:') ? itemIconKey(getItem(iconSource.slice(5))?.icon) : `nu-icon-${iconSource}`;
+    const icon = this.textures.exists(key) ? this.add.image(r.x + r.w / 2, r.y + 34, key) : null;
+    icon?.setScale(40 / Math.max(icon.width, icon.height));
+    const text = cardText(this, r.x + r.w / 2, r.y + r.h - 20, label, { size: 14, bold: true, color: '#f3e4bd', originX: 0.5, originY: 0.5 });
+    if (text.width > r.w - 16) text.setScale((r.w - 16) / text.width);
+    const draw = (on) => {
+      g.clear();
+      if (on) g.fillStyle(0x1b5aa0, 0.85).fillRoundedRect(r.x + 4, r.y + 4, r.w - 8, r.h - 8, 8);
+      if (!frame) g.lineStyle(4, on ? 0x8fd3ff : 0xd6a23a, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 9);
+    };
+    draw(false);
+    this.card.add([cover, g, frame, icon, text].filter(Boolean));
+    return { setVisible: (on) => { draw(on); return this; } };
   }
 
   // ---------------------------------------------------------------- mřížka
@@ -309,7 +374,18 @@ export default class InventoryScene extends Phaser.Scene {
       zone.on('pointerover', () => { hover?.setVisible(true); this.showEquipInfo(slot); });
       zone.on('pointerout', () => { hover?.setVisible(false); this.renderInfo(); });
       zone.on('pointerdown', (pointer) => {
-        if (this.modal || pointer.rightButtonDown()) return;
+        if (this.modal) return;
+        // Pravý klik: okno s předměty pro tento slot (stejné jako v kartě Hrdina).
+        if (pointer.rightButtonDown()) {
+          this.closeMenu();
+          const at = toScreen(r.x + r.w + 10, r.y);
+          openEquipPicker(this, this.state, slot, at.x, at.y, (result) => {
+            if (result.ok) this.changed();
+            this.render();
+            this.flash(result.message, result.ok ? '#ffd76a' : '#ffb3a0');
+          });
+          return;
+        }
         this.closeMenu();
         this.press = { type: 'equip', slot, x: pointer.x, y: pointer.y };
       });
@@ -317,7 +393,85 @@ export default class InventoryScene extends Phaser.Scene {
     });
   }
 
+  // Sloty nástrojů: 2 sloupce, pod slotem název druhu. Klik = výběr nástroje z inventáře
+  // (nebo Sundat), najetí myší = popis vlevo dole.
+  renderTools() {
+    this.toolsLayer.removeAll(true);
+    const cols = 2;
+    const cellW = (TOOLS.w - 36) / cols;
+    // Okraj uvnitř zlatého rámečku: nahoře nadpis, dole místo, aby popisek nesedl na rám.
+    const cellH = (TOOLS.h - 78) / Math.ceil(TOOL_SLOTS.length / cols);
+    // Slot + popisek (~20 px) se musí vejít do buňky – jinak popisek leží přes slot pod ním.
+    const size = Math.min(74, Math.floor(cellH - 24));
+    TOOL_SLOTS.forEach((slot, i) => {
+      const cx = TOOLS.x + 18 + (i % cols) * cellW + cellW / 2;
+      const top = TOOLS.y + 50 + Math.floor(i / cols) * cellH;
+      const x = cx - size / 2;
+      const id = this.state.tools?.[slot.id];
+      const item = getItem(id);
+      const g = this.add.graphics();
+      const draw = (hover) => {
+        g.clear();
+        roundBox(g, x, top, size, size, 0x05080c, 0.85, hover ? 0xffd76a : item ? 0x8a6a30 : 0x3a4654, hover ? 1 : 0.9, hover ? 2.5 : 1.5, 10);
+      };
+      draw(false);
+      this.toolsLayer.add(g);
+      if (item) {
+        this.toolsLayer.add(this.add.image(cx, top + size / 2, rarityGlowKey(this, item.rarity)).setDisplaySize(size - 8, size - 8));
+        if (item.icon && this.textures.exists(itemIconKey(item.icon))) {
+          const icon = this.add.image(cx, top + size / 2, itemIconKey(item.icon));
+          icon.setScale((size - 18) / Math.max(icon.width, icon.height));
+          this.toolsLayer.add(icon);
+        }
+      }
+      const mod = item?.toolMod ? ` +${item.toolMod}` : '';
+      const label = cardText(this, cx, top + size + 3, `${slot.label}${mod}`, { size: 14, color: mod ? '#8fe08a' : item ? '#dbe6f3' : '#7f8a96', originX: 0.5 });
+      if (label.width > cellW - 6) label.setScale((cellW - 6) / label.width);
+      this.toolsLayer.add(label);
+      const zone = this.add.zone(x, top, size, size).setOrigin(0).setInteractive({ useHandCursor: true });
+      zone.on('pointerover', () => {
+        draw(true);
+        if (this.menu || this.modal) return;
+        this.clearInfo();
+        if (item) this.describe(item, 1, `Nástroj – ${slot.label} · klik = vyměnit / sundat`);
+        else this.info.add(cardText(this, INFO.x + 30, INFO.y + 28, `${slot.label}: prázdný slot`, { size: 24, bold: true, color: '#ffe7ae' }));
+      });
+      zone.on('pointerout', () => { draw(false); if (!this.menu && !this.modal) this.renderInfo(); });
+      zone.on('pointerdown', () => { if (!this.modal) this.openToolPicker(slot, x + size + 8, top); });
+      this.toolsLayer.add(zone);
+    });
+  }
+
+  // Výběr nástroje pro slot: nástroje téhož druhu z inventáře, u obsazeného slotu Sundat.
+  openToolPicker(slot, x, y) {
+    this.closeMenu();
+    const rows = [];
+    this.state.inventory.slots.forEach((entry, index) => {
+      const item = getItem(entry?.id);
+      if (!item || !slot.accepts(item) || rows.some((r) => r.itemId === item.id)) return;
+      rows.push({
+        itemId: item.id, title: item.name, sub: item.description ?? '', color: RARITIES[item.rarity]?.color,
+        onClick: () => this.afterTool(equipTool(this.state, index))
+      });
+    });
+    const current = getItem(this.state.tools?.[slot.id]);
+    openHeroPicker(this, {
+      x: Math.min(x, GAME_WIDTH - 560), y,
+      title: `${slot.label} – nástroj`,
+      rows,
+      emptyText: 'V inventáři nemáš jiný nástroj tohoto druhu.',
+      footer: current ? { label: `Sundat: ${current.name}`, danger: true, onClick: () => this.afterTool(unequipTool(this.state, slot.id)) } : null
+    });
+  }
+
+  afterTool(result) {
+    if (result.ok) this.changed();
+    this.render();
+    this.flash(result.message, result.ok ? '#ffd76a' : '#ffb3a0');
+  }
+
   render() {
+    this.renderTools();
     this.renderEquipment();
     this.layer.removeAll(true);
     const slots = this.state.inventory.slots;
@@ -349,6 +503,8 @@ export default class InventoryScene extends Phaser.Scene {
     const g = this.add.graphics();
     this.layer.add(g);
     if (index !== undefined && index === this.selected) {
+      // Vybraný předmět (ten v náhledu vlevo dole): zlaté podkreslení pod ikonou + rámeček.
+      g.fillStyle(0xffd76a, 0.28).fillRoundedRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 8);
       g.lineStyle(4, 0xffd76a, 1).strokeRoundedRect(rect.x + 2, rect.y + 2, rect.w - 4, rect.h - 4, 8);
     }
     if (index !== undefined && index === this.moving) {
@@ -416,7 +572,8 @@ export default class InventoryScene extends Phaser.Scene {
     const double = item && this.lastClick?.index === index && now - this.lastClick.time < 350;
     this.lastClick = double ? null : { index, time: now };
     if (double) {
-      if (canEquip(item)) this.runAction('equip', index);
+      if (isTool(item)) this.afterTool(equipTool(this.state, index)); // nástroj do jeho slotu
+      else if (canEquip(item)) this.runAction('equip', index);
       else if (canUse(item)) this.runAction('use', index);
       else this.flash('Tento předmět nejde použít ani vybavit.');
       return;
@@ -556,6 +713,12 @@ export default class InventoryScene extends Phaser.Scene {
     this.info.add(cardText(this, INFO.x + 150, INFO.y + 26, item.name, { size: 26, bold: true, color: rarity.css }));
     this.info.add(cardText(this, INFO.x + 150, INFO.y + 62, `${rarity.label} · ${category}${qty ? ` · ${qty} ks` : ''}`, { size: 16, color: '#c9b98f' }));
     this.info.add(cardText(this, INFO.x + 150, INFO.y + 92, item.description ?? '', { size: 16, color: '#e8eef5', wrap: INFO.w - 180 }));
+    // Cena předmětu (hodnota za kus) a výkup u obchodníka (polovina) – vpravo nad spodním řádkem.
+    const value = itemValue(item.id);
+    const priceLine = value
+      ? `Cena: ${goldText(value)}${qty > 1 ? ' / ks' : ''} · výkup ${goldText(sellPrice(item.id))}`
+      : 'Nedá se prodat';
+    this.info.add(cardText(this, INFO.x + INFO.w - 30, INFO.y + INFO.h - 58, priceLine, { size: 16, bold: true, color: value ? '#ffd76a' : '#8f9aa6', originX: 1, originY: 1 }));
     if (footer) this.info.add(cardText(this, INFO.x + 30, INFO.y + INFO.h - 30, footer, { size: 18, color: '#8fd3ff', originY: 1 }));
   }
 
@@ -781,7 +944,7 @@ export default class InventoryScene extends Phaser.Scene {
     }
     this.card.add(zone);
 
-    // Seřadit (vpravo vedle Zavřít): v pořadí filtrů, sloučí neúplné hromádky.
+    // Seřadit (hned za lištou zlata): v pořadí filtrů, sloučí neúplné hromádky.
     this.sortButton = cardButton(this, this.card, SORT_AREA.x, SORT_AREA.y, SORT_AREA.w, SORT_AREA.h, 'Seřadit', () => this.sortItems(), { size: 28 });
   }
 

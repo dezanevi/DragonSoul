@@ -10,6 +10,9 @@
 // ======================================================================
 
 import { ALL_CRAFTING, CRAFTING_BY_ID, craftingOutputId, craftingXp, xpToNextCraftingLevel } from '../data/crafting.js';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { materialSaving, talentRecipeUnlocked } from './TalentSystem.js';
 import { getItemCount, removeItem, addItem, INVENTORY_PAGE_SIZE } from './InventorySystem.js';
 import { professionXpMultiplier } from './AlchemySystem.js';
 
@@ -33,7 +36,7 @@ export function normalizeCrafting(state) {
 
 export const craftingLevel = (state) => normalizeCrafting(state) && state.professions.crafting.level;
 export const isCraftingKnown = (state, recipe) =>
-  ALL_CRAFTING_KNOWN_FOR_TESTING || recipe.origin === 'base' || Boolean(state.crafting?.learned?.[recipe.id]);
+  recipe.talent ? talentRecipeUnlocked(state, recipe.talent) : ALL_CRAFTING_KNOWN_FOR_TESTING || recipe.origin === 'base' || Boolean(state.crafting?.learned?.[recipe.id]);
 // Pracoviště nejsou stupně: recept jde vyrobit jen na svém pracovišti.
 export const craftingStationOk = (recipe, station) => recipe.station === station;
 
@@ -68,6 +71,7 @@ export function craftItem(state, recipe, station, times = 1, random = Math.rando
   if (!check.ok) return { ok: false, message: check.reason };
   for (const [key, qty] of Object.entries(recipe.ingredients)) {
     let left = qty * times;
+    left -= materialSaving(state, left); // talent Úsporné zpracování
     for (const id of optionsOf(key)) {
       const take = Math.min(left, getItemCount(state, id));
       if (take > 0) removeItem(state, id, take);
@@ -86,13 +90,16 @@ export function craftItem(state, recipe, station, times = 1, random = Math.rando
     state.crafting.made[recipe.id] = (state.crafting.made[recipe.id] ?? 0) + 1;
   }
   const levelsGained = addCraftingXp(state, xp);
+  // Úkoly Řemeslnictví (šperk = amulet A nebo prsten B).
+  countQuestEvent(state, `craft:crafting:${recipe.id}`, times);
+  if (recipe.category === 'A' || recipe.category === 'B') countQuestEvent(state, 'craft:crafting:jewel', times);
   return {
     ok: true, made: made - leftOver, xp, levelsGained,
     message: `Vyrobeno: ${recipe.name} ×${made - leftOver} (+${xp} XP)${leftOver ? ` – ${leftOver} ks se nevešlo do inventáře` : ''}.`
   };
 }
 
-export function addCraftingXp(state, amount) {
+function addCraftingXpRaw(state, amount) {
   const prof = state.professions.crafting;
   prof.exp += amount;
   let gained = 0;
@@ -144,3 +151,11 @@ export function useCraftedItem(state, recipeId, now = Date.now()) {
 }
 
 export const allCraftingRecipes = () => ALL_CRAFTING;
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addCraftingXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'crafting');
+  const result = addCraftingXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'crafting', before, amount);
+  return result;
+}

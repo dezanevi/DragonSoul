@@ -13,7 +13,7 @@ import {
 import FantasyButton from '../ui/heroCard/FantasyButton.js';
 import CharacterTabs from '../ui/heroCard/CharacterTabs.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
-import { drawCardFrame, CARD_FIT, cardButton } from '../ui/fantasyCard.js';
+import { drawCardFrame, CARD_FIT, CARD_PANEL, cardButton, uiTitle } from '../ui/fantasyCard.js';
 import CardTooltip from '../ui/heroCard/CardTooltip.js';
 import EquipmentPanel from '../ui/heroCard/EquipmentPanel.js';
 import SkillsPanel from '../ui/heroCard/SkillsPanel.js';
@@ -30,12 +30,8 @@ import { HERO_CARD_FEMALE } from '../ui/heroCard/heroButtonSprites.js';
 
 // Šířka obrázku tlačítka Zavřít v souřadnicích podkladu (namalované tlačítko je ~270 px).
 const CLOSE_IMAGE_WIDTH = 310;
-import { EQUIPMENT_CHANGED, normalizeEquipment, getEquippedItem } from '../systems/EquipmentSystem.js';
-import { equipSlot, unequipToSlot } from '../systems/InventorySystem.js';
-import { getItem } from '../data/items.js';
-import { RARITY } from '../data/fishing.js';
-import { describeGearBonus } from '../data/smithing.js';
-import { openHeroPicker } from '../ui/heroCard/heroPicker.js';
+import { EQUIPMENT_CHANGED, normalizeEquipment } from '../systems/EquipmentSystem.js';
+import { openEquipPicker } from '../ui/heroCard/equipPicker.js';
 
 const SCHOOL_NAMES = { fire: 'Oheň', water: 'Voda', earth: 'Země', air: 'Vzduch', light: 'Světlo', dark: 'Temnota' };
 
@@ -76,6 +72,8 @@ export default class HeroScene extends Phaser.Scene {
     // zmenšená do panelu (CARD_FIT).
     this.card = this.add.container(CARD_FIT.OFFSET_X, CARD_FIT.OFFSET_Y);
     this.card.setScale(CARD_FIT.SCALE);
+    // Jednotná hlavička karet (stejně jako Dovednosti, Bestiář, Úkoly, Mapa).
+    uiTitle(this, CARD_PANEL.x + 150, CARD_PANEL.y + 38, 'Hrdina', { icon: 'hero_wheel', size: 34 });
 
     // Ženská postava má vlastní podklad karty (stejné rozložení).
     const cardTexture = this.state.gender === 'female' && this.textures.exists(HERO_CARD_FEMALE) ? HERO_CARD_FEMALE : CARD_TEXTURE;
@@ -207,8 +205,9 @@ export default class HeroScene extends Phaser.Scene {
 
     this.panels.push(this.equipment, this.skills);
 
-    // Kniha kouzel: tlačítko vpravo od Zavřít (souřadnice podkladu karty, stejná výška).
-    this.spellbookButton = cardButton(this, this.heroLayer, 930, 914, 300, 78, 'Kniha kouzel (K)', () => this.openSpellbook(), { size: 24 });
+    // Kniha kouzel: tlačítko pod portrétem hrdiny (souřadnice podkladu karty). Odkazy ze škol
+    // magie (klik na školu = kniha na její stránce) i klávesa K zůstávají.
+    this.spellbookButton = cardButton(this, this.heroLayer, 58, 584, 250, 72, 'Kniha kouzel (K)', () => this.openSpellbook(), { size: 24 });
   }
 
   // Kniha kouzel přes kartu hrdiny (karta se pozastaví a po zavření knihy pokračuje).
@@ -315,43 +314,10 @@ export default class HeroScene extends Phaser.Scene {
   // a Sundat, když je slot obsazený.
   openEquipPicker(slot) {
     this.tooltip?.hide();
-    const groups = new Map();
-    this.state.inventory.slots.forEach((entry, index) => {
-      const item = getItem(entry?.id);
-      if (!item || item.slot !== slot.id) return;
-      const group = groups.get(item.id) ?? { item, index, qty: 0 };
-      group.qty += entry.qty;
-      groups.set(item.id, group);
-    });
-    const rows = [...groups.values()].map(({ item, index, qty }) => ({
-      itemId: item.id,
-      title: `${item.name}${qty > 1 ? ` ×${qty}` : ''}`,
-      sub: (item.gear ? describeGearBonus(item.gear) : '') || item.description || '',
-      color: RARITY[item.rarity]?.color,
-      onClick: () => {
-        const result = equipSlot(this.state, index, this.game.events);
-        this.setStatus(result.message);
-        SaveSystem.save(this.state);
-        this.refresh();
-      }
-    }));
-    const equipped = getEquippedItem(this.state, slot.id);
     const at = this.cardPoint(slot.area.x + slot.area.w + 10, slot.area.y);
-    openHeroPicker(this, {
-      x: at.x, y: at.y,
-      title: `${slot.label} – obléct`,
-      rows,
-      emptyText: 'Nemáš žádné vybavení.',
-      footer: equipped ? {
-        label: `Sundat: ${equipped.name ?? equipped.id}`,
-        danger: true,
-        onClick: () => {
-          const result = unequipToSlot(this.state, slot.id, null, this.game.events);
-          this.setStatus(result.message);
-          SaveSystem.save(this.state);
-          this.refresh();
-        }
-      } : null
+    openEquipPicker(this, this.state, slot.id, at.x, at.y, (result) => {
+      this.setStatus(result.message);
+      this.refresh();
     });
   }
 

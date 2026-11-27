@@ -100,7 +100,9 @@ const blockMatch = (key) => {
   return { i, j: src.indexOf('\n  ],', i) };
 };
 const listOf = (key, re) => { const { i, j } = blockMatch(key); return [...src.slice(i, j).matchAll(re)]; };
-const mining = listOf('miningSpots', /\{deposit: '(\w+)', x: (\d+), y: (\d+)\}/g).map((m) => ({ deposit: m[1], x: +m[2], y: +m[3] }));
+// Lom: skupiny oreGroup('Nxx', x, y) = skála + 4 naleziště okolo (pole musí zůstat volná).
+const mining = listOf('miningSpots', /oreGroup\('(\w+)', (\d+), (\d+)\)/g).flatMap((m) =>
+  [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]].map(([dx, dy]) => ({ deposit: m[1], x: +m[2] + dx, y: +m[3] + dy })));
 const herbs = listOf('herbSpots', /\{site: '(\w+)', x: (\d+), y: (\d+)\}/g).map((m) => ({ site: m[1], x: +m[2], y: +m[3] }));
 const fishing = listOf('fishingSpots', /\{location: '(\w+)', x: (\d+), y: (\d+)\}/g).map((m) => ({ location: m[1], x: +m[2], y: +m[3] }));
 const rare = listOf('rareSpots', /\{ kind: '(\w+)', (\w+): '(\w+)', x: (\d+), y: (\d+) \}/g).map((m) => ({ kind: m[1], key: m[2], id: m[3], x: +m[4], y: +m[5] }));
@@ -108,9 +110,7 @@ const fixedPoint = (key) => { const m = src.match(new RegExp(`${key}: \\{ x: (\\
 const hidden = fixedPoint('hiddenVeinSpot');
 const meteor = fixedPoint('meteorSpot');
 
-// Lom: 12 nalezišť úr. 8–18 (nejvíc Krystalových puklin).
-const QUARRY_MIX = ['N27', 'N03', 'N27', 'N16', 'N27', 'N03', 'N27', 'N16', 'N27', 'N03', 'N16', 'N27'];
-mining.forEach((m, i) => { m.deposit = QUARRY_MIX[i % QUARRY_MIX.length]; });
+// Lom se tu už nemění: obsahuje každou žílu úr. 1–10 jednou (oreGroup v greenvale.js).
 
 // Rybaření u jezírka: pole země u vody jezírka (Lesní řeka, úr. 10).
 let pondSpot = null;
@@ -137,7 +137,10 @@ for (const b of buildings) {
   for (let y = b.y - 2; y <= b.y + b.h + 1; y++) for (let x = b.x - 2; x <= b.x + b.w + 1; x++) keep.add(`${x},${y}`);
   if (b.door) mark(b.door.x, b.door.y, 2);
 }
-const pinned = [...mining, ...fishing, ...herbs.filter((h) => !/^H\d/.test(h.site)), hidden, meteor].filter(Boolean);
+// Naleziště, na která odkazují úkoly, zůstávají na svém místě (H02 Břeh řeky – Byliny od řeky).
+const QUEST_HERB_SITES = new Set(['H02']);
+const wildHerb = (h) => /^H\d/.test(h.site) && !QUEST_HERB_SITES.has(h.site);
+const pinned = [...mining, ...fishing, ...herbs.filter((h) => !wildHerb(h)), hidden, meteor].filter(Boolean);
 for (const s of pinned) mark(s.x, s.y, 1);
 let trees = 0;
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -176,7 +179,7 @@ for (const r of rare) {
 
 // Divoké byliny H01–H07: zcela náhodně po trávě a loukách oblasti (mimo vesnici, daleko od sebe).
 const nearBuilding = (x, y, r) => buildings.some((b) => x >= b.x - r && x < b.x + b.w + r && y >= b.y - r && y < b.y + b.h + r);
-for (const h of herbs.filter((s) => /^H\d/.test(s.site))) {
+for (const h of herbs.filter(wildHerb)) {
   let pos = null;
   for (let tries = 0; tries < 50000 && !pos; tries++) {
     const x = 1 + Math.floor(rnd() * (W - 2));
@@ -359,7 +362,7 @@ const replaceBlock = (key, body) => {
   const { i, j } = blockMatch(key);
   src = src.slice(0, i) + `${key}: [\n` + body + src.slice(j);
 };
-replaceBlock('miningSpots', mining.map((m) => `    {deposit: '${m.deposit}', x: ${m.x}, y: ${m.y}}`).join(',\n'));
+// miningSpots zůstávají beze změny (skupiny oreGroup se skálami v decor).
 replaceBlock('fishingSpots', fishing.map((f) => `    {location: '${f.location}', x: ${f.x}, y: ${f.y}}`).join(',\n'));
 replaceBlock('herbSpots', herbs.map((h) => `    {site: '${h.site}', x: ${h.x}, y: ${h.y}}`).join(',\n'));
 replaceBlock('rareSpots', rare.map((r) => `    { kind: '${r.kind}', ${r.key}: '${r.id}', x: ${r.x}, y: ${r.y} }`).join(',\n'));

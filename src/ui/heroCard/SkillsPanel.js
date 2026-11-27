@@ -3,7 +3,7 @@ import { SKILLS } from './cardLayout.js';
 
 // Ukazatel úrovně v tlačítku dovednosti (relativně k tlačítku) – větší než namalovaný
 // rámeček v podkladu, který překryje: od ikony po pravý okraj, s úrovní a procenty.
-const SKILL_BAR = { x: 58, y: 46, w: 116, h: 21 };
+const SKILL_BAR = { x: 58, y: 44, w: 114, h: 18 }; // celý uvnitř rámečku dlaždice (nepřekrývá spodní okraj)
 import { cardText, drawBarFill } from './cardText.js';
 import { skillStateKey, spriteState } from './heroButtonSprites.js';
 import { miningClass, MINING_SPECIALIZATIONS } from '../../data/mining.js';
@@ -16,8 +16,9 @@ import { craftingClass } from '../../data/crafting.js';
 // zlatá zakliknutá (vybraná dovednost), šedá zamčená (professions[id].locked).
 
 // O kolik je obrázek větší než klikací plocha (záře kolem tlačítka).
-const SPRITE_SCALE_X = 1.03;
-const SPRITE_SCALE_Y = 1.13;
+const SPRITE_SCALE_X = 1.05;
+const SPRITE_SCALE_Y = 1.22; // vyšší rámeček, ať ukazatel nesedí na spodním okraji
+const SPRITE_SHIFT_Y = 2; // rámeček roste hlavně dolů
 
 export default class SkillsPanel {
   constructor(scene, parent, tooltip, onSkill) {
@@ -30,7 +31,7 @@ export default class SkillsPanel {
       const key = skillStateKey(skill.id, 'normal');
       if (!scene.textures.exists(key)) return null;
       const { x, y, w, h } = skill.area;
-      const sprite = scene.add.image(x + w / 2, y + h / 2, key).setDisplaySize(w * SPRITE_SCALE_X, h * SPRITE_SCALE_Y);
+      const sprite = scene.add.image(x + w / 2, y + h / 2 + SPRITE_SHIFT_Y, key).setDisplaySize(w * SPRITE_SCALE_X, h * SPRITE_SCALE_Y);
       parent.add(sprite);
       return sprite;
     });

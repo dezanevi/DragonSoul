@@ -19,6 +19,7 @@ const W = 980;
 const H = 700;
 const X = GAME_WIDTH / 2 - W / 2;
 const Y = GAME_HEIGHT / 2 - H / 2;
+const BAIT_TEXT_W = 300; // šířka názvu návnady mezi šipkami
 
 export default class FishingScene extends Phaser.Scene {
   constructor() {
@@ -48,10 +49,11 @@ export default class FishingScene extends Phaser.Scene {
     // Návnada: šipky / klávesy ← →.
     this.baitIndex = 0;
     cardText(this, X + 36, Y + 192, 'Návnada:', { size: 20, bold: true });
-    this.baitText = cardText(this, X + 250, Y + 192, '', { size: 20, color: '#ffd76a', originX: 0.5 });
-    cardButton(this, null, X + 140, Y + 186, 40, 36, '<', () => this.cycleBait(-1), { size: 20 });
-    cardButton(this, null, X + 320 + 120, Y + 186, 40, 36, '>', () => this.cycleBait(1), { size: 20 });
-    this.baitEffect = cardText(this, X + 500, Y + 194, '', { size: 16, color: '#9fb3c8', wrap: W - 540 });
+    // Název návnady mezi šipkami (šířka BAIT_TEXT_W, delší název se zmenší, aby nezalezl pod šipky).
+    this.baitText = cardText(this, X + 200 + BAIT_TEXT_W / 2, Y + 202, '', { size: 20, color: '#ffd76a', originX: 0.5, originY: 0.5 });
+    cardButton(this, null, X + 140, Y + 175, 54, 54, '<', () => this.cycleBait(-1), { size: 22 });
+    cardButton(this, null, X + 206 + BAIT_TEXT_W, Y + 175, 54, 54, '>', () => this.cycleBait(1), { size: 22 });
+    this.baitEffect = cardText(this, X + 280 + BAIT_TEXT_W, Y + 184, '', { size: 17, color: '#9fb3c8', wrap: W - 316 - BAIT_TEXT_W });
 
     cardText(this, X + 36, Y + 246, 'Možné úlovky (s touto návnadou a vybavením):', { size: 19, bold: true });
     this.tableLayer = this.add.container(0, 0);
@@ -107,7 +109,8 @@ export default class FishingScene extends Phaser.Scene {
 
     const baitId = this.currentBait();
     const bait = BAITS.find((b) => b.id === baitId);
-    this.baitText.setText(bait ? `${bait.name} (${getItemCount(this.state, bait.id)} ks)` : 'bez návnady');
+    this.baitText.setScale(1).setText(bait ? `${bait.name} (${getItemCount(this.state, bait.id)} ks)` : 'bez návnady');
+    if (this.baitText.width > BAIT_TEXT_W) this.baitText.setScale(BAIT_TEXT_W / this.baitText.width);
     this.baitEffect.setText(bait?.effect?.replace(/\s*\(Řemeslnictví.*\)$/, '') ?? '');
 
     // Tabulka úlovků: chycené druhy jménem, nechycené jako „???“.

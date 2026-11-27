@@ -58,12 +58,8 @@ export function preparePartyFrames(scene) {
 
 // ------------------------------------------------------ rozložení podkladu
 
-export const PARTY_SLOTS = [
-  { x: 53, y: 234, w: 463, h: 98 },
-  { x: 53, y: 343, w: 463, h: 96 },
-  { x: 53, y: 449, w: 463, h: 93 },
-  { x: 53, y: 554, w: 463, h: 96 }
-];
+// Políčka party i s okrajem rámečku (SLOT_PAD 9) celá uvnitř panelu Aktivní parta (34–540 × 175–669).
+export const PARTY_SLOTS = [237, 343, 449, 555].map((y) => ({ x: 60, y, w: 452, h: 88 }));
 
 export const STORAGE = {
   countX: 240, headerY: 712,
@@ -98,12 +94,14 @@ export const SKILLS = {
   iconX: 1132, textX: 1172, usesX: 1458
 };
 
-export const HISTORY = { x: 615, rowsY: [778, 806, 836], wrap: 440 };
+// Historie celá uvnitř panelu detailu (dřív spodní okraj zasahoval do rámu detailu).
+export const HISTORY = { x: 615, rowsY: [770, 796, 822], wrap: 440 };
 
 export const ACTIONS = {
   store: { x: 1094, y: 803, w: 184, h: 52 },
   release: { x: 1297, y: 803, w: 181, h: 52 }
 };
 
-export const HEADER = { infoX: 282, infoY: 117, countsX: 1402, countsY: 152 };
+// Počet v partě vpravo na řádku s informací (dřív ho zakrýval model monstra v detailu).
+export const HEADER = { infoX: 282, infoY: 117, countsX: 1480, countsY: 117 };
 export const CLOSE_AREA = { x: 628, y: 914, w: 275, h: 78 };

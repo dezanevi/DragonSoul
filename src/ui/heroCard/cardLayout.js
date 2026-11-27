@@ -19,7 +19,7 @@ export const TABS = [
   { id: 'talents', label: 'Talenty' },
   { id: 'party', label: 'Party' },
   { id: 'inventory', label: 'Inventář' },
-  { id: 'crafting', label: 'Řemesla' },
+  { id: 'crafting', label: 'Dovednosti' },
   { id: 'bestiary', label: 'Bestiář' },
   { id: 'map', label: 'Mapa' },
   { id: 'quests', label: 'Úkoly' }
@@ -40,22 +40,23 @@ export const HERO_TAB_IDLE_TEXTURE = 'hero-card-tab-hero-idle';
 
 // Sloty vybavení 91 × 62: vlevo zbraně a šperky, vpravo zbroj.
 export const EQUIPMENT_SLOTS = [
-  { id: 'weapon', label: 'Meč', area: rect(360, 413, 91, 62) },
-  { id: 'shield', label: 'Štít', area: rect(360, 480, 91, 62) },
-  { id: 'ring', label: 'Prsten', area: rect(360, 548, 91, 62) },
-  { id: 'amulet', label: 'Amulet', area: rect(360, 615, 91, 62) },
-  { id: 'helmet', label: 'Helma', area: rect(690, 413, 91, 62) },
-  { id: 'armor', label: 'Zbroj', area: rect(690, 480, 91, 62) },
-  { id: 'legs', label: 'Nohy', area: rect(690, 548, 91, 62) },
-  { id: 'boots', label: 'Boty', area: rect(690, 615, 91, 62) }
+  { id: 'weapon', label: 'Meč', area: rect(366, 419, 91, 62) },
+  { id: 'shield', label: 'Štít', area: rect(366, 486, 91, 62) },
+  { id: 'ring', label: 'Prsten', area: rect(366, 554, 91, 62) },
+  { id: 'amulet', label: 'Amulet', area: rect(366, 621, 91, 62) },
+  { id: 'helmet', label: 'Helma', area: rect(696, 419, 91, 62) },
+  { id: 'armor', label: 'Zbroj', area: rect(696, 486, 91, 62) },
+  { id: 'legs', label: 'Nohy', area: rect(696, 554, 91, 62) },
+  { id: 'boots', label: 'Boty', area: rect(696, 621, 91, 62) }
 ];
 
 // Dovednosti ve dvou řadách po čtyřech. Zadání uvádělo X 91/282/473/664 a šířku 182,
 // ale namalovaná tlačítka 2.–4. sloupce leží v podkladu o ~10 px vpravo
 // (ověřeno překryvem na hero_card.png), proto X a šířka podle obrázku.
-const SKILL_X = [93, 291, 484, 675];
-const SKILL_Y = [736, 818];
-const SKILL_WIDTH = 185;
+// Mřížka uvnitř panelu Dovednosti (x 40–826, y 722–908): 4 sloupce po 180 s mezerou 11.
+const SKILL_X = [57, 248, 439, 630];
+const SKILL_Y = [746, 824];
+const SKILL_WIDTH = 180;
 
 export const SKILLS = [
   { id: 'herbalism', label: 'Sběr bylin' },
@@ -84,18 +85,18 @@ export const CONTENT_AREA = rect(30, 96, 1476, 806);
 
 // Pole pro hodnoty, která v podkladu zůstala prázdná.
 export const FIELDS = {
-  name: { x: 462, y: 152 },
-  level: { x: 456, y: 204 },
-  expText: { x: 630, y: 248 },
-  expBar: rect(357, 272, 273, 15),
-  manaText: { x: 630, y: 306 },
-  manaBar: rect(357, 330, 273, 15),
-  heroStats: { x: 1036, rows: [181, 221, 259, 296, 334] },
-  commanderStats: { x: 1466, rows: [182, 226, 270, 313] },
-  gold: { x: 1428, y: 647 },
-  region: { x: 1030, y: 752 },
-  magicStones: { x: 1428, y: 855 },
-  magicStonesDetail: { x: 1040, y: 857 }
+  name: { x: 470, y: 164 },
+  level: { x: 464, y: 216 },
+  expText: { x: 638, y: 260 },
+  expBar: rect(365, 284, 273, 15),
+  manaText: { x: 638, y: 318 },
+  manaBar: rect(365, 342, 273, 15),
+  heroStats: { x: 1044, rows: [181, 221, 259, 296, 334] },
+  commanderStats: { x: 1462, rows: [182, 226, 270, 313] },
+  gold: { x: 1466, y: 641 },
+  region: { x: 940, y: 750 },
+  magicStones: { x: 1466, y: 857 },
+  magicStonesDetail: { x: 950, y: 859 }
 };
 
 // Šest karet magických škol: střed X a prázdný ukazatel pod názvem.

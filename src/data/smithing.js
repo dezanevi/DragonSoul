@@ -1,3 +1,4 @@
+import { statPart, monsterBonus, heroStatSuffix } from './heroStatLabels.js';
 // Kovářství podle schváleného dokumentu „Kovářství – návrh systému“.
 //
 //   SMITHING_INTERMEDIATES  tavení a mezivýrobky (M01–M19, do 112 receptů se nepočítají)
@@ -29,7 +30,8 @@ export const SMITHING_CATEGORIES = [
   { id: 'A', label: 'Zbraně' },
   { id: 'B', label: 'Zbroje a štíty' },
   { id: 'C', label: 'Nástroje' },
-  { id: 'D', label: 'Výztuhy' }
+  { id: 'D', label: 'Výztuhy' },
+  { id: 'T', label: 'Řemeslník', specialization: 'crafting' } // recepty za talenty stromu Řemesla
 ];
 // Vzácné a kalené kusy (E01–E20) nemají vlastní kategorii: zbraně patří do Zbraní, ostatní
 // do Zbrojí a štítů pod podfiltr „Vzácné a kalené“.
@@ -38,7 +40,8 @@ export const SMITHING_ORIGINS = {
   base: 'Odemkne se úrovní Kovářství',
   smith: 'Kovář (návrh)',
   found: 'Nalezený recept (návrh)',
-  quest: 'Úkol (návrh)'
+  quest: 'Úkol (návrh)',
+  talent: 'Talent stromu Řemesla (specializace Řemeslník)'
 };
 
 // Zkratky surovin (ids předmětů).
@@ -273,7 +276,29 @@ const RARE = [
   E('E20', 'Čepel prvotního plamene', 'weapon', 100, { [I.dragon]: 5, mat_prvotni_draci_plamen: 1, meteor_core_fragment: 1, gem_black_diamond: 1 }, { attack: 18 }, { elementDamage: { fire: 20 } }, 'quest')
 ];
 
-export const SMITHING_RECIPES = [...WEAPONS, ...ARMORS, ...TOOLS, ...REINFORCEMENTS, ...RARE];
+// ------------------------------------------------------- T. Řemeslník (recepty za talenty)
+// Jen pro specializaci Řemeslník: odemyká je hodnost talentu (talent: { id, rank }) nebo
+// dokončený strom (talent: { final }). Suroviny = vzácná kořist z Greenvale.
+const TR = (id, name, slot, level, ingredients, bonus, talent, rarity = 'rare') =>
+  ({ ...R(id, name, 'T', level, st(level), 1, ingredients, g(slot, bonus), 'talent'), talent, rarity });
+const TALENT_RECIPES = [
+  // Kovářský mistr – kovová výbava na 1., 3. a 5. hodnosti
+  TR('T01', 'Gobliní lovecký nůž', 'weapon', 3, { [I.cu]: 2, mat_zcizena_kovova_soucastka: 2 }, { attack: 3, speed: 1 }, { id: 'master_smith', rank: 1 }, 'uncommon'),
+  TR('T02', 'Orčí kroužková košile', 'armor', 7, { [I.cu]: 3, mat_orci_zelezny_ulomek: 2, [I.strap]: 1 }, { defense: 4, maxHp: 2 }, { id: 'master_smith', rank: 3 }),
+  TR('T03', 'Štít orčího bojovníka', 'shield', 10, { [I.bronze]: 3, mat_orci_kovovy_zeton: 2, mat_bojovnikuv_kozeny_remen: 1 }, { defense: 4, resolve: 2 }, { id: 'master_smith', rank: 5 }),
+  // Mistrovská výroba – vyšší kovové kusy na 1. a 5. hodnosti (3. hodnost = Řemeslnictví)
+  TR('T04', 'Meč z vlčích tesáků', 'weapon', 8, { [I.bronze]: 3, mat_vlci_tesak: 2, [I.strap]: 1 }, { attack: 5, speed: 1 }, { id: 'masterwork', rank: 1 }),
+  TR('T05', 'Sekera orčího válečníka', 'weapon', 10, { [I.fe]: 3, mat_orci_zelezny_ulomek: 3, mat_bojovnikuv_kozeny_remen: 1 }, { attack: 7 }, { id: 'masterwork', rank: 5 }, 'epic')
+];
+
+// Štěstí (ploché body hrdiny) u pár vzácných kousků.
+for (const [id, extra] of [['E13', { luck: 2 }], ['T05', { luck: 1 }]]) {
+  const r = [...RARE, ...TALENT_RECIPES].find((t) => t.id === id);
+  const bonus = r?.effect?.bonus ?? r?.bonus;
+  if (bonus) Object.assign(bonus, extra);
+}
+
+export const SMITHING_RECIPES = [...WEAPONS, ...ARMORS, ...TOOLS, ...REINFORCEMENTS, ...RARE, ...TALENT_RECIPES];
 export const ALL_SMITHING = [...SMITHING_INTERMEDIATES, ...SMITHING_RECIPES];
 export const SMITHING_BY_ID = Object.fromEntries(ALL_SMITHING.map((r) => [r.id, r]));
 
@@ -293,7 +318,7 @@ const ELEMENT_ATTACK = { fire: 'ohnivé', water: 'vodní', earth: 'zemní', air:
 
 // Čitelný popis bonusů (výbava, výztuha).
 export function describeGearBonus(e) {
-  const parts = Object.entries(e.bonus ?? {}).map(([stat, v]) => `${GEAR_STAT_LABELS[stat]} +${v} %`);
+  const parts = Object.entries(monsterBonus(e.bonus)).map(([stat, v]) => statPart(GEAR_STAT_LABELS, stat, v));
   const resist = Object.entries(e.resist ?? {});
   if (resist.length >= 7) parts.push(`odolnost všem elementům +${resist[0][1]} %`);
   else for (const [el, v] of resist) parts.push(`odolnost ${ELEMENT_NAMES[el]} +${v} %`);
@@ -305,5 +330,5 @@ export function describeSmithing(e) {
   if (!e) return 'Mezivýrobek pro další recepty.';
   if (e.tool) return `Nástroj: ${e.tool}`;
   if (e.reinforce) return `Výztuha (${e.battles} soubojů): ${describeGearBonus(e)} všem monstrům v partě.`;
-  return `${SLOT_LABELS[e.slot]}: ${describeGearBonus(e)} všem monstrům v partě (velitelský bonus).`;
+  return `${SLOT_LABELS[e.slot]}: ${describeGearBonus(e)} všem monstrům v partě (velitelský bonus).${heroStatSuffix(e.bonus)}`;
 }

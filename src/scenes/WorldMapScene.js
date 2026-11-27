@@ -4,7 +4,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { REGIONS, isRegionUnlocked, ALL_REGIONS_OPEN_FOR_TESTING } from '../systems/RegionSystem.js';
 import { loadWorldMap } from '../data/maps/index.js';
 import { TILE_SIZE } from '../data/tiles.js';
-import { CARD_PANEL, cardText, drawCardFrame, cardCloseButton } from '../ui/fantasyCard.js';
+import { CARD_PANEL, cardText, drawCardFrame, cardCloseButton, uiTitle } from '../ui/fantasyCard.js';
 import { currentMeteor, specialization } from '../systems/MiningSystem.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 
@@ -13,12 +13,13 @@ import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js
 // podle polohy na mapě světa (RegionSystem.mapX / mapY). Spojnice = propojení regionů,
 // zlaté body = brány, bílý rámeček = město, tečky = připravená místa NPC, modrá = hráč.
 
-const AREA = { x: CARD_PANEL.x + 40, y: CARD_PANEL.y + 70, w: CARD_PANEL.w - 80, h: CARD_PANEL.h - 170 };
+// Mapa pod jednotnou hlavičkou karty (nadpis s ikonou nesmí zasahovat do rámečku mapy).
+const AREA = { x: CARD_PANEL.x + 60, y: CARD_PANEL.y + 96, w: CARD_PANEL.w - 120, h: CARD_PANEL.h - 196 };
 const PX_PER_TILE = 1.7;
 const SEA = 0x0d2a44;
 
 // Textura regionu: 1 pixel = 1 dlaždice (vytvoří se jednou za hru).
-function regionTexture(scene, map) {
+export function regionTexture(scene, map) {
   const key = `worldmap-${map.id}`;
   if (scene.textures.exists(key)) return key;
   const canvas = document.createElement('canvas');
@@ -63,8 +64,9 @@ export default class WorldMapScene extends Phaser.Scene {
     g.lineStyle(2, 0x3b6e96, 0.8).strokeRoundedRect(AREA.x, AREA.y, AREA.w, AREA.h, 14);
 
     const current = this.state.region || 'Greenvale';
-    (cardText(this, CARD_PANEL.x + 46, CARD_PANEL.y + 26, 'Mapa Aurie', { size: 36, bold: true, color: '#ffe7ae' }));
-    (cardText(this, CARD_PANEL.x + CARD_PANEL.w - 46, CARD_PANEL.y + 36,
+    // Nadpis a text vpravo mimo zlaté rohy rámu (jako ostatní karty).
+    uiTitle(this, CARD_PANEL.x + 150, CARD_PANEL.y + 38, 'Mapa Aurie', { icon: 'map', size: 34 });
+    (cardText(this, CARD_PANEL.x + CARD_PANEL.w - 150, CARD_PANEL.y + 36,
       `Jsi v oblasti ${current}${ALL_REGIONS_OPEN_FOR_TESTING ? ' · test: všechny regiony průchozí' : ''}`,
       { size: 18, color: '#c9d3dd', originX: 1 }));
 
@@ -150,7 +152,7 @@ export default class WorldMapScene extends Phaser.Scene {
       ...(meteor ? [[0xffcf5a, 'Hvězdný meteorit']] : [])
     ];
     items.forEach(([color, label], i) => {
-      const x = AREA.x + 20 + i * (items.length > 4 ? 270 : 330);
+      const x = AREA.x + 110 + i * (items.length > 4 ? 270 : 330); // vlevo místo pro zlatý roh rámu
       legend.fillStyle(color, 1).fillCircle(x, ly + 12, 7);
       (cardText(this, x + 16, ly + 2, label, { size: 17, color: '#dbe6f3' }));
     });

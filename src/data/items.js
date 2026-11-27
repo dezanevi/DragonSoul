@@ -17,10 +17,10 @@ import { HERB_CATALOG, HERB_RARITY, HERB_SITES, SICKLES, SICKLE_EFFECTS, HERB_RA
 import { CRAFTING_INTERMEDIATES, CRAFTING_RECIPES, ALL_CRAFTING, craftingOutputId, describeCrafting } from './crafting.js';
 
 export const ITEM_CATEGORIES = [
-  { id: 'armor', label: 'Zbroj' },
+  { id: 'armor', label: 'Vybavení' }, // zbroj, zbraně, prsteny, amulety i druhá ruka
   { id: 'materials', label: 'Materiály' },
   { id: 'potions', label: 'Potiony' },
-  { id: 'accessories', label: 'Doplňky' },
+  { id: 'food', label: 'Jídlo' }, // pokrmy, suroviny na vaření, maso, ryby, kuchyňské mezivýrobky
   { id: 'keys', label: 'Klíče' },
   { id: 'other', label: 'Ostatní' }
 ];
@@ -49,6 +49,8 @@ const CONSUMABLES = [
 const CRYSTALS = [
   item('basic_crystal', 'Basic Soul Crystal', 'other', 'icons01_030',
     'Základní krystal pro ochočení divokých monster v souboji (akce Ochočení).'),
+  item('mage_crystal', 'Mágův krystal', 'other', 'icons01_030',
+    'Krystal od Mága pro úkol Nový společník. Ochočuje jako Basic Soul Crystal, ale jen na Skalní stráni; doplní se tam v souboji. Po odevzdání úkolu si ho Mág vezme zpět.'),
   item('greater_crystal', 'Greater Soul Crystal', 'other', 'icons01_008',
     'Silnější krystal s vyšší šancí na ochočení.', { rarity: 'uncommon' }),
   item('elemental_crystal', 'Elemental Soul Crystal', 'other', 'icons01_009',
@@ -401,11 +403,11 @@ const ALCHEMY_ITEMS = [
   ...ALCHEMY_RECIPES.filter((r) => !GAME_ITEM_RECIPES.includes(r.id)).map((r) => {
     const context = alchemyUseContext(r.effect);
     const catalyst = Boolean(r.effect?.catalyst);
-    return item(alchemyOutputId(r), r.name, catalyst ? 'materials' : 'potions', ALCHEMY_ICONS[r.category],
+    return item(alchemyOutputId(r), r.name, catalyst ? 'materials' : 'potions', ALCHEMY_ICONS[r.iconCategory ?? r.category],
       `Alchymie ${r.level}. ${describeAlchemy(r.effect)} ${USE_NOTE[context]}`.trim(),
       { use: context === 'none' || context === 'battle' ? undefined : { type: 'alchemy', recipe: r.id },
         battleUse: context === 'any' || context === 'battle' ? r.id : undefined,
-        rarity: r.level >= 91 ? 'legendary' : r.level >= 71 ? 'epic' : r.level >= 51 ? 'rare' : r.level >= 31 ? 'uncommon' : 'common' });
+        rarity: r.rarity ?? (r.level >= 91 ? 'legendary' : r.level >= 71 ? 'epic' : r.level >= 51 ? 'rare' : r.level >= 31 ? 'uncommon' : 'common') });
   })
 ];
 // Toniky a protijed (už ve hře) jdou nově použít i v souboji.
@@ -425,7 +427,9 @@ const miningDescription = (m) =>
 const MINING_ITEMS = [
   ...MINING_MATERIALS.map((m) => item(m.id, m.name, 'materials', m.icon, miningDescription(m), { rarity: m.rarity, price: m.price, mining: true })),
   ...PICKAXES.map((p) => item(p.id, p.name, 'other', 'icons01_046',
-    `Krumpáč stupně ${TIER_LABEL[p.tier]} (Těžba ${p.level}+). Stačí ho mít v inventáři. Vyrábí Kovářství (úroveň ${p.smithing}).`,
+    p.starter
+      ? `Starý krumpáč stupně I (Těžba 1+), dárek – ${p.starter}. Bez bonusů.`
+      : `Krumpáč stupně ${TIER_LABEL[p.tier]} (Těžba ${p.level}+). Používá se ze slotu Nástroje (karta Inventář). Vyrábí Kovářství (úroveň ${p.smithing}).`,
     { stack: 1, pickaxe: p.tier, rarity: ['common', 'common', 'uncommon', 'rare', 'epic', 'legendary'][p.tier - 1] })),
   ...MINING_TOOLS.map((t) => item(t.id, t.name, 'other', 'icons01_046',
     `Těžební nástroj (Těžba ${t.level}+). ${t.effect} Vyrábí Kovářství (úroveň ${t.smithing}).`,
@@ -463,7 +467,7 @@ const SMITHING_ITEMS = [
     }
     return item(smithingOutputId(r), r.name, 'armor', SMITH_ICONS[e.slot], `Kovářství ${r.level}. ${describeSmithing(e)}`,
       { slot: e.slot, stack: 1, gear: { bonus: { ...e.bonus }, resist: { ...(e.resist ?? {}) }, elementDamage: { ...(e.elementDamage ?? {}) } },
-        smithed: true, smithing: true, rarity: levelRarity(r.level) });
+        smithed: true, smithing: true, rarity: r.rarity ?? levelRarity(r.level) });
   }),
 ];
 
@@ -485,7 +489,7 @@ const CRAFTING_ITEMS = [
     r.effect?.slot ? CRAFT_SLOT_CATEGORY[r.effect.slot] : 'other',
     r.effect?.bag ? 'icons01_040' : r.effect?.slot ? 'icons01_019' : 'icons01_046',
     `Řemeslnictví ${r.level}. ${describeCrafting(r.effect)}`,
-    { rarity: craftRarity(r.level), crafting: true, craftIcon: Boolean(r.effect?.slot), ...craftExtra(r) }))
+    { rarity: r.rarity ?? craftRarity(r.level), crafting: true, craftIcon: Boolean(r.effect?.slot), ...craftExtra(r) }))
 ];
 
 // ------------------------------------------------------ 14. sběr bylin (src/data/herbalism.js)
@@ -493,7 +497,9 @@ const CRAFTING_ITEMS = [
 // vzácnost, cena a popis výskytu.
 const HERBALISM_ITEMS = [
   ...SICKLES.map((s) => item(s.id, s.name, 'other', 'icons01_046',
-    `Srp pro Sběr bylin (stupeň ${HERB_TIER_LABEL[s.tier]}, Sběr bylin ${s.level}+). ${SICKLE_EFFECTS[s.id]} Vyrábí Kovářství (úroveň ${s.smithing}).`,
+    s.starter
+      ? `Starý srp (stupeň I, Sběr bylin 1+), dárek – ${s.starter}. ${SICKLE_EFFECTS[s.id]} Bez bonusů.`
+      : `Srp pro Sběr bylin (stupeň ${HERB_TIER_LABEL[s.tier]}, Sběr bylin ${s.level}+). ${SICKLE_EFFECTS[s.id]} Vyrábí Kovářství (úroveň ${s.smithing}).`,
     { stack: 1, herbTool: true, rarity: ['common', 'uncommon', 'rare', 'epic', 'legendary'][s.tier - 1], price: s.price })),
   ...HERB_RARE_FINDS.map((f) => item(f.id, f.name, f.id === 'herb_botanical_note' ? 'other' : 'materials', 'icons01_033', f.description,
     { rarity: f.rarity, price: f.price, herbal: true, use: f.id === 'herb_botanical_note' ? { type: 'botanicalNote' } : undefined }))
@@ -503,6 +509,32 @@ export const ITEMS = Object.fromEntries(
   [...CONSUMABLES, ...CRYSTALS, ...GEAR, ...ACCESSORIES, ...KEY_ITEMS, ...RAW, ...Object.values(MATERIALS), ...FISHING_ITEMS, ...COOKING_ITEMS, ...ALCHEMY_ITEMS,
     ...MINING_ITEMS.filter((it) => !EXISTING_BEFORE_MINING[it.id]), ...SMITHING_ITEMS, ...HERBALISM_ITEMS, ...CRAFTING_ITEMS].map((it) => [it.id, it])
 );
+// Základní nástroje od NPC (dárky): běžné, bez bonusů, výkup za 1 zlatý (hodnota 2).
+export const STARTER_TOOLS = ['old_pickaxe', 'old_sickle', 'old_rod', 'old_hook'];
+for (const id of STARTER_TOOLS) if (ITEMS[id]) Object.assign(ITEMS[id], { price: 2, rarity: 'common', starterTool: true });
+// Ikona dárku = ikona nejnižšího vyrobeného nástroje téhož druhu (stejný vzhled, liší se jen bonusem).
+const STARTER_ICON_FROM = { old_pickaxe: 'pick_basic', old_sickle: 'herb_sickle', old_rod: 'simple_rod', old_hook: 'fishing_hook' };
+// (kopie ikony až na konci souboru – vyrobené nástroje dostávají vlastní ikony až níž)
+
+// Modifikátor vyrobených nástrojů podle stupně: +1 za první stupeň, +2 za druhý… (staré
+// nástroje od NPC +0). Každý bod: šance na kus navíc +2 %, doba těžby / sběru / čekání −3 %.
+export const TOOL_MOD = { extraPerPoint: 0.02, timePerPoint: 0.03 };
+{
+  const crafted = (list) => list.filter((t) => !t.starter).map((t) => t.id);
+  const ranks = [
+    ...PICKAXES.filter((p) => !p.starter).map((p) => [p.id, p.tier]),
+    ...SICKLES.filter((s) => !s.starter).map((s) => [s.id, s.tier]),
+    ...crafted(RODS).map((id, i) => [id, i + 1]),
+    ...METAL_PARTS.filter((m) => !m.starter).map((m) => [m.id, m.tier])
+  ];
+  for (const [id, mod] of ranks) {
+    const it = ITEMS[id];
+    if (!it) continue;
+    it.toolMod = mod;
+    it.description = `${it.description} Modifikátor +${mod}: šance na kus navíc +${Math.round(mod * TOOL_MOD.extraPerPoint * 100)} %, doba −${Math.round(mod * TOOL_MOD.timePerPoint * 100)} %.`;
+  }
+}
+export const toolModOf = (id) => ITEMS[id]?.toolMod ?? 0;
 
 // Vlastní ikony z listu „Fantasy RPG ikony surovin a výbavy“ (icons11, nástroj
 // tools/split-icons-grid.ps1 po řádcích) místo společných zástupných ikon.
@@ -751,3 +783,15 @@ export const RENAMED_ITEMS = {
   // Těžba: Krystalické jádro (drop Crystal Golem) = Křišťálové jádro z naleziště.
   mat_krystalicke_jadro: 'mat_kristalove_jadro'
 };
+
+// Dárkové nástroje od NPC: ikona prvního vyrobitelného nástroje téhož druhu (Kovářství C01–C03;
+// prut se nevyrábí – nejnižší prut z obchodu). Až tady, po přiřazení vlastních ikon výrobkům.
+for (const [id, from] of Object.entries(STARTER_ICON_FROM)) if (ITEMS[id] && ITEMS[from]?.icon) ITEMS[id].icon = ITEMS[from].icon;
+
+// Kategorie inventáře: Doplňky (prsteny, amulety, druhá ruka) patří do Vybavení; jídlo má vlastní
+// kategorii Jídlo (pokrmy, suroviny na vaření, maso, ryby, kuchyňské mezivýrobky).
+const FOOD_ITEM_IDS = new Set([...STAPLES.map((x) => x.id), ...MEATS.map((x) => x.id), ...INTERMEDIATES.map((r) => outputItemId(r)), ...FISH.map((x) => x.id), 'travel_ration']);
+for (const item of Object.values(ITEMS)) {
+  if (item.category === 'accessories') item.category = 'armor';
+  if (item.use?.type === 'meal' || FOOD_ITEM_IDS.has(item.id)) item.category = 'food';
+}

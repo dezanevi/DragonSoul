@@ -11,6 +11,9 @@
 // ======================================================================
 
 import { ALL_SMITHING, SMITHING_BY_ID, smithingOutputId, smithingXp } from '../data/smithing.js';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { getTalentBonuses, materialSaving, talentRecipeUnlocked } from './TalentSystem.js';
 import { xpToNextFishingLevel as xpToNextLevel } from '../data/fishing.js';
 import { getItem } from '../data/items.js';
 import { getItemCount, removeItem, addItem } from './InventorySystem.js';
@@ -38,7 +41,7 @@ export function normalizeSmithing(state) {
 
 export const smithingLevel = (state) => normalizeSmithing(state) && state.professions.smithing.level;
 export const isSmithingKnown = (state, recipe) =>
-  ALL_SMITHING_KNOWN_FOR_TESTING || recipe.origin === 'base' || Boolean(state.smithing?.learned?.[recipe.id]);
+  recipe.talent ? talentRecipeUnlocked(state, recipe.talent) : ALL_SMITHING_KNOWN_FOR_TESTING || recipe.origin === 'base' || Boolean(state.smithing?.learned?.[recipe.id]);
 
 const optionsOf = (key) => key.split('|');
 export const smithingIngredientCount = (state, key) => optionsOf(key).reduce((sum, id) => sum + getItemCount(state, id), 0);
@@ -62,6 +65,7 @@ export function forge(state, recipe, stationRank, times = 1) {
   if (!check.ok) return { ok: false, message: check.reason };
   for (const [key, qty] of Object.entries(recipe.ingredients)) {
     let left = qty * times;
+    left -= materialSaving(state, left); // talent Úsporné zpracování
     for (const id of optionsOf(key)) {
       const take = Math.min(left, getItemCount(state, id));
       if (take > 0) removeItem(state, id, take);
@@ -79,13 +83,14 @@ export function forge(state, recipe, stationRank, times = 1) {
     state.smithing.made[recipe.id] = (state.smithing.made[recipe.id] ?? 0) + 1;
   }
   const levelsGained = addSmithingXp(state, xp);
+  countQuestEvent(state, `craft:smithing:${recipe.id}`, times); // úkoly Kovářství
   return {
     ok: true, made: made - leftOver, xp, levelsGained,
     message: `Vykováno: ${recipe.name} ×${made - leftOver} (+${xp} XP)${leftOver ? ` – ${leftOver} ks se nevešlo do inventáře` : ''}.`
   };
 }
 
-export function addSmithingXp(state, amount) {
+function addSmithingXpRaw(state, amount) {
   const prof = state.professions.smithing;
   prof.exp += amount;
   let gained = 0;
@@ -131,20 +136,31 @@ function gearSources(state) {
   const sources = [];
   for (const equipped of Object.values(state?.equipment ?? {})) {
     const item = getItem(equipped?.id);
-    if (item?.gear) sources.push({ gear: item.gear, smithed: Boolean(item.smithed || item.crafted) });
+    if (item?.gear) sources.push({ gear: item.gear, smithed: Boolean(item.smithed || item.crafted), kind: gearKind(item) });
   }
   const r = activeReinforcement(state);
-  if (r) sources.push({ gear: r, smithed: true });
+  if (r) sources.push({ gear: r, smithed: true, kind: 'metal' });
   return sources;
 }
 
 const isCraftsman = (state) => state?.talentProgress?.specialization === 'crafting';
 
+// Kovová výbava = z Kovářství, nekovová = z Řemeslnictví (talenty Kovářský mistr / Zručný řemeslník).
+function gearKind(item) {
+  if (item?.smithing) return 'metal';
+  if (item?.crafting || item?.crafted) return 'nonmetal';
+  return null;
+}
+function talentGearMult(state, kind) {
+  const t = getTalentBonuses(state);
+  return 1 + (kind === 'metal' ? t.metalGearBonus : kind === 'nonmetal' ? t.nonMetalGearBonus : 0);
+}
+
 function sumGear(state, field, key) {
   let total = 0;
   const mult = isCraftsman(state) ? CRAFTSMAN_MULTIPLIER : 1;
-  for (const { gear, smithed } of gearSources(state)) {
-    const value = Number(gear?.[field]?.[key]) || 0;
+  for (const { gear, smithed, kind } of gearSources(state)) {
+    const value = (Number(gear?.[field]?.[key]) || 0) * talentGearMult(state, kind);
     total += smithed ? value * mult : value;
   }
   return Math.min(GEAR_STAT_CAP, Math.round(total * 10) / 10);
@@ -164,10 +180,10 @@ export function gearBreakdown(state, stat) {
   for (const equipped of Object.values(state?.equipment ?? {})) {
     const item = getItem(equipped?.id);
     const value = Number(item?.gear?.bonus?.[stat]) || 0;
-    if (value) rows.push({ name: item.name, value: (item.smithed || item.crafted) ? value * mult : value });
+    if (value) rows.push({ name: item.name, value: ((item.smithed || item.crafted) ? value * mult : value) * talentGearMult(state, gearKind(item)) });
   }
   const r = activeReinforcement(state);
-  if (Number(r?.bonus?.[stat])) rows.push({ name: `${r.name} (výztuha, ${r.battlesLeft} soubojů)`, value: r.bonus[stat] * mult });
+  if (Number(r?.bonus?.[stat])) rows.push({ name: `${r.name} (výztuha, ${r.battlesLeft} soubojů)`, value: r.bonus[stat] * mult * talentGearMult(state, 'metal') });
   return rows.map((x) => ({ ...x, value: Math.round(x.value * 10) / 10 }));
 }
 
@@ -183,3 +199,11 @@ export function gearSummary(state) {
 }
 
 export const allSmithingRecipes = () => ALL_SMITHING;
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addSmithingXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'smithing');
+  const result = addSmithingXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'smithing', before, amount);
+  return result;
+}

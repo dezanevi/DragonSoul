@@ -113,8 +113,9 @@ export const CARD_FOR_TAB = { hero: 'Hero', talents: 'Talents', party: 'Party', 
 export function createCardTabBar(scene, activeId, context) {
   const objects = [];
 
-  // Podklad lišty – všude stejný (svět, interiér, karty); drawStrip: false ho vynechá.
-  if (context.drawStrip !== false) objects.push(drawTabStrip(scene).setDepth(90).setScrollFactor(0));
+  // Podklad lišty (panel, který tlačítka spojoval) je zrušený – tlačítka stojí samostatně.
+  // drawStrip: true ho vrátí (TAB_STRIP zůstává pro ořez kamery při vysunutí karty).
+  if (context.drawStrip === true) objects.push(drawTabStrip(scene).setDepth(90).setScrollFactor(0));
 
   let hoverId = null;
   const sprites = TABS.map((tab, index) => {
@@ -179,4 +180,12 @@ export function openCardForTab(scene, tabId, context) {
     initialTab: CARD_FOR_TAB[tabId] ? undefined : tabId
   });
   scene.scene.bringToTop(sceneKey);
+}
+
+// Obdélník záložky na obrazovce (navádění – světlé okno nad záložkou, ui/guideSpotlight.js).
+export function tabRect(tabId) {
+  const tab = TABS.find((t) => t.id === tabId);
+  if (!tab) return null;
+  const { x, y, w, h } = tab.area;
+  return { x: OFFSET_X + x * SCALE, y: OFFSET_Y + y * SCALE, w: w * SCALE, h: h * SCALE };
 }

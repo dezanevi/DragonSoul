@@ -8,10 +8,11 @@ import { getBondLevel } from '../systems/MonsterBondSystem.js';
 import { elementName } from '../systems/ElementSystem.js';
 import { createMonsterModel } from '../battle/monsterModels.js';
 import { monsterHeadKey, monsterStillKey } from '../battle/monsterAnimations.js';
-import { cardText, cardButton, openCardModal, drawCardFrame, CARD_FIT, nineImage } from '../ui/fantasyCard.js';
-import { askName } from '../ui/nameInput.js';
+import { cardText, cardButton, openCardModal, drawCardFrame, CARD_FIT, CARD_PANEL, nineImage, uiTitle } from '../ui/fantasyCard.js';
+import { askName, renameIcon } from '../ui/nameInput.js';
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 import { closeStateKey } from '../ui/heroCard/tabSprites.js';
+import { monsterStatBonuses } from '../systems/MonsterStatBonus.js';
 import {
   PARTY_CARD,
   partyFrame,
@@ -96,6 +97,8 @@ export default class PartyScene extends Phaser.Scene {
     } else {
       this.card.add(this.add.rectangle(0, 0, CARD_W, CARD_H, 0x0b1830).setOrigin(0).setStrokeStyle(6, 0xd6a23a));
     }
+    // Jednotná hlavička karet (stejně jako Dovednosti, Bestiář, Úkoly, Mapa).
+    uiTitle(this, CARD_PANEL.x + 150, CARD_PANEL.y + 38, 'Parta', { icon: 'paw', size: 34 });
     this.layer = this.add.container(0, 0);
     this.card.add(this.layer);
 
@@ -298,16 +301,17 @@ export default class PartyScene extends Phaser.Scene {
 
       const ready = this.readiness(monster);
       // Miniatura: hlava z prvního snímku animace v rámečku políčka (jinak kreslený model).
-      if (!this.addImageFit(monsterHeadKey(this, monster.speciesId), rect.x + 45, rect.y + 48, 74, 72)) {
+      // Menší než rámeček ikony, aby uši / rohy nepřesahovaly (jako portrét v detailu).
+      if (!this.addImageFit(monsterHeadKey(this, monster.speciesId), rect.x + 40, rect.y + rect.h / 2, 54, 56)) {
         this.addModel(monster, rect.x + 52, rect.y + rect.h - 12, 0.5);
       }
-      this.text(rect.x + 120, rect.y + 12, monster.name, { size: 22, bold: true });
-      this.text(rect.x + 120, rect.y + 47, `${this.speciesName(monster)} · ${elementName(monster.element)} · Úr. ${monster.level}`, {
+      this.text(rect.x + 120, rect.y + 8, monster.name, { size: 22, bold: true });
+      this.text(rect.x + 120, rect.y + 37, `${this.speciesName(monster)} · ${elementName(monster.element)} · Úr. ${monster.level}`, {
         size: 13, color: '#c9b98f', strokeThickness: 2
       });
-      const { hp, maxHp } = this.hpBar(g, rect.x + 119, rect.y + rect.h - 30, 248, 18, monster);
-      this.text(rect.x + 376, rect.y + rect.h - 21, `${hp}/${maxHp}`, { size: 14, color: '#dbe6f3', originY: 0.5, strokeThickness: 2 });
-      this.text(rect.x + 440, rect.y + 29, ready.label, { size: 13, bold: true, color: ready.color, originX: 1, originY: 0.5, strokeThickness: 2 });
+      const { hp, maxHp } = this.hpBar(g, rect.x + 119, rect.y + rect.h - 28, 248, 16, monster);
+      this.text(rect.x + 376, rect.y + rect.h - 20, `${hp}/${maxHp}`, { size: 14, color: '#dbe6f3', originY: 0.5, strokeThickness: 2 });
+      this.text(rect.x + rect.w - 14, rect.y + 22, ready.label, { size: 13, bold: true, color: ready.color, originX: 1, originY: 0.5, strokeThickness: 2 });
     });
     this.layer.add(g);
   }
@@ -371,8 +375,8 @@ export default class PartyScene extends Phaser.Scene {
     this.layer.add(g);
 
     const p = DETAIL.portrait;
-    // Portrét: první snímek animace bez pohybu; velký model na kruhu zůstává s animací idle.
-    if (!this.addImageFit(monsterStillKey(this, monster.speciesId), p.x + p.w / 2, p.y + p.h / 2 + 4, p.w - 18, p.h - 24)) {
+    // Portrét: hlava z prvního snímku animace; celé monstrum je vedle na kruhu (model).
+    if (!this.addImageFit(monsterHeadKey(this, monster.speciesId) ?? monsterStillKey(this, monster.speciesId), p.x + p.w / 2, p.y + p.h / 2 + 4, p.w - 18, p.h - 24)) {
       this.addModel(monster, p.x + p.w / 2, p.y + p.h - 18, 0.8);
     }
     this.addModel(monster, DETAIL.model.x, DETAIL.model.y, 1.05);
@@ -381,8 +385,7 @@ export default class PartyScene extends Phaser.Scene {
     const nameText = this.text(DETAIL.textX, DETAIL.nameY, monster.name, { size: 34, bold: true, color: '#ffe7ae', originY: 0.5, strokeThickness: 5 });
     const nameMax = DETAIL.elementDot.x - DETAIL.elementDot.r - 12 - 54 - 12 - DETAIL.textX;
     if (nameText.width > nameMax) nameText.setScale(nameMax / nameText.width);
-    const rename = cardButton(this, null, DETAIL.textX + nameText.displayWidth + 12, DETAIL.nameY - 27, 54, 54, '✎', () => this.renameMonster(monster), { size: 28 });
-    for (const o of rename.objects) this.layer.add(o);
+    for (const o of renameIcon(this, DETAIL.textX + nameText.displayWidth + 4, DETAIL.nameY - 27, () => this.renameMonster(monster))) this.layer.add(o);
     this.text(DETAIL.textX, DETAIL.line1Y - 8, `${this.speciesName(monster)} · ${elementName(monster.element)} · Úroveň ${monster.level} · ${where}`, {
       size: 16, color: '#c9b98f', strokeThickness: 2, originY: 0.5
     });
@@ -410,6 +413,8 @@ export default class PartyScene extends Phaser.Scene {
       size: 22, bold: true, color: free > 0 ? '#ffd76a' : '#c9b98f', originX: 0.5, originY: 0.5, strokeThickness: 4
     });
     const training = monster.trainingPoints ?? {};
+    // Bonusy v souboji (velitel, důvěra, jídlo, elixír, výbava) – zeleně „+N“ jako v kartě hrdiny.
+    const bonuses = monsterStatBonuses(this.state, monster);
 
     Object.keys(STAT_LABELS).forEach((stat, index) => {
       const y = STATS.rowsY[index];
@@ -417,15 +422,21 @@ export default class PartyScene extends Phaser.Scene {
       const invested = Number(training[stat]) || 0;
       const progress = invested % TRAINING_PER_STAT_UP;
       const canSpend = free > 0 && invested < MAX_TRAINING_PER_STAT && total < MAX_TRAINING_TOTAL;
+      const extra = bonuses[stat]?.bonus > 0 ? bonuses[stat] : null;
 
-      this.text(STATS.valueX, y, String(value), { size: 22, bold: true, color: '#fff2c4', originX: 1, originY: 0.5 });
+      this.text(extra ? STATS.valueX - 30 : STATS.valueX, y, String(value), { size: 22, bold: true, color: '#fff2c4', originX: 1, originY: 0.5 });
+      if (extra) {
+        const plus = this.text(STATS.valueX - 27, y, `+${extra.bonus}`, { size: 18, bold: true, color: '#7fe08a', originY: 0.5 });
+        if (plus.width > 46) plus.setScale(46 / plus.width);
+      }
       for (let i = 0; i < progress; i++) {
         const cx = STATS.diamondX + i * STATS.diamondStep;
         const h = STATS.diamondHalf;
         g.fillStyle(0xffd23a, 1).fillPoints([{ x: cx, y: y - h }, { x: cx + h, y }, { x: cx, y: y + h }, { x: cx - h, y }], true);
       }
 
-      const rowInfo = `${STAT_LABELS[stat]} ${value}\n${this.statEffect(stat, value)}`;
+      const bonusLine = extra ? `\nV souboji ${extra.value} (+${extra.bonus}): ${extra.parts.join(', ')}.` : '';
+      const rowInfo = `${STAT_LABELS[stat]} ${value}${bonusLine}\n${this.statEffect(stat, extra?.value ?? value)}`;
       // Najetí na řádek ukáže, co statistika dělá v boji.
       const rowZone = this.add.zone(STATS.labelX - 50, y - 18, 340, 36).setOrigin(0).setInteractive();
       rowZone.on('pointerover', () => this.showStatTip(rowInfo, y));

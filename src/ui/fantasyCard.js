@@ -209,11 +209,13 @@ export function cardCloseButton(scene, onClose, panel = CARD_PANEL) {
 // Krátká hláška vlevo dole na kartě (nahoře je lišta karet, uprostřed Zavřít).
 export function cardFlash(scene, message, color = '#ffb3a0') {
   scene.cardFlashText?.destroy();
-  scene.cardFlashText = cardText(scene, CARD_PANEL.x + 34, CARD_PANEL.y + CARD_PANEL.h - 52, message, {
+  // Spodní okraj textu je pevný: delší hláška roste nahoru a nevyleze pod kartu.
+  scene.cardFlashText = cardText(scene, CARD_PANEL.x + 34, CARD_PANEL.y + CARD_PANEL.h - 88, message, {
     size: 22,
     bold: true,
     color,
     wrap: 640,
+    originY: 1,
     strokeThickness: 4
   }).setDepth(160);
   scene.tweens.add({ targets: scene.cardFlashText, alpha: 0, delay: 2400, duration: 500 });

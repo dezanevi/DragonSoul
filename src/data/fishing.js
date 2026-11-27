@@ -132,6 +132,9 @@ export const SEA_WATERS = new Set(['pobřežní vody', 'hluboké moře']);
 // Kovové části (Kovářství, schválené recepty). Vyšší umí vše, co nižší.
 // tier: hook 1 < reinforced 2 < reel 3 < spear 4.
 export const METAL_PARTS = [
+  // Dárek od Rybáře: základní háček bez bonusů, prodá se za 1 zlatý.
+  { id: 'old_hook', name: 'Starý háček', tier: 1, rareBonus: 1, starter: 'Rybář',
+    description: 'Starý háček od Rybáře. Rybolov ve sladkých vodách, bez bonusů.' },
   { id: 'fishing_hook', name: 'Rybářský hák', tier: 1, rareBonus: 1, price: 20,
     description: 'Kovová část rybářského náčiní. Rybolov ve sladkých vodách. (Kovářství 5: 1 železo, měděný drát; zatím prodává Rybářská chata.)' },
   { id: 'reinforced_fishing_hook', name: 'Zesílený rybářský hák', tier: 2, rareBonus: 1.25,
@@ -150,6 +153,9 @@ export const METAL_REQUIREMENT = {
 
 // Pruty (Řemeslnictví – návrh). wait = násobek doby čekání.
 export const RODS = [
+  // Dárek od Rybáře: základní prut bez bonusů, prodá se za 1 zlatý.
+  { id: 'old_rod', name: 'Starý prut', wait: 1, starter: 'Rybář',
+    description: 'Starý prut od Rybáře, bez bonusů.' },
   { id: 'simple_rod', name: 'Jednoduchý prut', wait: 1, price: 15,
     description: 'Základní prut. (Řemeslnictví 1: 2× Dřevo, 2× Vlákno; prodává Rybářská chata.)' },
   { id: 'flexible_rod', name: 'Pružný prut', wait: 0.9,

@@ -2,13 +2,14 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { cardText, cardButton, uiWindow, uiTitle, nineImage, openCardModal } from '../ui/fantasyCard.js';
+import { submitBugReport, bugContext, loadBugReports, downloadBugReports } from '../systems/BugReportSystem.js';
 
 // Nabídka pauzy (Esc ve světě): Vrátit se do hry, Uložit hru, Načíst hru, Nastavení,
 // Hlavní menu, Vypnout hru (Nastavení a Vypnout hru zatím nedostupné).
 // Svět je během nabídky pozastavený.
 
 const W = 560;
-const H = 640;
+const H = 720;
 const X = (GAME_WIDTH - W) / 2;
 const Y = (GAME_HEIGHT - H) / 2;
 
@@ -30,13 +31,85 @@ export default class PauseScene extends Phaser.Scene {
     };
     // Stejné stisknutí Esc, které pauzu otevřelo, ji nesmí hned zavřít.
     this.time.delayedCall(200, () => this.input.keyboard.on('keydown', this.onKey));
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.keyboard.off('keydown', this.onKey));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard.off('keydown', this.onKey);
+      this.removeBugInput(); // pole pro text je HTML – po zavření pauzy nesmí zůstat
+    });
     this.showMain();
   }
 
   clear() {
+    this.removeBugInput();
     this.children.removeAll(true);
     this.modal = null;
+  }
+
+  // ------------------------------------------------------------ hlášení chyb
+  // Okno s polem pro popis chyby (HTML textarea nad plátnem – psaní s diakritikou, více řádků).
+  // K popisu se připojí poloha, oblast, úroveň a sledovaný úkol (BugReportSystem.bugContext).
+  showBugReport() {
+    this.clear();
+    this.view = 'bug';
+    const BW = 980;
+    const BH = 700;
+    const BX = (GAME_WIDTH - BW) / 2;
+    const BY = (GAME_HEIGHT - BH) / 2;
+    uiWindow(this, BX, BY, BW, BH, { shade: 0.55 });
+    uiTitle(this, BX + 40, BY + 26, 'Nahlásit chybu', { icon: 'scroll', size: 36 });
+    const ctx = bugContext(this.state);
+    cardText(this, BX + 40, BY + 92, 'Popiš, co se stalo a co jsi čekal. Poloha a stav hry se přidají samy:', { size: 20, color: '#dbe6f3' });
+    cardText(this, BX + 40, BY + 124, `${ctx.region}${ctx.interior ? ` – ${ctx.interior}` : ''} · pole ${ctx.position.x ?? '?'}, ${ctx.position.y ?? '?'} · úroveň ${ctx.level ?? '?'}`, { size: 18, color: '#9fb3c8' });
+    nineImage(this, 'nu-slot', BX + 40, BY + 160, BW - 80, 330, 0.4);
+    this.createBugInput(BX + 52, BY + 172, BW - 104, 306);
+    const count = loadBugReports().length;
+    cardText(this, BX + 40, BY + 506, `V tomto prohlížeči je uloženo hlášení: ${count}.`, { size: 18, color: '#9fb3c8' });
+    cardButton(this, null, BX + 40, BY + BH - 96, 280, 62, 'Odeslat (Ctrl+Enter)', () => this.sendBugReport(), { size: 22 });
+    cardButton(this, null, BX + 340, BY + BH - 96, 300, 62, 'Stáhnout reporty', () => { downloadBugReports(); this.flash('Reporty se stáhly jako soubor .md.'); }, { size: 22, disabled: count === 0 });
+    cardButton(this, null, BX + BW - 300, BY + BH - 96, 260, 62, 'Zpět (Esc)', () => this.showMain(), { size: 22, danger: true });
+  }
+
+  // Pozice prvku na plátně (souřadnice hry 1920 × 1080 → stránka).
+  createBugInput(x, y, w, h) {
+    const canvas = this.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const sx = rect.width / GAME_WIDTH;
+    const sy = rect.height / GAME_HEIGHT;
+    const area = document.createElement('textarea');
+    area.placeholder = 'Např.: U Bylinkářky se po přijetí úkolu nezobrazil obchod…';
+    area.maxLength = 2000;
+    Object.assign(area.style, {
+      position: 'fixed', left: `${rect.left + x * sx}px`, top: `${rect.top + y * sy}px`, width: `${w * sx}px`, height: `${h * sy}px`,
+      zIndex: 60, resize: 'none', boxSizing: 'border-box', padding: '10px', borderRadius: '8px',
+      background: 'rgba(5, 8, 12, 0.92)', color: '#f3e4bd', border: '2px solid #d6a23a',
+      font: `${Math.max(14, Math.round(22 * sy))}px Lora, Georgia, serif`
+    });
+    area.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter' && event.ctrlKey) { event.preventDefault(); this.sendBugReport(); }
+      if (event.key === 'Escape') { event.preventDefault(); this.showMain(); }
+    });
+    document.body.appendChild(area);
+    this.bugInput = area;
+    // Klávesnice Phaseru nesmí brát znaky (mezerník, šipky) z pole pro text.
+    this.input.keyboard.disableGlobalCapture();
+    this.input.keyboard.enabled = false;
+    setTimeout(() => area.focus(), 50);
+  }
+
+  removeBugInput() {
+    if (!this.bugInput) return;
+    this.bugInput.remove();
+    this.bugInput = null;
+    this.input.keyboard.enabled = true;
+    this.input.keyboard.enableGlobalCapture();
+  }
+
+  async sendBugReport() {
+    const text = this.bugInput?.value ?? '';
+    if (text.trim().length < 3) { this.flash('Napiš prosím aspoň krátký popis chyby.', '#ff9a8a'); return; }
+    const result = await submitBugReport(this.state, text);
+    this.showMain();
+    this.flash(result.server ? 'Díky! Hlášení je uložené ve složce bug-reports.' : 'Díky! Hlášení je uložené v prohlížeči (Stáhnout reporty).', '#8ff0b0');
   }
 
   showMain() {
@@ -49,6 +122,7 @@ export default class PauseScene extends Phaser.Scene {
       ['Uložit hru', () => this.showSlots('save')],
       ['Načíst hru', () => this.showSlots('load')],
       ['Nastavení', null],
+      ['Nahlásit chybu', () => this.showBugReport()],
       ['Hlavní menu', () => this.toMenu()],
       ['Vypnout hru', null]
     ];

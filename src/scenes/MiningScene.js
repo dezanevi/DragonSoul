@@ -37,6 +37,8 @@ export default class MiningScene extends Phaser.Scene {
     this.returnScene = data.returnScene ?? 'World';
     this.deposit = depositById(data.depositId);
     this.hidden = Boolean(data.hidden);
+    this.spotKey = data.spotKey ?? null; // konkrétní žíla – odpočívá zvlášť
+    this.rareSpot = Boolean(data.rareSpot); // vzácné místo – obnova 48 min
     this.region = data.region ?? 'Greenvale';
     this.closing = false;
     this.working = null;
@@ -130,7 +132,7 @@ export default class MiningScene extends Phaser.Scene {
       this.line(X + 36, y, `Vytěženo: ${this.state.mining.log[d.id]}×`, { color: '#8d8378', size: 16 });
     }
 
-    const check = checkDeposit(this.state, d, { hidden: this.hidden });
+    const check = checkDeposit(this.state, d, { hidden: this.hidden, spotKey: this.spotKey });
     this.reasonText.setText(check.ok || this.working ? '' : check.reason);
     this.mineButton.setDisabled(!check.ok || Boolean(this.working));
     this.mineButton.setLabel(this.working ? 'Těžíš…' : 'Těžit (mezerník)');
@@ -138,7 +140,7 @@ export default class MiningScene extends Phaser.Scene {
 
   start() {
     if (this.working || this.closing) return;
-    if (!checkDeposit(this.state, this.deposit, { hidden: this.hidden }).ok) return;
+    if (!checkDeposit(this.state, this.deposit, { hidden: this.hidden, spotKey: this.spotKey }).ok) return;
     this.working = { total: miningSeconds(this.state, this.deposit) * 1000, elapsed: 0 };
     this.refresh();
   }
@@ -161,7 +163,7 @@ export default class MiningScene extends Phaser.Scene {
 
   finish() {
     this.stopWorking();
-    const result = mineDeposit(this.state, this.deposit, { hidden: this.hidden, region: this.region });
+    const result = mineDeposit(this.state, this.deposit, { hidden: this.hidden, region: this.region, spotKey: this.spotKey, rareSpot: this.rareSpot });
     if (!result.ok) {
       this.reasonText.setText(result.reason);
       this.refresh();
@@ -172,7 +174,7 @@ export default class MiningScene extends Phaser.Scene {
     if (result.levelsGained > 0) lines.push(`Těžba postoupila na úroveň ${result.level}!`);
     if (result.rare.length) lines.push(`Vzácný nález: ${result.rare.map(itemName).join(', ')}!`);
     if (result.revealedHidden) lines.push(`Průzkumník: odhalil jsi Skrytou žílu (${depositById(result.revealedHidden.deposit).name}) na 30 min.`);
-    const status = depositStatus(this.state, this.deposit);
+    const status = depositStatus(this.state, this.deposit, Date.now(), this.spotKey);
     if (!this.hidden && !status.ready && status.until) lines.push(`Naleziště se obnoví za ${formatWait(status.until - Date.now())}.`);
     openLoot(this, {
       state: this.state,

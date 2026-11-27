@@ -1,3 +1,4 @@
+import { statPart } from './heroStatLabels.js';
 // Vaření podle schváleného dokumentu „Vaření – návrh systému“: suroviny, mezivýrobky
 // a 104 hlavních receptů. Čísla jsou výchozí návrh, ladíme je spolu.
 //
@@ -234,6 +235,20 @@ export const RECIPES = [
   R('V104', 'Dračí kapr na žhavých kamenech', 'J', 99, 4, 4, { fish_dragon_carp: 1, cm_fire_extract: 1, cm_star_spice: 1, cm_demon_spice: 1 }, b(8, { attack: 15, speed: 12 }), 'quest')
 ];
 
+// Opakující se pokrmy (stejný účinek jako jiný recept na podobné úrovni) dávají místo toho
+// Štěstí nebo Charisma hrdiny (ploché body na pár soubojů): 1 bod do úr. 24, +1 za každých 25 úrovní.
+// Masový vývar se zeleninou (V043) zůstává – je to snídaně k noclehu v hostinci.
+const HERO_STAT_MEALS = {
+  V013: 'charisma', V015: 'charisma', V039: 'luck', V027: 'luck', V091: 'charisma', V036: 'luck',
+  V020: 'luck', V050: 'charisma', V042: 'charisma', V086: 'luck', V032: 'charisma', V065: 'luck',
+  V046: 'charisma', V061: 'luck', V033: 'luck', V047: 'charisma', V093: 'luck', V069: 'charisma',
+  V089: 'charisma', V095: 'luck'
+};
+for (const r of RECIPES) {
+  const stat = HERO_STAT_MEALS[r.id];
+  if (stat) r.effect = { buffs: { [stat]: 1 + Math.floor(r.level / 25) }, battles: r.level >= 50 ? 5 : 4 };
+}
+
 export const ALL_COOKING = [...INTERMEDIATES, ...RECIPES];
 export const COOKING_BY_ID = Object.fromEntries(ALL_COOKING.map((r) => [r.id, r]));
 
@@ -255,7 +270,7 @@ export function describeEffect(e) {
   if (e.mana) parts.push(`+${e.mana} many`);
   if (e.regen) parts.push(`regenerace ${e.regen} HP po každém souboji`);
   if (e.manaRegen) parts.push(`mana +${e.manaRegen} po každém souboji`);
-  for (const [stat, value] of Object.entries(e.buffs ?? {})) parts.push(`${STAT_LABELS[stat]} +${value} %`);
+  for (const [stat, value] of Object.entries(e.buffs ?? {})) parts.push(statPart(STAT_LABELS, stat, value));
   let text = parts.join(', ');
   if (e.battles && (e.regen || e.manaRegen || e.buffs)) text += ` (${e.battles} ${e.battles < 5 ? 'souboje' : 'soubojů'})`;
   const travel = [];

@@ -1,3 +1,4 @@
+import { statPart } from './heroStatLabels.js';
 // Alchymie podle schváleného dokumentu „Alchymie – návrh systému“: 12 mezivýrobků
 // a 108 hlavních receptů v pěti kategoriích. Čísla jsou výchozí návrh.
 //
@@ -32,7 +33,8 @@ export const ALCHEMY_CATEGORIES = [
   { id: 'B', label: 'Protijedy a ochrana' },
   { id: 'C', label: 'Bojové elixíry' },
   { id: 'D', label: 'Katalyzátory a směsi' },
-  { id: 'E', label: 'Průzkum a užitek' }
+  { id: 'E', label: 'Průzkum a užitek' },
+  { id: 'T', label: 'Řemeslník', specialization: 'crafting' } // recepty za talenty stromu Řemesla
 ];
 
 export const ALCHEMY_ORIGINS = {
@@ -40,7 +42,8 @@ export const ALCHEMY_ORIGINS = {
   game: 'Předmět, který už ve hře je',
   alchemist: 'Alchymista (návrh)',
   found: 'Nalezený recept (návrh)',
-  quest: 'Úkol (návrh)'
+  quest: 'Úkol (návrh)',
+  talent: 'Talent stromu Řemesla (specializace Řemeslník)'
 };
 
 // ------------------------------------------------------- mezivýrobky
@@ -197,6 +200,29 @@ const PRODUCT_IDS = {
 export const alchemyOutputId = (recipe) =>
   recipe.category === 'M' ? recipe.id : PRODUCT_IDS[recipe.id] ?? `alch_${recipe.id}`;
 
+// ------------------------------------------------------- T. Řemeslník (recepty za talenty)
+// Vzácné směsi: na 1., 3. a 5. hodnosti. Jen pro specializaci Řemeslník. iconCategory = ikona
+// podle druhu účinku (kategorie T vlastní ikonu nemá).
+const TR = (id, name, level, qty, ingredients, effect, rank, iconCategory, rarity = 'rare') =>
+  ({ ...R(id, name, 'T', level, 1, qty, ingredients, effect, 'talent'), talent: { id: 'rare_mixtures', rank }, iconCategory, rarity });
+export const ALCHEMY_TALENT_RECIPES = [
+  TR('LT1', 'Slizový protijed', 3, 2, { mat_podzemni_sliz: 1, clean_water: 1 }, { heal: 20, cure: 'all' }, 1, 'B', 'uncommon'),
+  TR('LT2', 'Elixír divokého kance', 6, 1, { mat_divoka_kuze: 1, healing_herbs: 2, clean_water: 1 }, { buffs: { attack: 8, defense: 4 }, battles: 3 }, 3, 'C'),
+  TR('LT3', 'Lektvar větrného běžce', 9, 1, { mat_vetrny_krystal: 1, mat_vetrny_drap: 1, clean_water: 1 }, { buffs: { speed: 12 }, battles: 3 }, 5, 'C')
+];
+ALCHEMY_RECIPES.push(...ALCHEMY_TALENT_RECIPES);
+
+// Opakující se lektvary → Štěstí a Charisma hrdiny (ploché body na pár soubojů).
+for (const [id, change] of [
+  ['L051', { name: 'Elixír štěstěny', effect: { buffs: { luck: 2 }, battles: 3 } }],      // dřív útok +6 (mezi L044 a L052)
+  ['L018', { name: 'Lektvar výmluvnosti', effect: { buffs: { charisma: 2 }, battles: 3 } }], // dřív mana za tah (mezi L016 a L022)
+  ['L097', { effect: { explore: { tame: 0.05 }, buffs: { luck: 2 }, battles: 3 } }],      // Lektvar štěstí lovce + Štěstí
+  ['L108', { effect: { explore: { drop: 0.25, tame: 0.1 }, buffs: { luck: 4, charisma: 2 }, battles: 10 } }]
+]) {
+  const r = ALCHEMY_RECIPES.find((x) => x.id === id);
+  if (r) Object.assign(r, change);
+}
+
 export const ALL_ALCHEMY = [...ALCHEMY_INTERMEDIATES, ...ALCHEMY_RECIPES];
 export const ALCHEMY_BY_ID = Object.fromEntries(ALL_ALCHEMY.map((r) => [r.id, r]));
 export const ALCHEMY_BY_OUTPUT = Object.fromEntries(ALL_ALCHEMY.map((r) => [alchemyOutputId(r), r]));
@@ -244,7 +270,7 @@ export function describeAlchemy(e) {
     parts.push(list.length >= 7 ? `odolnost proti všem elementům ${list[0][1]} % (${souboje(e.battles)})`
       : `odolnost ${list.map(([el, v]) => `${ELEMENT_LABELS_CZ[el]} ${v} %`).join(', ')} (${souboje(e.battles)})`);
   }
-  if (e.buffs) parts.push(`${Object.entries(e.buffs).map(([s, v]) => `${STAT_LABELS[s]} +${v} %`).join(', ')} (${souboje(e.battles)})`);
+  if (e.buffs) parts.push(`${Object.entries(e.buffs).map(([s, v]) => statPart(STAT_LABELS, s, v)).join(', ')} (${souboje(e.battles)})`);
   if (e.throw) {
     const t = e.throw;
     parts.push(`vrhací: ${t.damage ? `${t.damage} poškození, ` : ''}${STATUS_LABELS_CZ[t.status]} na ${tahy(t.turns)}`);

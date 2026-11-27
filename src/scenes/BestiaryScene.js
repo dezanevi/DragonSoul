@@ -8,39 +8,62 @@ import { normalizeElement } from '../systems/ElementSystem.js';
 // České názvy elementů (Bestiář).
 const ELEMENT_NAMES = { air: 'vzduch', water: 'voda', fire: 'oheň', earth: 'země', verdant: 'příroda', light: 'světlo', dark: 'temnota' };
 import { ELEMENT_COLORS } from '../battle/monsterModels.js';
-import { createAnimatedBody, monsterStillKey } from '../battle/monsterAnimations.js';
+import { createAnimatedBody, monsterStillKey, monsterHeadKey } from '../battle/monsterAnimations.js';
 import { arrowKey } from '../ui/inventorySprites.js';
-import { CARD_PANEL, cardText, drawCardFrame, cardCloseButton, uiTitle } from '../ui/fantasyCard.js';
+import { CARD_PANEL, cardText, cardButton, drawCardFrame, cardCloseButton, uiTitle } from '../ui/fantasyCard.js';
+import { REGIONS } from '../systems/RegionSystem.js';
+import { loadWorldMap } from '../data/maps/index.js';
+import { regionTexture } from './WorldMapScene.js';
+import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
+
+// Výskyt druhu: louky setkání (map.encounterZones) ve všech regionech, kde se druh objevuje.
+// Mapy regionů se načtou jednou (generované regiony jsou drahé).
+const habitatMaps = new Map();
+const regionMap = (id) => {
+  if (!habitatMaps.has(id)) habitatMaps.set(id, loadWorldMap(id));
+  return habitatMaps.get(id);
+};
+function speciesHabitat(species) {
+  const found = [];
+  for (const region of REGIONS) {
+    const map = regionMap(region.id);
+    const zones = (map.encounterZones ?? []).filter((z) => (z.species ?? []).includes(species.id));
+    if (zones.length) found.push({ region: region.id, map, zones });
+  }
+  return found;
+}
 import { createCardTabBar, slideCardIn, slideCardOut } from '../ui/cardTabBar.js';
 import { LOOK, roundBox, tileRow, darkPanel, headingLine, itemIcon } from '../ui/craftLook.js';
-import { getSkill, getStarterSkillId, getSkillsLearnedAtLevel } from '../systems/MonsterSkillSystem.js';
+import { getSkill, getStarterSkillId, getSkillsLearnedAtLevel, getBondSkillId, skillUnlockLevels } from '../systems/MonsterSkillSystem.js';
 
 // Schopnosti druhu a úroveň, na které se monstrum naučí (start + 10, 20, 40, 80).
-const SKILL_LEVELS = [10, 20, 40, 80];
 const SKILL_CATEGORY = { physical: 'fyzická', magical: 'magická', buff: 'posílení', healing: 'léčení' };
 function speciesSkills(species) {
   const rows = [];
   const starter = getSkill(getStarterSkillId(species.id, species.element));
   if (starter) rows.push({ level: 1, skill: starter });
-  for (const level of SKILL_LEVELS) {
+  for (const level of skillUnlockLevels(species.id)) {
     for (const id of getSkillsLearnedAtLevel(species.id, level, species.element)) {
       const skill = getSkill(id);
       if (skill && !rows.some((r) => r.skill.id === id)) rows.push({ level, skill });
     }
   }
+  // Bond schopnost: naučí se při důvěře (Bond) 100 – stupeň Soulbound.
+  const bond = getSkill(getBondSkillId(species.id, species.element));
+  if (bond && !rows.some((r) => r.skill.id === bond.id)) rows.push({ level: 'bond', skill: bond });
   return rows;
 }
 
 // Karta Bestiář (záložka Bestiář) ve stylu karty Řemesla. Vlevo filtry (Všechna, Objevená,
 // Ochočená, elementy), uprostřed seznam druhů s obrázkem, vpravo detail s animací (idle),
-// údaji, záznamem (pozorováno / ochočeno / poraženo), schopnostmi s úrovní odemčení a kořistí
+// údaji, záznamem (výskyt s náhledem mapy / ochočeno / poraženo), schopnostmi s úrovní odemčení a kořistí
 // (klik = Databáze v Řemeslech).
 // Neobjevené druhy jsou „???“ a jejich obrázek je jen černá silueta.
 
 const P = CARD_PANEL;
-const LEFT = { x: P.x + 34, y: P.y + 92, w: 300 };
+const LEFT = { x: P.x + 50, y: P.y + 92, w: 290 }; // odstup od rámu karty
 const LIST = { x: P.x + 362, y: P.y + 92, w: 600 };
-const DETAIL = { x: LIST.x + LIST.w + 20, y: P.y + 92, w: P.x + P.w - 34 - (LIST.x + LIST.w + 20), h: P.h - 92 - 60 };
+const DETAIL = { x: LIST.x + LIST.w + 20, y: P.y + 92, w: P.x + P.w - 50 - (LIST.x + LIST.w + 20), h: P.h - 92 - 60 }; // vpravo odstup od rámu
 const ROW = 58;
 const PAGE = 12;
 const ELEMENTS = ['air', 'water', 'fire', 'earth', 'verdant', 'light', 'dark'];
@@ -77,8 +100,8 @@ export default class BestiaryScene extends Phaser.Scene {
     this.view = { filter: memory.filter ?? 'all', page: memory.page ?? 0, selected: memory.selected ?? null };
 
     drawCardFrame(this);
-    uiTitle(this, P.x + 46, P.y + 22, 'Bestiář', { icon: 'paw', size: 34 });
-    this.progressText = cardText(this, P.x + P.w - 50, P.y + 34, '', { size: 20, color: '#cfe2f5', originX: 1 });
+    uiTitle(this, P.x + 150, P.y + 38, 'Bestiář', { icon: 'paw', size: 34 });
+    this.progressText = cardText(this, P.x + P.w - 150, P.y + 46, '', { size: 20, color: '#cfe2f5', originX: 1 });
     this.content = this.add.container(0, 0);
 
     cardCloseButton(this, () => this.closeCard());
@@ -96,6 +119,7 @@ export default class BestiaryScene extends Phaser.Scene {
     });
     this.onKey = (event) => {
       if (event.repeat) return;
+      if (this.habitat) { if (event.code === 'Escape') this.closeHabitat(); return; }
       if (event.code === 'Escape') this.closeCard();
       else if (event.code === 'ArrowRight' || event.code === 'PageDown') this.turn(1);
       else if (event.code === 'ArrowLeft' || event.code === 'PageUp') this.turn(-1);
@@ -235,7 +259,7 @@ export default class BestiaryScene extends Phaser.Scene {
 
   // Malý obrázek: první snímek animace (neobjevené = černá silueta), jinak barevná tečka.
   thumb(species, cx, cy, size, known) {
-    const key = monsterStillKey(this, species.id);
+    const key = monsterHeadKey(this, species.id) ?? monsterStillKey(this, species.id);
     if (key) {
       const image = this.add.image(cx, cy, key);
       image.setScale(size / Math.max(image.width, image.height));
@@ -307,15 +331,31 @@ export default class BestiaryScene extends Phaser.Scene {
 
     y += this.heading(x, y, w, 'Záznam') + 12;
     const r = this.record(species);
-    const stats = [['Pozorováno', r.seen], ['Ochočeno', r.caught], ['Poraženo', r.defeated ?? 0], ['V partě a úschovně', this.ownedCount(species)]];
+    // Výskyt (místo Pozorováno): počet luk, kde se druh objevuje; klik = náhled mapy.
+    const habitat = speciesHabitat(species);
+    const meadows = habitat.reduce((n, h) => n + h.zones.length, 0);
+    const stats = [
+      ['Výskyt (klik)', meadows ? `${meadows} ${meadows === 1 ? 'louka' : meadows < 5 ? 'louky' : 'luk'}` : '—', () => this.openHabitat(species)],
+      ['Ochočeno', r.caught], ['Poraženo', r.defeated ?? 0], ['V partě a úschovně', this.ownedCount(species)]
+    ];
     const cw = (w - 30) / stats.length;
-    stats.forEach(([label, value], i) => {
+    stats.forEach(([label, value, onClick], i) => {
       const bx = x + i * (cw + 10);
+      const by = y; // pevná poloha – y se níž posouvá (rámeček pod myší dřív uskočil do Schopností)
       const box = this.add.graphics();
-      roundBox(box, bx, y, cw, 60, LOOK.fill, 0.9, LOOK.line, 0.9, 1.5, 10);
+      const draw = (hover) => { box.clear(); roundBox(box, bx, by, cw, 60, LOOK.fill, 0.9, hover ? LOOK.gold : LOOK.line, 0.9, hover ? 2.5 : 1.5, 10); };
+      draw(false);
       this.put(box);
-      this.put(cardText(this, bx + cw / 2, y + 19, String(value ?? 0), { size: 24, bold: true, color: '#ffd76a', originX: 0.5, originY: 0.5 }));
-      this.put(cardText(this, bx + cw / 2, y + 45, label, { size: 15, color: '#cfd6de', originX: 0.5, originY: 0.5 }));
+      const valueText = this.put(cardText(this, bx + cw / 2, y + 19, String(value ?? 0), { size: 24, bold: true, color: '#ffd76a', originX: 0.5, originY: 0.5 }));
+      if (valueText.width > cw - 12) valueText.setScale((cw - 12) / valueText.width);
+      this.put(cardText(this, bx + cw / 2, y + 45, label, { size: 15, color: onClick ? '#ffe7ae' : '#cfd6de', originX: 0.5, originY: 0.5 }));
+      if (onClick) {
+        const zone = this.add.zone(bx, y, cw, 60).setOrigin(0).setInteractive({ useHandCursor: true });
+        zone.on('pointerover', () => draw(true));
+        zone.on('pointerout', () => draw(false));
+        zone.on('pointerdown', onClick);
+        this.put(zone);
+      }
     });
     y += 76;
 
@@ -326,18 +366,24 @@ export default class BestiaryScene extends Phaser.Scene {
     y += this.heading(x, y, colW, 'Schopnosti') + 10;
     const skills = speciesSkills(species);
     if (!skills.length) this.put(cardText(this, x + 16, y, 'Žádné známé schopnosti.', { size: 18, color: '#9fb3c8' }));
+    // Víc schopností (podpisová + Bond = 7) → hustší řádky, ať se vejdou do panelu.
+    const step = skills.length > 6 ? 35 : 44;
+    const dense = step < 44;
     skills.forEach(({ level, skill }, i) => {
-      const ry = y + i * 44;
+      const ry = y + i * step;
+      const isBond = level === 'bond';
+      const isSignature = Boolean(skill.signature); // podpisová schopnost druhu: zlatý odznak
       const badge = this.add.graphics();
-      roundBox(badge, x, ry, 64, 38, LOOK.fill, 0.9, LOOK.line, 0.9, 1.5, 8);
+      roundBox(badge, x, ry, 64, step - 6, isBond ? 0x2a1638 : isSignature ? 0x3a2a12 : LOOK.fill, 0.9, isBond ? 0xd08cff : isSignature ? 0xffd76a : LOOK.line, 0.9, 1.5, 8);
       this.put(badge);
-      this.put(cardText(this, x + 32, ry + 19, level === 1 ? 'start' : `úr. ${level}`, { size: 15, bold: true, color: '#ffd76a', originX: 0.5, originY: 0.5 }));
-      const name = this.put(cardText(this, x + 76, ry - 1, skill.name, { size: 19, bold: true, color: '#f3e4bd' }));
+      this.put(cardText(this, x + 32, ry + (step - 6) / 2, isBond ? 'Bond' : level === 1 ? 'start' : `úr. ${level}`, { size: 15, bold: true, color: isBond ? '#e2b8ff' : '#ffd76a', originX: 0.5, originY: 0.5 }));
+      const name = this.put(cardText(this, x + 76, ry - (dense ? 3 : 1), isSignature ? `★ ${skill.name}` : skill.name, { size: dense ? 17 : 19, bold: true, color: isSignature ? '#ffd76a' : '#f3e4bd' }));
       if (name.width > colW - 80) name.setScale((colW - 80) / name.width);
       const power = skill.power ? ` · síla ${skill.power}` : '';
       const reach = skill.range ? ` · dosah ${skill.range}` : ' · na sebe';
-      this.put(cardText(this, x + 76, ry + 22, `${SKILL_CATEGORY[skill.category] ?? skill.category}${power}${reach}`, { size: 15, color: '#9fc4e6' }));
+      this.put(cardText(this, x + 76, ry + (dense ? 15 : 22), `${isSignature ? 'podpisová · ' : ''}${SKILL_CATEGORY[skill.category] ?? skill.category}${power}${reach}`, { size: dense ? 14 : 15, color: '#9fc4e6' }));
     });
+    const hasBond = skills.some((s) => s.level === 'bond');
 
     const drops = SPECIES_DROPS[species.id] ?? [];
     let dy = top + this.heading(rx, top, colW, 'Kořist (klik = databáze)') + 10;
@@ -354,6 +400,86 @@ export default class BestiaryScene extends Phaser.Scene {
       t.on('pointerout', () => t.setColor(RARITY[item?.rarity]?.color ?? '#8fd3ff'));
       t.on('pointerdown', () => this.openItem(id));
     });
+
+    // Jak se Bond schopnost získá (MonsterBondSystem) – pod kořistí, kde je místo.
+    if (hasBond) {
+      let by = dy + Math.max(1, drops.length) * 40 + 14;
+      by += this.heading(rx, by, colW, 'Bond (důvěra)') + 8;
+      this.put(cardText(this, rx, by,
+        'Důvěra 0–100, roste o 2 za každé společné vítězství. Na 100 (Soulbound) se monstrum naučí Bond schopnost. Každých 20 důvěry +1 útok, každých 40 +1 obrana, od 80 +1 rychlost.',
+        { size: 16, color: '#d9bff0', wrap: colW }));
+    }
+  }
+
+  // Náhled výskytu: mapa regionu (dlaždice jako na kartě Mapa), louky se zlatým rámečkem
+  // a na každé pomalu blikající obrázek monstra. Zavře Esc, tlačítko nebo klik mimo okno.
+  openHabitat(species) {
+    this.closeHabitat();
+    const found = speciesHabitat(species);
+    const W = 1000;
+    const H = 820;
+    const x = GAME_WIDTH / 2 - W / 2;
+    const y = GAME_HEIGHT / 2 - H / 2;
+    const layer = this.add.container(0, 0).setDepth(800);
+    this.habitat = layer;
+    const shade = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02060a, 0.6).setOrigin(0).setInteractive();
+    shade.on('pointerdown', () => this.closeHabitat());
+    const panel = this.add.graphics();
+    roundBox(panel, x, y, W, H, 0x08111d, 0.98, LOOK.gold, 1, 3, 16);
+    const block = this.add.zone(x, y, W, H).setOrigin(0).setInteractive();
+    layer.add([shade, panel, block, cardText(this, x + 36, y + 24, `Výskyt – ${species.name}`, { size: 30, bold: true, color: '#ffe7ae' })]);
+
+    const view = found[0] ?? { region: species.region, map: regionMap(species.region) ?? regionMap('Greenvale'), zones: [] };
+    const area = { x: x + 36, y: y + 84, w: W - 72, h: H - 250 };
+    const map = view.map;
+    if (map) {
+      const scale = Math.min(area.w / map.width, area.h / map.height);
+      const mx = area.x + (area.w - map.width * scale) / 2;
+      const my = area.y + (area.h - map.height * scale) / 2;
+      layer.add(this.add.image(mx, my, regionTexture(this, map)).setOrigin(0).setScale(scale));
+      const marks = this.add.graphics();
+      marks.lineStyle(2, LOOK.gold, 0.9).strokeRect(mx - 2, my - 2, map.width * scale + 4, map.height * scale + 4);
+      layer.add(marks);
+      const stillKey = monsterHeadKey(this, species.id) ?? monsterStillKey(this, species.id);
+      for (const zone of view.zones) {
+        const zx = mx + zone.x0 * scale;
+        const zy = my + zone.y0 * scale;
+        const zw = (zone.x1 - zone.x0 + 1) * scale;
+        const zh = (zone.y1 - zone.y0 + 1) * scale;
+        marks.fillStyle(0xffd76a, 0.18).fillRect(zx, zy, zw, zh);
+        marks.lineStyle(2, 0xffd76a, 1).strokeRect(zx, zy, zw, zh);
+        const cx = zx + zw / 2;
+        const cy = zy + zh / 2;
+        let icon;
+        if (stillKey) {
+          icon = this.add.image(cx, cy, stillKey);
+          icon.setScale(52 / Math.max(icon.width, icon.height));
+        } else {
+          icon = this.add.circle(cx, cy, 14, ELEMENT_COLORS[elementOf(species)] ?? 0xffd76a).setStrokeStyle(3, 0x05080c);
+        }
+        layer.add(icon);
+        // Pomalé blikání (1,2 s tam a zpět).
+        this.tweens.add({ targets: icon, alpha: 0.2, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        layer.add(cardText(this, cx, zy + zh + 4, zone.name, { size: 15, bold: true, color: '#ffe7ae', originX: 0.5, strokeThickness: 4 }));
+      }
+    }
+
+    // Seznam luk pod mapou (region, název, úroveň monster).
+    let ly = area.y + area.h + 16;
+    const lines = found.flatMap((h) => h.zones.map((z) => `${h.region} – ${z.name} (úr. ${z.level?.[0] ?? '?'}–${z.level?.[1] ?? '?'})${z.rare ? ' · vzácná' : ''}`));
+    const info = lines.length
+      ? lines.slice(0, 4).join('\n') + (lines.length > 4 ? `\n… a ${lines.length - 4} dalších` : '')
+      : `Konkrétní louka zatím není určená – druh patří do oblasti ${species.region}.`;
+    layer.add(cardText(this, x + 40, ly, info, { size: 19, color: '#dbe6f3', lineSpacing: 4, wrap: W - 380 }));
+    const close = cardButton(this, null, x + W - 300, y + H - 92, 260, 60, 'Zavřít (Esc)', () => this.closeHabitat(), { size: 22 });
+    layer.add(close.objects);
+  }
+
+  closeHabitat() {
+    if (!this.habitat) return;
+    this.tweens.killTweensOf(this.habitat.list);
+    this.habitat.destroy();
+    this.habitat = null;
   }
 
   heading(x, y, w, value) {

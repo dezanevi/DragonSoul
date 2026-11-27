@@ -145,7 +145,7 @@ export function searchItems(query = '', filter = 'all') {
   return Object.values(ITEMS)
     .filter((item) => {
       if (q && !plain(item.name).includes(q)) return false;
-      if (filter === 'materials') return item.category === 'materials' && !isGear(item);
+      if (filter === 'materials') return (item.category === 'materials' || (item.category === 'food' && !item.use)) && !isGear(item);
       if (filter === 'made') return isMade(item) && !isGear(item);
       if (filter === 'gear') return isGear(item);
       if (filter === 'other') return item.category !== 'materials' && !isGear(item) && !isMade(item);

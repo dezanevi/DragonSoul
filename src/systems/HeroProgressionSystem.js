@@ -59,3 +59,19 @@ export function applyHeroLevelUp(state) {
   // jedna za každou sudou úroveň.
   normalizeTalentProgress(state);
 }
+
+// Zkušenosti hrdiny mimo souboj (odměny úkolů): stejná křivka jako po souboji
+// (úroveň × 20 na další úroveň). Vrací počet získaných úrovní.
+export function addHeroExp(state, amount) {
+  if (!state || !(amount > 0)) return 0;
+  state.level = Math.max(1, Number(state.level) || 1);
+  state.exp = (Number(state.exp) || 0) + Math.round(amount);
+  let gained = 0;
+  while (state.exp >= state.level * 20) {
+    state.exp -= state.level * 20;
+    state.level += 1;
+    applyHeroLevelUp(state);
+    gained += 1;
+  }
+  return gained;
+}

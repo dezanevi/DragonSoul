@@ -1,5 +1,6 @@
 // ======================================================================
-// Simulace souboje: místo ručního boje se výsledek dopočítá z průměrného poškození
+// Simulace souboje podle pravidel rychlého souboje (bez mřížky: všichni na dosah, útok na
+// dálku bez postihu, nepřátelé míří na monstra s útoky na dálku). Výsledek se dopočítá z průměrného poškození
 // monster (útok / magie proti zbroji / vůli, elementy, odolnosti), přesnosti a počtu
 // použití útočných technik. Hrdinova kouzla se nepočítají. Hráčova monstra mají
 // nevýhodu 20 % (poškození × 0,8). Bonusy jídla, elixírů, výbavy a ochranných
@@ -10,7 +11,7 @@
 // Bez Phaseru – jde testovat v Node.
 // ======================================================================
 
-import { calculateElementalDamage } from '../battle/DamageCalculator.js';
+import { calculateElementalDamage, levelDamageMultiplier } from '../battle/DamageCalculator.js';
 import { getMonsterSkills } from './MonsterSkillSystem.js';
 
 export const SIMULATION_HANDICAP = 0.2;
@@ -35,6 +36,7 @@ export function hitDamage(attacker, skill, target, modify = (result) => result.d
   const defense = magical ? Number(target.resolve) || 0 : Number(target.armor ?? target.defense) || 0;
   const base = Math.max(1, Math.floor(skill.power + power * 0.5 - defense * 0.5));
   const result = calculateElementalDamage(base, skill.element, target.monster?.element);
+  result.damage = Math.max(1, Math.round(result.damage * levelDamageMultiplier(attacker, target)));
   let damage = modify(result, attacker, target, skill.category, skill.element);
   if (attacker.side === 'player') damage *= 1 - SIMULATION_HANDICAP;
   return Math.max(1, Math.round(damage));
@@ -68,18 +70,23 @@ function bestSkill(sim, target, modify) {
   return best;
 }
 
-// Cíl: soupeř s nejnižším podílem HP (jako AI v souboji).
+// Cíl podle pravidel rychlého souboje (bez mřížky, BattleScene.chooseSimpleTarget):
+// nepřátelé míří přednostně na monstra s útoky na dálku (magické útoky), mezi nimi na
+// nejzraněnější; jinak (a hráčova monstra vždy) soupeř s nejnižším podílem HP.
+const hasRanged = (sim) => sim.skills.some((skill) => skill.category === 'magical' && sim.uses[skill.id] > 0);
 function pickTarget(sim, sims) {
+  const foes = sims.filter((other) => other.hp > 0 && other.side !== sim.side);
+  const ranged = sim.side === 'enemy' ? foes.filter(hasRanged) : [];
   let target = null;
-  for (const other of sims) {
-    if (other.hp <= 0 || other.side === sim.side) continue;
+  for (const other of ranged.length ? ranged : foes) {
     if (!target || other.hp / other.maxHp < target.hp / target.maxHp) target = other;
   }
   return target;
 }
 
 // Jeden průběh boje. Vrací { win, rounds, sims }.
-export function runSimulation(units, { modify, random = Math.random } = {}) {
+// crit = { player, enemy }: šance na kritický zásah (×1,5) – stejně jako v souboji (Štěstí).
+export function runSimulation(units, { modify, random = Math.random, crit = null } = {}) {
   const sims = cloneUnits(units);
   const alive = (side) => sims.some((sim) => sim.side === side && sim.hp > 0);
   let rounds = 0;
@@ -98,7 +105,11 @@ export function runSimulation(units, { modify, random = Math.random } = {}) {
       if (random() <= hitChance(sim.unit, skill)) {
         // Rozptyl ±10 % kolem vzorce, ať průběhy nejsou všechny stejné.
         const spread = 0.9 + random() * 0.2;
-        target.hp = Math.max(0, target.hp - Math.max(1, Math.round(hitDamage(sim.unit, skill, target.unit, modify) * spread)));
+        const critMult = crit && random() < (crit[sim.side] ?? 0) ? 1.5 : 1;
+        // Podpisové schopnosti: více zásahů a vysátí (zásah okolí simulace nepočítá).
+        const dealt = Math.max(1, Math.round(hitDamage(sim.unit, skill, target.unit, modify) * spread * critMult * Math.max(1, Number(skill.hits) || 1)));
+        target.hp = Math.max(0, target.hp - dealt);
+        if (skill.drain) sim.hp = Math.min(sim.maxHp, sim.hp + Math.round(dealt * skill.drain));
       }
       if (!hasCharges(sim)) sim.hp = 0; // vyčerpané techniky = omdlí (pravidlo souboje)
       if (!alive('player') || !alive('enemy')) break;
@@ -134,9 +145,9 @@ function averageDamage(units, side, modify) {
 }
 
 // Odhad před rozhodnutím: šance na výhru a přehled sil obou stran.
-export function estimateBattle(units, { modify, runs = SIMULATION_RUNS, random = Math.random } = {}) {
+export function estimateBattle(units, { modify, runs = SIMULATION_RUNS, random = Math.random, crit = null } = {}) {
   let wins = 0;
-  for (let i = 0; i < runs; i++) if (runSimulation(units, { modify, random }).win) wins += 1;
+  for (let i = 0; i < runs; i++) if (runSimulation(units, { modify, random, crit }).win) wins += 1;
   const side = (name) => units.filter((unit) => unit.side === name && unit.hp > 0);
   const sum = (list, key) => list.reduce((total, unit) => total + (Number(unit[key]) || 0), 0);
   const players = side('player');

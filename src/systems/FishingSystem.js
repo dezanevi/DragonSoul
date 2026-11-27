@@ -8,11 +8,14 @@
 // ======================================================================
 
 import Phaser from 'phaser';
+import { skillXpBefore, reportSkillXp } from './SkillXpEvents.js';
+import { countQuestEvent } from './QuestCounters.js';
+import { luckGatherBonus } from './HeroStatsSystem.js';
 import {
   CATCHES, LOCATION_BY_ID, LOCATIONS, METAL_PARTS, METAL_REQUIREMENT, RODS, BAIT_BY_ID,
   SEA_WATERS, FISHING_RULES, FISH, isRareOrBetter, xpToNextFishingLevel
 } from '../data/fishing.js';
-import { getItem } from '../data/items.js';
+import { getItem, TOOL_MOD, toolModOf } from '../data/items.js';
 import { getItemCount, removeItem } from './InventorySystem.js';
 import { getTalentBonuses } from './TalentSystem.js';
 import { exploreBonus, professionXpMultiplier } from './AlchemySystem.js';
@@ -85,6 +88,8 @@ export function waitSeconds(state, location, baitId = null, random = Math.random
   const bait = BAIT_BY_ID[baitId];
   if (bait?.wait && baitAppliesToWater(bait, location)) wait *= bait.wait;
   wait *= exploreBonus(state, 'fishWait', 1); // Návnadový olej
+  // Modifikátor prutu a háčku / navijáku: čekání −3 % za bod.
+  wait *= Math.max(0.5, 1 - TOOL_MOD.timePerPoint * (toolModOf(bestRod(state)?.id) + toolModOf(bestMetal(state)?.id)));
   return Phaser.Math.Clamp(wait, FISHING_RULES.minWait, FISHING_RULES.maxWait);
 }
 
@@ -183,10 +188,15 @@ export function completeCast(state, location, baitId = null, random = Math.rando
   const newSpecies = !(state.fishing.log[entry.id] > 0);
   const xp = Math.round(catchXp(state, entry) * professionXpMultiplier(state));
   state.fishing.log[entry.id] = (state.fishing.log[entry.id] ?? 0) + 1;
+  // Úkoly (Rybolov I a III): chycené ryby, neobvyklé a lepší zvlášť.
+  if (entry.kind === 'fish') {
+    countQuestEvent(state, 'fish');
+    if (entry.rarity !== 'common') countQuestEvent(state, 'fish:better');
+  }
   if (entry.rarity === 'legendary') state.fishing.legendaryUntil[entry.id] = Date.now() + FISHING_RULES.legendaryCooldownMs;
 
   // Talent Rybářská trpělivost: šance na bonusový kus (ne u legendárních).
-  const bonusChance = Math.min(0.2, getTalentBonuses(state).fishingBonusChance ?? 0);
+  const bonusChance = Math.min(0.2, getTalentBonuses(state).fishingBonusChance ?? 0) + luckGatherBonus(state); // + Štěstí
   const qty = entry.rarity !== 'legendary' && random() < bonusChance ? 2 : 1;
 
   const levelsGained = addFishingXp(state, xp);
@@ -194,7 +204,7 @@ export function completeCast(state, location, baitId = null, random = Math.rando
   return { entry, label, qty, xp, newSpecies, levelsGained, level: state.professions.fishing.level };
 }
 
-export function addFishingXp(state, amount) {
+function addFishingXpRaw(state, amount) {
   const prof = state.professions.fishing;
   prof.exp += amount;
   let gained = 0;
@@ -231,3 +241,11 @@ export function sellPrice(state, itemId, demandAware = true) {
 
 export const locationById = (id) => LOCATION_BY_ID[id] ?? null;
 export const allLocations = () => LOCATIONS;
+
+// Zisk XP → vyskakovací okno dovednosti (SkillXpEvents).
+export function addFishingXp(state, amount, ...rest) {
+  const before = skillXpBefore(state, 'fishing');
+  const result = addFishingXpRaw(state, amount, ...rest);
+  reportSkillXp(state, 'fishing', before, amount);
+  return result;
+}

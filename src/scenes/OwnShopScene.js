@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
+import { goldText } from '../ui/goldText.js';
+import { withSpend } from '../ui/spendConfirm.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
 import { getItem } from '../data/items.js';
 import { RARITY } from '../data/fishing.js';
 import { itemValue } from '../systems/ItemValueSystem.js';
 import { normalizeInventory } from '../systems/InventorySystem.js';
+import { countQuestEvent } from '../systems/QuestCounters.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
 import { cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
-import { askName } from '../ui/nameInput.js';
+import { askName, renameIcon } from '../ui/nameInput.js';
 import {
   ECONOMIC_CATEGORIES, economicCategory, itemPopularity, popularityLabel, priceRating, reputationBand,
   REGION_ECONOMY, diplomacyItemXp, GAME_DAY_MS
@@ -68,7 +71,7 @@ export default class OwnShopScene extends Phaser.Scene {
     // Prodej běží na pozadí: karta se obnoví po každém prodeji a jednou za 2 s (nasycení, čas).
     this.offSale = onShopSale(({ shop, itemId, qty, revenue }) => {
       if (shop.id !== this.shopId) return;
-      this.say(`Prodáno: ${getItem(itemId)?.name} ×${qty} za ${revenue} zl.`);
+      this.say(`Prodáno: ${getItem(itemId)?.name} ×${qty} za ${goldText(revenue)}.`);
       this.dirty = true;
     });
     this.timer = this.time.addEvent({ delay: 2000, loop: true, callback: () => { this.dirty = true; } });
@@ -131,7 +134,7 @@ export default class OwnShopScene extends Phaser.Scene {
     // Název obchodu (✎ = přejmenovat).
     this.titleText.setText(`Tvůj obchod – ${shop.name}`);
     if (this.titleText.width > 760) this.titleText.setScale(760 / this.titleText.width); else this.titleText.setScale(1);
-    this.button(this.titleText.x + this.titleText.displayWidth + 14, Y + 18, 54, '✎', () => this.renameShop(), { size: 28 });
+    for (const o of renameIcon(this, this.titleText.x + this.titleText.displayWidth + 6, Y + 18, () => this.renameShop())) this.layer.add(o);
 
     // Horní lišta: zlato, stav, reputace, Diplomacie, herní den.
     this.put(coinAmount(this, X + W - 36, Y + 30, this.state.gold, { size: 24, bold: true, color: '#ffd76a', originX: 1 }, { prefix: 'Zlato:' }));
@@ -150,18 +153,24 @@ export default class OwnShopScene extends Phaser.Scene {
         this.refresh();
       }, { active: this.tab === tab.id, disabled: false });
     });
-    const status = shop.open ? 'Otevřeno' : shop.closedReason === 'unpaid' ? `Zavřeno – dluh ${shop.debt} zl` : 'Zavřeno';
+    const status = shop.open ? 'Otevřeno' : shop.closedReason === 'unpaid' ? `Zavřeno – dluh ${goldText(shop.debt)}` : 'Zavřeno';
     this.text(X + 1120, Y + 102, status, { size: 22, bold: true, color: shop.open ? '#7fd67a' : '#ff8a7a' });
-    this.button(X + W - 36 - 300, Y + 86, 300, shop.open ? 'Zavřít obchod' : shop.debt ? `Uhradit ${shop.debt} zl a otevřít` : 'Otevřít obchod', () => {
-      const result = setShopOpen(this.state, this.shopId, !shop.open);
-      this.say(result.ok ? (shop.open ? 'Obchod je otevřený, zákazníci chodí.' : 'Obchod je zavřený, nic se neprodává.') : result.reason);
-      SaveSystem.save(this.state);
-      this.refresh();
+    this.button(X + W - 36 - 300, Y + 86, 300, shop.open ? 'Zavřít obchod' : shop.debt ? `Uhradit ${goldText(shop.debt)} a otevřít` : 'Otevřít obchod', () => {
+      withSpend(this, !shop.open ? shop.debt : 0, { title: 'Uhradit dluh za provoz', lines: ['Obchod se po úhradě znovu otevře.'] }, () => {
+        const result = setShopOpen(this.state, this.shopId, !shop.open);
+        this.say(result.ok ? (shop.open ? 'Obchod je otevřený, zákazníci chodí.' : 'Obchod je zavřený, nic se neprodává.') : result.reason);
+        SaveSystem.save(this.state);
+        this.refresh();
+      });
     });
 
     if (this.tab === 'sale') this.renderSale();
     else if (this.tab === 'storage') this.renderStorage();
-    else this.renderStats();
+    else {
+      // Úkol Účetní kniha: stačí knihu otevřít (počítá se každé zobrazení).
+      countQuestEvent(this.state, 'ledger:open');
+      this.renderStats();
+    }
   }
 
   // ------------------------------------------------------------------ Prodej
@@ -358,9 +367,9 @@ export default class OwnShopScene extends Phaser.Scene {
     const net = s.revenue - s.costs;
     const t = s.today;
     const rows = [
-      ['Dnes – tržby', `${t.revenue} zl`], ['Dnes – zákazníci / obchody', `${t.customers} / ${t.trades}`],
-      ['Celkové tržby', `${s.revenue} zl`], ['Provozní náklady celkem', `${s.costs} zl (${PROPERTY_TYPES[shop.type].dailyCost} zl / den)`],
-      ['Čistý provozní příjem', `${net} zl`], ['Zákazníci / obchody celkem', `${s.customers} / ${s.trades}`],
+      ['Dnes – tržby', `${goldText(t.revenue)}`], ['Dnes – zákazníci / obchody', `${t.customers} / ${t.trades}`],
+      ['Celkové tržby', `${goldText(s.revenue)}`], ['Provozní náklady celkem', `${goldText(s.costs)} (${goldText(PROPERTY_TYPES[shop.type].dailyCost)} / den)`],
+      ['Čistý provozní příjem', `${goldText(net)}`], ['Zákazníci / obchody celkem', `${s.customers} / ${s.trades}`],
       ['Reputace', `${Math.round(shop.reputation)} – ${reputationBand(shop.reputation)[1]} (návštěvnost ×${reputationBand(shop.reputation)[2].toFixed(2).replace('.', ',')})`],
       ['Očekávaní zákazníci', `~${Math.round(customersPerDay(this.state, shop))} za herní den`]
     ];
@@ -376,7 +385,7 @@ export default class OwnShopScene extends Phaser.Scene {
     const days = [...s.days].slice(-5).reverse();
     if (!days.length) this.text(X + 40, top + 490, 'Zatím žádný dokončený herní den.', { size: 19, color: '#9aa4ae' });
     days.forEach((d, i) => {
-      this.text(X + 40, top + 490 + i * 34, `Den ${d.day + 1}: tržby ${d.revenue} zl · náklady ${d.costs} zl · zákazníci ${d.customers} · obchody ${d.trades}`, { size: 19 });
+      this.text(X + 40, top + 490 + i * 34, `Den ${d.day + 1}: tržby ${goldText(d.revenue)} · náklady ${goldText(d.costs)} · zákazníci ${d.customers} · obchody ${d.trades}`, { size: 19 });
     });
 
     // Nejprodávanější / nejméně prodávané, historie.
@@ -386,7 +395,7 @@ export default class OwnShopScene extends Phaser.Scene {
     if (!items.length) this.text(rx, top + 52, 'Zatím se nic neprodalo.', { size: 19, color: '#9aa4ae' });
     items.slice(0, 5).forEach(([id, row], i) => {
       this.icon(id, rx + 18, top + 64 + i * 40, 30);
-      this.text(rx + 40, top + 52 + i * 40, `${getItem(id).name}: ${row.qty} ks za ${row.revenue} zl`, { size: 19, maxWidth: 800 });
+      this.text(rx + 40, top + 52 + i * 40, `${getItem(id).name}: ${row.qty} ks za ${goldText(row.revenue)}`, { size: 19, maxWidth: 800 });
     });
     const slow = this.shop.slots.filter(Boolean).filter((sl) => !(s.items[sl.itemId]?.qty)).map((sl) => getItem(sl.itemId).name);
     this.text(rx, top + 270, 'Nejméně prodávané (v nabídce, zatím bez prodeje)', { size: 22, bold: true });
@@ -395,7 +404,7 @@ export default class OwnShopScene extends Phaser.Scene {
     this.text(rx, top + 400, 'Historie obchodů', { size: 22, bold: true });
     if (!s.history.length) this.text(rx, top + 438, 'Zatím žádné obchody.', { size: 19, color: '#9aa4ae' });
     s.history.slice(0, 8).forEach((h, i) => {
-      this.text(rx, top + 438 + i * 32, `Den ${h.day + 1}: ${CUSTOMER_TYPES[h.customer]?.name ?? h.customer} koupil ${getItem(h.itemId)?.name} ×${h.qty} za ${h.qty * h.price} zl`, { size: 18, maxWidth: 820 });
+      this.text(rx, top + 438 + i * 32, `Den ${h.day + 1}: ${CUSTOMER_TYPES[h.customer]?.name ?? h.customer} koupil ${getItem(h.itemId)?.name} ×${h.qty} za ${goldText(h.qty * h.price)}`, { size: 18, maxWidth: 820 });
     });
   }
 
