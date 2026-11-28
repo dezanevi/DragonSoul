@@ -6,6 +6,10 @@
 //
 // goals: cíle splněné podle počítadel událostí (systems/QuestCounters.js), počítá se od přijetí.
 //   { key, need, text, target, craftItem } – craftItem = výrobek (označí pracoviště a recept).
+//   needs: [{ item, qty, text, target, kind }] – suroviny před výrobou: dokud je hráč nemá, úkol
+//          (text i Sledovat) ukazuje první chybějící; kind 'buy' = označení v obchodě.
+//   shop: obchod, kde se má prodat (marketFood, marketWares, fisher, miner, herbalist) – modrý „?“
+//         u volby Obchod; sellItem = co prodat (označení ve výkupu, filtr).
 // steps + deliver: stejné jako úvodní úkoly profesí (obstarat suroviny, vyrobit, odevzdat).
 
 const GV = 'Greenvale';
@@ -50,22 +54,24 @@ export const CRAFT_QUESTS = {
   }),
   greenvale_fish_demand: quest('greenvale_fish_demand', {
     title: 'Rybolov II – Úlovek dne',
-    brief: 'Prodej Rybářovi rybu, kterou dnes poptává (za 150 % ceny).',
+    brief: 'Chyť Plotici a prodej ji Rybářovi.',
     giver: 'Rybář',
-    description: 'Rybář každý den hledá jeden druh ryby a platí za něj víc. Který to je, uvidíš v jeho obchodě (Dnešní poptávka).',
+    description: 'Rybář vykupuje úlovky. Plotice bere na molu i v rybníku u chaty – chyť ji a prodej mu ji v jeho obchodě.',
     returnTo: 'Vrať se za Rybářem do Rybářské chaty.',
     reward: '15 zlata, 300 XP Rybolovu a 30 XP Diplomacie.',
     requires: ['greenvale_fish_dock'],
     rewardGold: 15,
     rewardXp: [{ prof: 'fishing', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
-    goals: [{ key: 'sell:fishDemand', need: 1, text: 'Chyť rybu z dnešní poptávky a prodej ji Rybářovi (obchod v Rybářské chatě)', target: { ...FISHER, interaction: true } }],
+    goals: [{ key: 'sold:fish_roach', need: 1, text: 'Prodej Plotici Rybářovi (Rybářská chata – Obchod a výkup ryb)', target: { ...FISHER, interaction: true },
+      shop: 'fisher', sellItem: 'fish_roach',
+      needs: [{ item: 'fish_roach', qty: 1, text: 'Chyť Plotici (rybník u chaty nebo molo, modrý kruh, E)', target: POND }] }],
     giverTarget: FISHER,
     flags: flags('fishDemand'),
     dialog: {
-      offer: ['Každý den chci jeden druh ryby – a za ten platím půldruhé ceny. Podívej se v obchodě, co dnes hledám, chyť ji a prodej mi ji.'],
-      active: ['Dnešní poptávku najdeš v mém obchodě nahoře. Chyť tu rybu a prodej mi ji.'],
-      ready: ['Přesně tuhle jsem chtěl. Vidíš, s poptávkou se vyplatí počítat.'],
-      done: ['Zítra budu chtít zase jinou rybu. Stav se.']
+      offer: ['Úlovky ti rád vykoupím. Chyť plotici – bere tady v rybníku i na molu – a prodej mi ji. A každý den hledám jeden druh ryby, za ten platím víc.'],
+      active: ['Plotice bere v rybníku u chaty. Pak mi ji prodej v obchodě.'],
+      ready: ['Pěkná plotice. Vidíš, i z běžného úlovku je pár zlatých.'],
+      done: ['Dnešní poptávku najdeš v mém obchodě nahoře – za tu rybu platím víc.']
     }
   }),
   greenvale_fish_rare: quest('greenvale_fish_rare', {
@@ -122,7 +128,7 @@ export const CRAFT_QUESTS = {
     rewardXp: [{ prof: 'mining', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
       { key: 'mine:iron_ore', need: 3, text: 'Vytěž 3× Železnou rudu (lom, Železná žíla, Těžba 5)', target: quarry('N02', 'Lom – Železná žíla') },
-      { key: 'sell:MiningShop', need: 3, text: 'Prodej Hornickému mistrovi 3 suroviny z Těžby (obchod v Kovárně)', target: { ...MINER, interaction: true } }
+      { key: 'sell:MiningShop', need: 3, text: 'Prodej Hornickému mistrovi 3 suroviny z Těžby (obchod v Kovárně)', target: { ...MINER, interaction: true }, shop: 'miner' }
     ],
     giverTarget: MINER,
     flags: flags('mineIron'),
@@ -167,7 +173,7 @@ export const CRAFT_QUESTS = {
     rewardXp: [{ prof: 'herbalism', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
       { key: 'herb:farm', need: 5, text: 'Nasbírej 5 bylin na statku (záhony u mlýna a ohrada za mostem)', target: herbSite('Z01', 'Záhony statku') },
-      { key: 'sell:HerbalistShop', need: 3, text: 'Prodej Bylinkářce 3 byliny (obchod v Domě Bylinkářky)', target: { ...HERBALIST, interaction: true } }
+      { key: 'sell:HerbalistShop', need: 3, text: 'Prodej Bylinkářce 3 byliny (obchod v Domě Bylinkářky)', target: { ...HERBALIST, interaction: true }, shop: 'herbalist' }
     ],
     giverTarget: HERBALIST,
     flags: flags('herbFarm'),
@@ -241,8 +247,13 @@ export const CRAFT_QUESTS = {
     rewardGold: 15,
     rewardXp: [{ prof: 'cooking', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
-      { key: 'craft:cooking:V013', need: 1, text: 'Chyť Plotici (molo nebo rybník) a uvař Pečenou plotici (Plotice + Léčivé byliny, kuchyně)', target: POND, craftItem: 'meal_V013' },
-      { key: 'sold:meal_V013', need: 1, text: 'Prodej 1× Pečenou plotici Trhovkyni (Tržiště – potraviny)', target: { ...MARKET, interaction: true } }
+      { key: 'craft:cooking:V013', need: 1, text: 'Uvař Pečenou plotici v Hostinské kuchyni (nebo na sporáku)', target: B('greenvale_tavern', 'Hostinská kuchyně'), craftItem: 'meal_V013',
+        needs: [
+          { item: 'fish_roach', qty: 1, text: 'Chyť Plotici (rybník u Rybářské chaty nebo molo, modrý kruh, E)', target: POND },
+          { item: 'healing_herbs', qty: 1, kind: 'buy', text: 'Obstarej Léčivé byliny (Bylinkářka – obchod, nebo nasbírat)', target: { ...HERBALIST, interaction: true } }
+        ] },
+      { key: 'sold:meal_V013', need: 1, text: 'Prodej 1× Pečenou plotici Trhovkyni (Tržiště – potraviny → Obchod → filtr Jídlo)', target: { ...MARKET, interaction: true },
+        shop: 'marketFood', sellItem: 'meal_V013' }
     ],
     giverTarget: MARKET,
     flags: flags('cookFish'),
@@ -286,8 +297,13 @@ export const CRAFT_QUESTS = {
     rewardGold: 15,
     rewardXp: [{ prof: 'alchemy', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
-      { key: 'craft:alchemy:L015', need: 1, text: 'Nasbírej 2× Modré byliny (Stín u vodopádu) a uvař Tonik many (+ Čistá voda, Alchymistický stůl)', target: herbSite('H03', 'Stín u vodopádu'), craftItem: 'mana_potion' },
-      { key: 'sold:mana_potion', need: 1, text: 'Prodej 1× Tonik many na tržišti (Trhovkyně nebo Obchodník s látkami)', target: { ...MARKET, interaction: true } }
+      { key: 'craft:alchemy:L015', need: 1, text: 'Uvař Tonik many na Alchymistickém stole (Alchymistický obchod)', target: ALCHEMIST, craftItem: 'mana_potion',
+        needs: [
+          { item: 'blue_herbs', qty: 2, text: 'Nasbírej 2× Modré byliny (Stín u vodopádu, zelený kruh, E)', target: herbSite('H03', 'Stín u vodopádu') },
+          { item: 'clean_water', qty: 1, kind: 'buy', text: 'Kup Čistou vodu u Trhovkyně (Tržiště – potraviny)', target: { ...MARKET, interaction: true } }
+        ] },
+      { key: 'sold:mana_potion', need: 1, text: 'Prodej 1× Tonik many Trhovkyni (Tržiště – potraviny → Obchod → filtr Potiony)', target: { ...MARKET, interaction: true },
+        shop: 'marketFood', sellItem: 'mana_potion' }
     ],
     giverTarget: ALCHEMIST,
     flags: flags('alchMana'),
@@ -309,7 +325,11 @@ export const CRAFT_QUESTS = {
     rewardGold: 35,
     rewardXp: { prof: 'alchemy', amount: 400 },
     goals: [
-      { key: 'craft:alchemy:L089', need: 1, text: 'Nasbírej Hořký kořen (Les) a Čisticí byliny a uvař Odpuzovač zvěře (Alchymie 2)', target: herbSite('H04', 'Les'), craftItem: 'alch_L089' },
+      { key: 'craft:alchemy:L089', need: 1, text: 'Uvař Odpuzovač zvěře na Alchymistickém stole (Alchymie 2)', target: ALCHEMIST, craftItem: 'alch_L089',
+        needs: [
+          { item: 'bitter_root', qty: 1, text: 'Nasbírej Hořký kořen (Les, zelený kruh, E)', target: herbSite('H04', 'Les') },
+          { item: 'cleansing_herbs', qty: 1, text: 'Nasbírej Čisticí byliny (Břeh řeky, zelený kruh, E)', target: herbSite('H02', 'Břeh řeky') }
+        ] },
       { key: 'use:alchemy:L089', need: 1, text: 'Použij Odpuzovač zvěře (inventář, Použít)', target: null }
     ],
     giverTarget: ALCHEMIST,
@@ -334,8 +354,13 @@ export const CRAFT_QUESTS = {
     rewardGold: 15,
     rewardXp: [{ prof: 'smithing', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
-      { key: 'craft:smithing:sm_copper_ingot', need: 1, text: 'Vytěž 2× Měděnou rudu a 1× Uhlí a roztav Měděný ingot u výhně (Kovárna)', target: quarry('N01', 'Lom – Měděná žíla'), craftItem: 'sm_copper_ingot' },
-      { key: 'sold:sm_copper_ingot', need: 1, text: 'Prodej 1× Měděný ingot na tržišti (Obchodník s látkami nebo Trhovkyně)', target: { ...WARES, interaction: true } }
+      { key: 'craft:smithing:sm_copper_ingot', need: 1, text: 'Roztav Měděný ingot u výhně (Kovárna)', target: MINER, craftItem: 'sm_copper_ingot',
+        needs: [
+          { item: 'copper_ore', qty: 2, text: 'Vytěž 2× Měděnou rudu (lom, Měděná žíla, E)', target: quarry('N01', 'Lom – Měděná žíla') },
+          { item: 'coal', qty: 1, text: 'Vytěž 1× Uhlí (lom, Uhelná sloj, E)', target: quarry('N33', 'Lom – Uhelná sloj') }
+        ] },
+      { key: 'sold:sm_copper_ingot', need: 1, text: 'Prodej 1× Měděný ingot Obchodníkovi s látkami (Tržiště – zboží → Obchod → filtr Materiály)', target: { ...WARES, interaction: true },
+        shop: 'marketWares', sellItem: 'sm_copper_ingot' }
     ],
     giverTarget: MINER,
     flags: flags('smithIngot'),
@@ -356,7 +381,11 @@ export const CRAFT_QUESTS = {
     requires: ['greenvale_smith_ingot'],
     rewardGold: 35,
     rewardXp: { prof: 'smithing', amount: 400 },
-    goals: [{ key: 'craft:smithing:A01', need: 1, text: 'Vykovej Měděnou dýku u výhně (2× Měděný ingot + Kožený řemínek)', target: MINER, craftItem: 'smith_A01' }],
+    goals: [{ key: 'craft:smithing:A01', need: 1, text: 'Vykovej Měděnou dýku u výhně (Kovárna)', target: MINER, craftItem: 'smith_A01',
+      needs: [
+        { item: 'sm_copper_ingot', qty: 2, text: 'Roztav 2× Měděný ingot u výhně (každý 2× Měděná ruda + Uhlí)', target: MINER },
+        { item: 'leather_strap', qty: 1, text: 'Vyrob Kožený řemínek (Kůže od Obchodníka s látkami, Koželužský stůl v Řemeslné dílně)', target: WORKSHOP }
+      ] }],
     giverTarget: MINER,
     flags: flags('smithWeapon'),
     dialog: {
@@ -399,8 +428,13 @@ export const CRAFT_QUESTS = {
     rewardGold: 15,
     rewardXp: [{ prof: 'crafting', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
-      { key: 'craft:crafting:jewel', need: 1, text: 'Vyrob prsten nebo amulet na Šperkařském stole (např. Měděný prsten: Měděný drát + Křemen)', target: WORKSHOP, craftItem: 'cr_b01' },
-      { key: 'sell:jewel', need: 1, text: 'Prodej 1 prsten nebo amulet na tržišti (Obchodník s látkami)', target: { ...WARES, interaction: true } }
+      { key: 'craft:crafting:jewel', need: 1, text: 'Vyrob Měděný prsten (nebo jiný šperk) na Šperkařském stole v Řemeslné dílně', target: WORKSHOP, craftItem: 'cr_b01',
+        needs: [
+          { item: 'sm_copper_wire', qty: 1, text: 'Vyrob Měděný drát u výhně v Kovárně (z Měděného ingotu)', target: MINER },
+          { item: 'quartz', qty: 1, text: 'Vytěž Křemen (lom, Křemenná žíla, Těžba 3)', target: quarry('N34', 'Lom – Křemenná žíla') }
+        ] },
+      { key: 'sell:jewel', need: 1, text: 'Prodej prsten nebo amulet Obchodníkovi s látkami (Tržiště – zboží → Obchod → filtr Vybavení)', target: { ...WARES, interaction: true },
+        shop: 'marketWares', sellItem: 'jewel' }
     ],
     giverTarget: WORKSHOP,
     flags: flags('craftJewel'),
@@ -421,7 +455,11 @@ export const CRAFT_QUESTS = {
     requires: ['greenvale_craft_jewel'],
     rewardGold: 35,
     rewardXp: { prof: 'crafting', amount: 400 },
-    goals: [{ key: 'craft:crafting:E01', need: 1, text: 'Vyrob Basic Soul Crystal (Křišťálový střep + Vlákno) na Soul Crystal Workbench v Hvězdárně', target: B('greenvale_observatory', 'Hvězdárna'), craftItem: 'basic_crystal' }],
+    goals: [{ key: 'craft:crafting:E01', need: 1, text: 'Vyrob Basic Soul Crystal na Soul Crystal Workbench v Hvězdárně', target: B('greenvale_observatory', 'Hvězdárna'), craftItem: 'basic_crystal',
+      needs: [
+        { item: 'mat_kristalovy_strep', qty: 1, text: 'Získej Křišťálový střep (lom – Krystalová puklina, Těžba 10, nebo kořist z monster)', target: quarry('N27', 'Lom – Krystalová puklina') },
+        { item: 'fiber', qty: 1, kind: 'buy', text: 'Kup Vlákno u Obchodníka s látkami (Tržiště – zboží)', target: { ...WARES, interaction: true } }
+      ] }],
     giverTarget: WORKSHOP,
     flags: flags('craftCrystal'),
     dialog: {

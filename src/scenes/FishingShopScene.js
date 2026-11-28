@@ -7,6 +7,8 @@ import { ShopCart, sellButtons, SELL_BUTTONS_W, shopItemHover } from '../ui/shop
 import { addItem, getItemCount, removeItem, normalizeInventory } from '../systems/InventorySystem.js';
 import { dailyDemand, sellPrice } from '../systems/FishingSystem.js';
 import { countQuestEvent } from '../systems/QuestCounters.js';
+import { questSellList } from '../systems/QuestSystem.js';
+import { questMarkObjects } from '../ui/craftLook.js';
 import { STAPLES } from '../data/cooking.js';
 import { FISHER_EXTRA_GOODS } from '../data/merchants.js';
 import { itemIconKey } from '../ui/inventorySprites.js';
@@ -125,6 +127,9 @@ export default class FishingShopScene extends Phaser.Scene {
     }
     for (const row of owned) row.qty -= this.cart.sellCount(row.id);
     owned.splice(0, owned.length, ...owned.filter((row) => row.qty > 0));
+    // Ryba k prodeji pro úkol (Rybolov II – Plotice): nahoře a označená jako věci k nákupu.
+    const sellList = questSellList(this.state);
+    owned.sort((a, b) => Number(Boolean(sellList[b.id])) - Number(Boolean(sellList[a.id])));
     if (!owned.length) {
       this.layer.add(cardText(this, X + 1210, Y + 190, 'Nemáš žádné ryby ani vodní suroviny na prodej.', { size: 19, color: '#9aa4ae' }));
     }
@@ -132,12 +137,14 @@ export default class FishingShopScene extends Phaser.Scene {
       const y = Y + 180 + index * 62;
       const item = getItem(row.id);
       const color = (RARITY[item.rarity] ?? RARITY.common).color;
+      const sellMark = sellList[row.id];
+      if (sellMark) this.layer.add(questMarkObjects(this, X + 1198, y - 2, 632, 60, { quests: [] }, cardText).objects);
       shopItemHover(this, this.layer, row.id, X + 1208, y, 1210 - SELL_BUTTONS_W - 606, 56);
       this.icon(row.id, X + 1234, y + 24);
       const name = cardText(this, X + 1266, y + 4, `${item.name} ×${row.qty}`, { size: 19, bold: true, color });
       if (name.width > 160) name.setScale(160 / name.width);
       this.layer.add(name);
-      this.layer.add(coinAmount(this, X + 1266, y + 30, this.cart.sellUnit(sellPrice(this.state, row.id)), { size: 16, color: '#9fb3c8' }, { rest: '/ ks' }));
+      this.layer.add(coinAmount(this, X + 1266, y + 30, this.cart.sellUnit(sellPrice(this.state, row.id)), { size: 16, color: sellMark ? '#ffd76a' : '#9fb3c8' }, { rest: sellMark ? `/ ks · úkol ${Math.min(sellMark.need, sellMark.have)}/${sellMark.need}` : '/ ks' }));
       this.layer.add(sellButtons(this, this.cart, { x: X + 1820 - SELL_BUTTONS_W, y: y + 2, itemId: row.id, qty: row.qty, onSell: (n) => this.addSell(row.id, n) }));
     });
 

@@ -410,6 +410,25 @@ export function currentQuestGoal(state, questId) {
   return quest?.goals?.find((g) => goalHave(state, questId, g) < g.need) ?? null;
 }
 
+// Aktuální krok cíle: první chybějící surovina (goal.needs – nasbírat, vytěžit, koupit, vyrobit),
+// když má hráč všechny, cíl sám (výroba, prodej…). Sledovat a text úkolu se tak posouvají krok
+// po kroku (modré byliny → stůl, měď → uhlí → výheň). null = žádný nesplněný cíl.
+export function currentGoalStep(state, questId) {
+  const goal = currentQuestGoal(state, questId);
+  if (!goal) return null;
+  const need = (goal.needs ?? []).find((n) => getItemCount(state, n.item) < n.qty);
+  return need ? { ...need, goal, isNeed: true } : { goal, text: goal.text, target: goal.target, craftItem: goal.craftItem };
+}
+
+// Má hráč teď u obchodu prodat něco pro úkol? (modrý „?“ u volby Obchod)
+export function questWantsShop(state, shopKey) {
+  return Object.values(QUESTS).some((quest) => {
+    if (!quest.goals || getQuestStatus(state, quest.id) !== QUEST_STATUS.active) return false;
+    const step = currentGoalStep(state, quest.id);
+    return step && !step.isNeed && step.goal.shop === shopKey;
+  });
+}
+
 // Aktuální krok úkolu s kroky: první surovina, kterou hráč ještě nemá; když má všechny,
 // výroba. Hotový výrobek v inventáři = žádný krok (úkol je splněný). Bez kroků null.
 export function currentQuestStep(state, questId) {
@@ -421,7 +440,7 @@ export function currentQuestStep(state, questId) {
 
 // Cíl probíhajícího úkolu (kam vede Sledovat, modrý kruh, modrý „?“).
 function objectiveTargetOf(state, quest) {
-  if (quest.goals) return currentQuestGoal(state, quest.id)?.target ?? null;
+  if (quest.goals) return currentGoalStep(state, quest.id)?.target ?? null;
   return quest.steps ? currentQuestStep(state, quest.id)?.target ?? null : quest.objectiveTarget;
 }
 
@@ -434,6 +453,7 @@ export function questNeededItems(state) {
     if (quest.deliver) ids.add(quest.deliver.id);
     if (quest.objectiveItem) ids.add(quest.objectiveItem.id);
     if (status === QUEST_STATUS.active) for (const step of quest.steps ?? []) if (step.item) ids.add(step.item);
+    if (status === QUEST_STATUS.active && quest.goals) for (const need of currentQuestGoal(state, quest.id)?.needs ?? []) ids.add(need.item);
   }
   return ids;
 }
@@ -468,16 +488,33 @@ function questMarkList(state, pick) {
 // Předměty, které má hráč pro úkoly koupit (označení v obchodě). Zůstávají označené i po
 // koupi (stav 1/1, 3/1), dokud úkol probíhá.
 export function questShoppingList(state) {
-  return questMarkList(state, (quest) => (quest.steps ?? []).filter((s) => s.kind === 'buy').map((s) => ({ item: s.item, qty: s.qty })));
+  return questMarkList(state, (quest) => {
+    // Cíl se surovinami ke koupi (Čistá voda, Vlákno…): označené, dokud cíl běží.
+    if (quest.goals) return (currentQuestGoal(state, quest.id)?.needs ?? []).filter((n) => n.kind === 'buy').map((n) => ({ item: n.item, qty: n.qty }));
+    return (quest.steps ?? []).filter((s) => s.kind === 'buy').map((s) => ({ item: s.item, qty: s.qty }));
+  });
+}
+
+// Předměty, které má hráč pro úkol prodat (označení ve výkupu a ve filtru): id předmětu, nebo
+// 'jewel' (jakýkoli prsten / amulet) → stejný tvar jako výše (have = prodáno od přijetí).
+export function questSellList(state) {
+  return questMarkList(state, (quest) => {
+    if (!quest.goals) return [];
+    const step = currentGoalStep(state, quest.id);
+    return step && !step.isNeed && step.goal.sellItem ? [{ item: step.goal.sellItem, qty: step.goal.need, have: goalHave(state, quest.id, step.goal) }] : [];
+  });
 }
 
 // Výrobky pro úkoly (označení receptů v oknech výroby): id výrobku → stejný tvar jako výše.
 export function questCraftList(state) {
   return questMarkList(state, (quest) => {
     if (quest.goals) { // cíl s výrobou: označit výrobek, dokud ten cíl běží
-      const goal = currentQuestGoal(state, quest.id);
+      const step = currentGoalStep(state, quest.id);
+      if (!step) return [];
+      // Chybějící surovina, kterou jde vyrobit (ingot, řemínek, drát): označit ji (stav = zásoba).
+      if (step.isNeed) return [{ item: step.item, qty: step.qty, have: getItemCount(state, step.item) }];
       // have = vyrobeno od přijetí (ne zásoba v inventáři – ta se nepočítá)
-      return goal?.craftItem ? [{ item: goal.craftItem, qty: goal.need, have: goalHave(state, quest.id, goal) }] : [];
+      return step.craftItem ? [{ item: step.craftItem, qty: step.goal.need, have: goalHave(state, quest.id, step.goal) }] : [];
     }
     return quest.steps.some((s) => s.kind === 'craft') && quest.deliver ? [{ item: quest.deliver.id, qty: quest.deliver.qty }] : [];
   });
@@ -602,7 +639,9 @@ export function questStep(state, questId) {
   const status = getQuestStatus(state, questId);
   if (status === QUEST_STATUS.notStarted) return `Zadává: ${quest.giver}.`;
   if (status === QUEST_STATUS.active && quest.goals) {
-    const goal = currentQuestGoal(state, questId);
+    const step = currentGoalStep(state, questId);
+    if (step?.isNeed) return `${step.text}: ${Math.min(step.qty, getItemCount(state, step.item))}/${step.qty}.`;
+    const goal = step?.goal;
     return goal ? `${goal.text}: ${Math.min(goal.need, goalHave(state, questId, goal))}/${goal.need}.` : quest.returnTo;
   }
   if (status === QUEST_STATUS.active) return quest.steps ? currentQuestStep(state, questId)?.text ?? '' : quest.objectiveText?.(state) ?? quest.objective;
@@ -618,8 +657,13 @@ export function questProgress(state, questId) {
   const status = getQuestStatus(state, questId);
   if (status === QUEST_STATUS.ready) return { text: 'Splněno – odevzdej', ratio: 1 };
   if (status !== QUEST_STATUS.active) return null;
-  const goal = quest.goals ? currentQuestGoal(state, questId) : null;
-  const goalProgress = goal ? { have: goalHave(state, questId, goal), need: goal.need, label: quest.goals.length > 1 ? `Část ${quest.goals.indexOf(goal) + 1}/${quest.goals.length}` : null } : null;
+  const goalStep = quest.goals ? currentGoalStep(state, questId) : null;
+  const goal = goalStep?.goal ?? null;
+  const part = goal && quest.goals.length > 1 ? `Část ${quest.goals.indexOf(goal) + 1}/${quest.goals.length}` : null;
+  // Příprava surovin: ukazatel počtu té suroviny; jinak postup cíle.
+  const goalProgress = goalStep?.isNeed
+    ? { have: getItemCount(state, goalStep.item), need: goalStep.qty, label: part ? `${part} · suroviny` : 'Suroviny' }
+    : goal ? { have: goalHave(state, questId, goal), need: goal.need, label: part } : null;
   if (quest.progress || goalProgress) {
     const { have, need, label, unit } = goalProgress ?? quest.progress(state);
     const done = Math.max(0, Math.min(need, Math.floor(Number(have) || 0)));

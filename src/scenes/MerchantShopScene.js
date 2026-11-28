@@ -11,7 +11,10 @@ import { addItem, getItemCount, removeItem, normalizeInventory } from '../system
 import { itemIconKey } from '../ui/inventorySprites.js';
 import { cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
 import { questMarkObjects } from '../ui/craftLook.js';
-import { questShoppingList, questNeededItems } from '../systems/QuestSystem.js';
+import { questShoppingList, questNeededItems, questSellList, QUEST_MARK_BLUE } from '../systems/QuestSystem.js';
+
+// Předmět k prodeji pro úkol (id nebo „jakýkoli šperk“) → řádek označení, jinak null.
+const sellMarkOf = (list, id) => list[id] ?? (list.jewel && ['ring', 'amulet'].includes(getItem(id)?.slot) ? list.jewel : null);
 import { sellPrice } from '../systems/ItemValueSystem.js';
 import { ShopCart, sellButtons, SELL_BUTTONS_W, shopItemHover } from '../ui/shopCart.js';
 
@@ -150,9 +153,17 @@ export default class MerchantShopScene extends Phaser.Scene {
     return this.sellFilter ? rows.filter((r) => sellCategory(r.id) === this.sellFilter) : rows;
   }
 
+  // Kategorie (filtry), ve kterých má hráč něco prodat pro úkol – navedení modrým „?“.
+  questSellCategories() {
+    const list = questSellList(this.state);
+    return new Set(this.sellRows().filter((r) => sellMarkOf(list, r.id)).map((r) => sellCategory(r.id)));
+  }
+
   renderSell() {
     this.renderSellFilter();
-    const rows = this.filteredSellRows();
+    const sellList = questSellList(this.state);
+    // Předměty k prodeji pro úkol nahoře a označené (jako věci k nákupu).
+    const rows = this.filteredSellRows().sort((a, b) => Number(Boolean(sellMarkOf(sellList, b.id))) - Number(Boolean(sellMarkOf(sellList, a.id))));
     const needed = questNeededItems(this.state);
     if (!rows.length) {
       const label = SELL_FILTERS.find((c) => c.id === this.sellFilter)?.label;
@@ -164,6 +175,9 @@ export default class MerchantShopScene extends Phaser.Scene {
     rows.slice(this.sellPage * PAGE, (this.sellPage + 1) * PAGE).forEach((row, i) => {
       const y = Y + 140 + i * ROW;
       const item = getItem(row.id);
+      const sellMark = sellMarkOf(sellList, row.id);
+      // Rámeček a „!“ jako u nákupu; stav úkolu (prodáno / potřeba) na řádku s cenou.
+      if (sellMark) this.layer.add(questMarkObjects(this, SELL.x + 10, y - 2, SELL.w - 20, ROW - 4, { quests: [] }, cardText).objects);
       shopItemHover(this, this.layer, row.id, SELL.x + 20, y, SELL.w - 40 - SELL_BUTTONS_W, ROW - 6);
       this.icon(row.id, SELL.x + 44, y + 28, 40);
       const color = (RARITY[item?.rarity] ?? RARITY.common).color;
@@ -174,7 +188,7 @@ export default class MerchantShopScene extends Phaser.Scene {
       for (let cut = base.length - 1; name.displayWidth > 150 && cut > 3; cut--) name.setText(`${base.slice(0, cut).trimEnd()}… ×${row.qty}`);
       this.layer.add(name);
       // Předmět pro úkol: upozornění (prodat jde, ale úkol pak chybí).
-      const note = needed.has(row.id) ? ' · pro úkol' : '';
+      const note = sellMark ? ` · úkol ${Math.min(sellMark.need, sellMark.have)}/${sellMark.need}` : needed.has(row.id) ? ' · pro úkol' : '';
       this.layer.add(coinAmount(this, SELL.x + 76, y + 34, this.cart.sellUnit(row.price), { size: 17, color: note ? '#ffd76a' : '#b8a890' }, { rest: `/ ks${note}` }));
       this.layer.add(sellButtons(this, this.cart, { x: SELL.x + SELL.w - 20 - SELL_BUTTONS_W, y: y + 4, h: 56, itemId: row.id, qty: row.qty, onSell: (n) => this.addSell(row, n) }));
     });
@@ -189,6 +203,11 @@ export default class MerchantShopScene extends Phaser.Scene {
     const button = cardButton(this, null, bx, Y + 86, bw, 54, `Filtr: ${label} ▾`, () => this.toggleFilterMenu(bx, Y + 146, bw), { size: 20 });
     if (this.sellFilter) button.objects[1]?.setColor?.('#ffd76a');
     this.layer.add(button.objects);
+    // Úkol chce něco prodat a zvolený filtr to neukazuje samostatně: modrý „?“ na filtru.
+    const wanted = this.questSellCategories();
+    if (wanted.size && !wanted.has(this.sellFilter)) {
+      this.layer.add(cardText(this, bx + 24, Y + 113, '?', { size: 32, bold: true, color: QUEST_MARK_BLUE, originX: 0.5, originY: 0.5, strokeThickness: 5 }));
+    }
   }
 
   toggleFilterMenu(x, y, w) {
@@ -196,6 +215,7 @@ export default class MerchantShopScene extends Phaser.Scene {
     const rows = this.sellRows();
     const count = (id) => rows.filter((r) => !id || sellCategory(r.id) === id).reduce((sum, r) => sum + r.qty, 0);
     const options = [{ id: null, label: 'Vše' }, ...SELL_FILTERS];
+    const wanted = this.questSellCategories();
     const objects = [];
     // Klik mimo nabídku ji zavře.
     const shade = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.001).setOrigin(0).setInteractive().setDepth(50);
@@ -213,6 +233,8 @@ export default class MerchantShopScene extends Phaser.Scene {
         this.refresh();
       }, { size: 20, disabled: !n && opt.id !== null });
       if (opt.id === this.sellFilter) b.objects[1]?.setColor?.('#ffd76a');
+      // Kategorie s věcí k prodeji pro úkol: modrý „?“.
+      if (opt.id && wanted.has(opt.id)) b.objects.push(cardText(this, x + 24, y + i * 60 + 27, '?', { size: 30, bold: true, color: QUEST_MARK_BLUE, originX: 0.5, originY: 0.5, strokeThickness: 5 }));
       for (const o of b.objects) { o.setDepth?.(52); objects.push(o); }
     });
     this.filterMenu = objects;

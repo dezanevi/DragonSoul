@@ -23,6 +23,21 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
 
 ---
 
+## Verze 0.3 – rozpracováno
+
+### Opraveno – řemeslné úkoly (navádění, obchod, odevzdání)
+- Rybolov II – Úlovek dne: místo denní poptávky (často mořská ryba, v Greenvale nechytitelná) chyť a prodej
+  Rybářovi Plotici.
+- Úkoly s výrobou vedou krok po kroku: nejdřív chybějící suroviny (nasbírat / vytěžit / koupit / vyrobit),
+  pak pracoviště. Sledovat i text úkolu se posouvají – např. Tonik many: modré byliny → čistá voda →
+  Alchymistický stůl; Vlastní ingot: měď → uhlí → výheň v Kovárně. Platí pro Vaření II, Alchymii II a III,
+  Kovářství II a III a Výrobu II a III; suroviny ke koupi jsou označené v obchodě.
+- Prodej pro úkol: u postavy modrý „?“ u volby Obchod; ve výkupu modrý „?“ na filtru a u kategorie (např.
+  Jídlo, Potiony), předmět k prodeji nahoře v rámečku s „!“ a „úkol 0/1“ (jako věci k nákupu). Platí i pro
+  Rybářův obchod (Plotice).
+- Nabídka postavy: nový úkol má žlutý „!“, splněný úkol k odevzdání žlutý „?“.
+- Skalní stráň: monstra úrovně 1–3 (úkol Nový společník).
+
 ## Verze 0.2 – 2026-11-28
 
 ### Změněno – hlavní menu vpravo dole

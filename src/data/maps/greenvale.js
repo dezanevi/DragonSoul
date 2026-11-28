@@ -297,7 +297,8 @@ export const GREENVALE_MAP = {
     { id: 'meadow_windy_plain', name: 'Větrná pláň', x0: 8, y0: 9, x1: 18, y1: 18, level: [11, 13], species: ['thornroot_stag', 'earth_elemental', 'mossveil_lynx'] },
     { id: 'meadow_north_shore', name: 'Louka u severního pobřeží', x0: 28, y0: 10, x1: 36, y1: 19, level: [8, 10], species: ['hobgoblin', 'cave_worm', 'cave_bear', 'zephyr_hound'] },
     { id: 'north_pasture', name: 'Severní pastvina', x0: 25, y0: 29, x1: 32, y1: 37, level: [3, 5], species: ['wild_boar', 'goblin', 'forest_sprite'] },
-    { id: 'rocky_slope', name: 'Skalní stráň', x0: 79, y0: 33, x1: 86, y1: 48, level: [8, 10], species: ['hobgoblin', 'cave_worm', 'cave_bear', 'zephyr_hound'] },
+    { id: 'rocky_slope', name: 'Skalní stráň', x0: 79, y0: 33, x1: 86, y1: 48, level: [1, 3], // úroveň 1–3 (úkol Nový společník)
+      species: ['hobgoblin', 'cave_worm', 'cave_bear', 'zephyr_hound'] },
     { id: 'lodge_meadow', name: 'Louka za Loveckou chatou', x0: 25, y0: 49, x1: 33, y1: 60, level: [1, 3], species: ['dire_wolf', 'wild_boar'] },
     { id: 'south_plains', name: 'Jižní pláně', x0: 1, y0: 56, x1: 12, y1: 68, level: [5, 7], species: ['goblin', 'giant_spider', 'zephyr_hound'] },
     { id: 'forest_glade', name: 'Lesní paseka', x0: 18, y0: 86, x1: 27, y1: 96, level: [7, 9], species: ['giant_spider', 'galecrest_lynx', 'briarbound_wisp'] },

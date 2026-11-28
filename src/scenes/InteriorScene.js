@@ -28,7 +28,9 @@ import {
   chooseSecondSchool,
   SECOND_SCHOOL_OPTIONS,
   currentQuestStep,
-  currentQuestGoal,
+  currentGoalStep,
+  questWantsShop,
+  QUEST_MARK_GOLD,
   QUEST_MARK_BLUE
 } from '../systems/QuestSystem.js';
 import { itemSources } from '../systems/ProfessionDatabase.js';
@@ -111,7 +113,8 @@ function questCraftNeeds(state) {
   const needs = [];
   for (const quest of Object.values(QUESTS)) {
     if (quest.goals && getQuestStatus(state, quest.id) === QUEST_STATUS.active) {
-      const item = currentQuestGoal(state, quest.id)?.craftItem;
+      const step = currentGoalStep(state, quest.id);
+      const item = step?.isNeed ? step.item : step?.craftItem; // i surovina k výrobě (ingot, řemínek…)
       const recipe = item ? itemSources(item).find((source) => source.kind === 'recipe') : null;
       if (recipe) needs.push({ prof: recipe.prof, station: Number(recipe.recipe?.station) || 1 });
       continue;
@@ -1171,19 +1174,19 @@ export default class InteriorScene extends Phaser.Scene {
         if (!flags.herbStarterGiven) return null;
         quest('greenvale_river_herbs', () => this.herbalistQuestTalk());
         spotQuests();
-        options.push({ label: 'Obchod a výkup bylin', run: () => this.openHerbalistShop() });
+        options.push({ label: 'Obchod a výkup bylin', run: () => this.openHerbalistShop(), mark: questWantsShop(this.state, 'herbalist') ? { char: '?', color: QUEST_MARK_BLUE } : null });
         talk(NPC_TALK.herbalist);
         break;
       case 'fisher':
         if (!flags.fishingStarterGiven) return null;
         spotQuests();
-        options.push({ label: 'Obchod a výkup ryb', run: () => this.openFishingShop() });
+        options.push({ label: 'Obchod a výkup ryb', run: () => this.openFishingShop(), mark: questWantsShop(this.state, 'fisher') ? { char: '?', color: QUEST_MARK_BLUE } : null });
         talk(NPC_TALK.fisher);
         break;
       case 'miner':
         if (!flags.miningStarterGiven) return null;
         spotQuests();
-        options.push({ label: 'Obchod a výkup surovin', run: () => this.openMiningShop() });
+        options.push({ label: 'Obchod a výkup surovin', run: () => this.openMiningShop(), mark: questWantsShop(this.state, 'miner') ? { char: '?', color: QUEST_MARK_BLUE } : null });
         talk(NPC_TALK.miner);
         break;
       case 'healer':
@@ -1230,7 +1233,7 @@ export default class InteriorScene extends Phaser.Scene {
       }
       case 'talk':
         spotQuests();
-        if (spot.shop) options.push({ label: 'Obchod', run: () => this.openMerchantShop(spot.shop) });
+        if (spot.shop) options.push({ label: 'Obchod', run: () => this.openMerchantShop(spot.shop), mark: questWantsShop(this.state, spot.shop) ? { char: '?', color: QUEST_MARK_BLUE } : null });
         if (!options.length) return null;
         talk(spot.lines ?? ['…']);
         break;
@@ -1245,9 +1248,9 @@ export default class InteriorScene extends Phaser.Scene {
     const quest = QUESTS[questId];
     if (!quest) return null;
     const status = getQuestStatus(this.state, questId);
-    if (status === QUEST_STATUS.notStarted && isQuestAvailable(this.state, questId)) return { label: `Nový úkol: ${quest.title}`, run, highlight: true };
+    if (status === QUEST_STATUS.notStarted && isQuestAvailable(this.state, questId)) return { label: `Nový úkol: ${quest.title}`, run, highlight: true, mark: { char: '!', color: QUEST_MARK_GOLD } };
     if (status === QUEST_STATUS.active) return { label: `Úkol: ${quest.title}`, run };
-    if (status === QUEST_STATUS.ready) return { label: `Odevzdat úkol: ${quest.title}`, run, highlight: true };
+    if (status === QUEST_STATUS.ready) return { label: `Odevzdat úkol: ${quest.title}`, run, highlight: true, mark: { char: '?', color: QUEST_MARK_GOLD } };
     return null;
   }
 
@@ -1293,6 +1296,14 @@ export default class InteriorScene extends Phaser.Scene {
       const label = option.danger ? option.label : `${i + 1}. ${option.label}`;
       const btn = cardButton(this, null, bx, by, bw, bh, label, pick, { size: 22, danger: option.danger });
       if (option.highlight) btn.objects[1].setColor('#ffd76a'); // nový / splněný úkol: zlaté písmo
+      // Značka úkolu v tlačítku vlevo: žlutý „!“ nový úkol, žlutý „?“ odevzdat, modrý „?“ obchod pro úkol.
+      if (option.mark) {
+        // Popisek kousek doprava a případně zmenšit, aby se značky nedotýkal.
+        const label = btn.objects[1];
+        label.setX(label.x + 14);
+        if (label.displayWidth > bw - 84) label.setScale((bw - 84) / label.width);
+      }
+      if (option.mark) btn.objects.push(cardText(this, bx + 26, by + bh / 2, option.mark.char, { size: 34, bold: true, color: option.mark.color, originX: 0.5, originY: 0.5, strokeThickness: 5 }));
       if (infoText && option.info) {
         btn.objects[2].on('pointerover', () => infoText.setText(option.info).setColor('#f3e4bd'));
         btn.objects[2].on('pointerout', () => infoText.setText('Najeď myší na volbu – ukáže se její popis.').setColor('#c9b98f'));
