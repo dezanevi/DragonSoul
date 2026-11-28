@@ -149,7 +149,7 @@ export function buyProperty(state, id) {
   state.gold -= prop.price;
   state.business.properties[id] = {
     id, type: prop.type, region: prop.region, name: prop.name,
-    open: true, debt: 0, reputation: REPUTATION_START, repMilestones: {},
+    open: true, debt: 0, till: 0, reputation: REPUTATION_START, repMilestones: {},
     storage: {}, slots: Array.from({ length: type.slots }, () => null),
     specialization: 'mixed', employees: [],
     purchasedDay: currentGameDay(state),
@@ -200,12 +200,29 @@ export function setSlotPrice(state, shopId, index, price) {
   slot.price = Math.max(1, Math.round(price));
 }
 
+// Platba z pokladny obchodu, co chybí, ze zlata hrdiny.
+function payFromTill(state, shop, amount) {
+  const fromTill = Math.min(Number(shop.till) || 0, amount);
+  shop.till = (Number(shop.till) || 0) - fromTill;
+  state.gold = (Number(state.gold) || 0) - (amount - fromTill);
+}
+
+// Vybrání pokladny: tržby obchodu → zlato hrdiny. Vrací vybranou částku.
+export function collectTill(state, shopId) {
+  const shop = getShop(state, shopId);
+  const amount = Math.max(0, Math.floor(Number(shop?.till) || 0));
+  if (!amount) return 0;
+  shop.till -= amount;
+  state.gold = (Number(state.gold) || 0) + amount;
+  return amount;
+}
+
 export function setShopOpen(state, shopId, open) {
   const shop = getShop(state, shopId);
   if (!shop) return { ok: false };
   if (open && shop.debt > 0) {
-    if ((state.gold ?? 0) < shop.debt) return { ok: false, reason: `Nejdřív uhraď dluh za provoz: ${shop.debt} zlata.` };
-    state.gold -= shop.debt;
+    if ((Number(shop.till) || 0) + (state.gold ?? 0) < shop.debt) return { ok: false, reason: `Nejdřív uhraď dluh za provoz: ${shop.debt} zlata.` };
+    payFromTill(state, shop, shop.debt);
     shop.stats.costs += shop.debt;
     shop.debt = 0;
   }
@@ -369,9 +386,17 @@ function serveCustomer(state, shop) {
       .map((slot, index) => ({ slot, index }))
       .filter(({ slot }) => slot && economicCategory(slot.itemId) === cat && storageQty(shop, slot.itemId) > 0 && slot.price <= budget);
     if (!offers.length) continue;
-    const scored = offers.map((o) => ({ ...o, p: buyChance(state, shop, o.slot.itemId, o.slot.price, typeId) })).sort((a, b) => b.p - a.p);
-    const best = scored[0];
-    if (!best.p || Math.random() > best.p) continue;
+    // Zákazník si nabídku vybírá náhodně podle chuti (šance nákupu) a když ho první nepřesvědčí,
+    // zváží ještě druhou. Dřív bral vždy jen tu nejlepší – ostatní zboží stejné kategorie se pak
+    // neprodalo nikdy (např. Bylinný obklad vedle levnějšího Odpuzovače zvěře).
+    let candidates = offers.map((o) => ({ ...o, p: buyChance(state, shop, o.slot.itemId, o.slot.price, typeId) })).filter((o) => o.p > 0);
+    let best = null;
+    for (let tries = 0; tries < 2 && candidates.length && !best; tries++) {
+      const pick = pickWeighted(candidates.map((o) => [o, o.p]));
+      if (Math.random() <= pick.p) best = pick;
+      candidates = candidates.filter((o) => o !== pick);
+    }
+    if (!best) continue;
     const maxQty = ECONOMIC_CATEGORIES[cat].maxQty;
     const qty = Math.min(1 + Math.floor(Math.random() * maxQty), storageQty(shop, best.slot.itemId), Math.floor(budget / best.slot.price));
     if (qty < 1) continue;
@@ -389,7 +414,8 @@ function sell(state, shop, slot, qty, typeId) {
   const cat = economicCategory(itemId);
   shop.storage[itemId] -= qty;
   if (shop.storage[itemId] <= 0) delete shop.storage[itemId];
-  state.gold = (Number(state.gold) || 0) + revenue;
+  // Tržba zůstává v pokladně obchodu – hráč ji vybere v obchodě (collectTill).
+  shop.till = (Number(shop.till) || 0) + revenue;
 
   const market = (state.business.market[shop.region] ??= {});
   market[cat] = Math.min(1, (market[cat] ?? 0) + qty / ECONOMIC_CATEGORIES[cat].capacity);
@@ -430,8 +456,9 @@ function processDay(state, day) {
     const today = shop.stats.today;
     if (shop.open) {
       const cost = PROPERTY_TYPES[shop.type].dailyCost;
-      if ((state.gold ?? 0) >= cost) {
-        state.gold -= cost;
+      // Provoz se platí nejdřív z pokladny obchodu, zbytek ze zlata hrdiny.
+      if ((Number(shop.till) || 0) + (state.gold ?? 0) >= cost) {
+        payFromTill(state, shop, cost);
         shop.stats.costs += cost;
         today.costs += cost;
       } else {

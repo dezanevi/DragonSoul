@@ -37,6 +37,37 @@ Kategorie změn: **Přidáno**, **Změněno**, **Opraveno**, **Odstraněno**, **
   Rybářův obchod (Plotice).
 - Nabídka postavy: nový úkol má žlutý „!“, splněný úkol k odevzdání žlutý „?“.
 - Skalní stráň: monstra úrovně 1–3 (úkol Nový společník).
+- Naleziště pro úkoly mimo louky s monstry vysoké úrovně: Hořký kořen (Alchymie III) ze Zahrádky Řemeslné
+  dílny místo Lesa u Louky nad západními útesy (úr. 12–14), Modré byliny (Alchymie II) ze zahrádky u domu
+  ve vesnici místo Stínu u vodopádu na Jižních pláních (úr. 5–7), Vodní květ (Byliny III) z tůňky na statku.
+- Výkup Hornického mistra a Bylinkářky: suroviny k prodeji pro úkol (Těžba II – železná a měděná ruda,
+  Byliny II – byliny ze statku) jsou nahoře v rámečku s „!“ a „úkol x/3“.
+- Vaření II – Ryba na talíř: bez rybářského prutu úkol nejdřív pošle za Rybářem. Ten dá prut (i když ho už
+  jednou dal), neotevře obchod, rozhovor skončí a ve světě se ohlásí „Splněno: rybářský prut…“ s dalším
+  krokem (Chyť Plotici).
+- Vyskakovací okno dovednosti: „Odemkl se 1 recept / Odemkly se 2 recepty / Odemklo se 5 receptů“ místo
+  „Odemkl jsi N předmětů“.
+- Vlastní obchod – pokladna: tržby zůstávají v obchodě (ne rovnou u hrdiny). V záhlaví obchodu tlačítko
+  „Vybrat N zlata“ převede pokladnu do zlata hrdiny. Denní provoz a dluh se platí nejdřív z pokladny,
+  zbytek ze zlata. Hláška o prodeji ukazuje stav pokladny.
+- Vlastní obchod – zákazníci: z nabídky stejné kategorie si vybírají náhodně podle chuti (šance nákupu)
+  a zváží i druhou nabídku. Dřív brali vždy jen tu nejlepší, takže ostatní zboží kategorie se neprodalo
+  nikdy (např. Bylinný obklad vedle Odpuzovače zvěře).
+- Vlastní obchod – Sklad: inventář má filtr kategorií (tlačítko „Filtr: … ▾“ – Vybavení, Materiály, Potiony,
+  Jídlo, Ostatní, s počty kusů; prázdné kategorie neaktivní, Esc filtr zavře).
+- Nový společník: hráč, který už má víc než 2 monstra (v partě i úschovně), má úkol hned po přijetí splněný
+  a může ho rovnou odevzdat.
+- Hustý bylinný porost (a další speciální naleziště bylin): hra se při sběru zasekla – okno sběru spadlo
+  na výpočtu doby sběru (speciální naleziště nemají vzácnost). Doba je teď podle stupně naleziště
+  (+0,5 s za každý tah navíc, porost 3 s).
+- Kovářství II a III: texty úkolů „vykovej ingot“ místo „roztav ingot“.
+- Vodní květ jde sbírat od Sběru bylin 7 (dřív 8) – úkol Byliny III i texty upravené.
+- Jídla s Charismou: bonus trvá minuty místo soubojů – 15 min (recepty od úrovně 50: 20 min), souboje ho
+  neubírají. Popis jídla „Charisma +1 (15 min)“. Jídla se Štěstím zůstávají na souboje.
+- Výroba I – Kůže na zakázku: hlídá inventář – bez kůže z monstra vede Sledovat na louku s divočáky,
+  s kůží (kteroukoli, kterou jde vyčinit) do Řemeslné dílny ke Koželužskému stolu.
+- Ženská postava na GitHubu: soubor animace přejmenovaný na malá písmena (hero-female-walk.png) – GitHub
+  rozlišuje velikost písmen, Windows ne (připraveno, zatím nenahráno).
 
 ## Verze 0.2 – 2026-11-28
 

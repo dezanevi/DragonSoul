@@ -106,7 +106,10 @@ const herbOf = (id) => HERB_BY_ID[id];
 
 export function herbSeconds(state, site) {
   const herb = herbOf(site.main);
-  let seconds = HERB_RARITY[site.rarity].seconds;
+  // Speciální naleziště (Hustý bylinný porost, Skryté lesní…) nemají vzácnost – doba podle stupně
+  // (dřív tu hra spadla a okno sběru se zaseklo). Za každý tah navíc +0,5 s.
+  const rarity = HERB_RARITY[site.rarity] ?? Object.values(HERB_RARITY).find((r) => r.tier === site.tier) ?? HERB_RARITY.common;
+  let seconds = rarity.seconds + (site.special ? 0.5 * Math.max(0, (site.draws ?? 1) - 1) : 0);
   seconds *= 1 - HERB_RULES.secondsPerLevel * Math.max(0, herbLevel(state) - (herb?.level ?? site.minLevel));
   seconds *= 1 - 0.05 * tiersAbove(state, site);
   if (bestSickle(state)?.id === 'mithril_sickle' || bestSickle(state)?.id === 'star_sickle') seconds *= 0.85;

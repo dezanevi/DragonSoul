@@ -236,7 +236,7 @@ export const RECIPES = [
 ];
 
 // Opakující se pokrmy (stejný účinek jako jiný recept na podobné úrovni) dávají místo toho
-// Štěstí nebo Charisma hrdiny (ploché body na pár soubojů): 1 bod do úr. 24, +1 za každých 25 úrovní.
+// Štěstí (na pár soubojů) nebo Charisma (na minuty) hrdiny – ploché body: 1 bod do úr. 24, +1 za každých 25 úrovní.
 // Masový vývar se zeleninou (V043) zůstává – je to snídaně k noclehu v hostinci.
 const HERO_STAT_MEALS = {
   V013: 'charisma', V015: 'charisma', V039: 'luck', V027: 'luck', V091: 'charisma', V036: 'luck',
@@ -246,7 +246,9 @@ const HERO_STAT_MEALS = {
 };
 for (const r of RECIPES) {
   const stat = HERO_STAT_MEALS[r.id];
-  if (stat) r.effect = { buffs: { [stat]: 1 + Math.floor(r.level / 25) }, battles: r.level >= 50 ? 5 : 4 };
+  // Charisma platí hlavně při obchodu → na minuty (15, od úr. 50 20 min); Štěstí na souboje.
+  if (stat === 'charisma') r.effect = { buffs: { [stat]: 1 + Math.floor(r.level / 25) }, minutes: r.level >= 50 ? 20 : 15 };
+  else if (stat) r.effect = { buffs: { [stat]: 1 + Math.floor(r.level / 25) }, battles: r.level >= 50 ? 5 : 4 };
 }
 
 export const ALL_COOKING = [...INTERMEDIATES, ...RECIPES];
@@ -273,6 +275,7 @@ export function describeEffect(e) {
   for (const [stat, value] of Object.entries(e.buffs ?? {})) parts.push(statPart(STAT_LABELS, stat, value));
   let text = parts.join(', ');
   if (e.battles && (e.regen || e.manaRegen || e.buffs)) text += ` (${e.battles} ${e.battles < 5 ? 'souboje' : 'soubojů'})`;
+  else if (e.buffs && e.minutes && !e.move && !e.explore) text += ` (${e.minutes} min)`; // časový bonus (Charisma)
   const travel = [];
   if (e.move) travel.push(`rychlost pohybu na mapě +${e.move} %`);
   if (e.explore) travel.push(`průzkum: +${e.explore} HP monstrům každých 50 kroků`);

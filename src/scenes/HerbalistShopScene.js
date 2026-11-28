@@ -12,7 +12,8 @@ import {
 import { itemIconKey } from '../ui/inventorySprites.js';
 import { cardText, cardButton, uiWindow, uiTitle, uiSection, coinAmount } from '../ui/fantasyCard.js';
 import { questBuyMark } from '../ui/craftLook.js';
-import { questShoppingList } from '../systems/QuestSystem.js';
+import { questShoppingList, questSellList } from '../systems/QuestSystem.js';
+import { questMarkObjects } from '../ui/craftLook.js';
 import { ShopCart, sellButtons, SELL_BUTTONS_W, shopItemHover } from '../ui/shopCart.js';
 
 // Obchod Bylinkářky v Greenvale: omezená denní zásoba běžných bylin (vzácné se neprodávají),
@@ -138,6 +139,9 @@ export default class HerbalistShopScene extends Phaser.Scene {
     }
     for (const row of owned) row.qty -= this.cart.sellCount(row.id);
     owned.splice(0, owned.length, ...owned.filter((row) => row.qty > 0));
+    // Byliny k prodeji pro úkol (Byliny II) nahoře.
+    const sellList = questSellList(this.state);
+    owned.sort((a, b) => Number(Boolean(sellList[b.id])) - Number(Boolean(sellList[a.id])));
     if (!owned.length) {
       this.layer.add(cardText(this, X + 1210, Y + 180, 'Nemáš žádné byliny na prodej.', { size: 20, color: '#9aa4ae' }));
     }
@@ -145,12 +149,15 @@ export default class HerbalistShopScene extends Phaser.Scene {
       const y = Y + 172 + index * 62;
       const item = getItem(row.id);
       const color = (RARITY[item.rarity] ?? RARITY.common).color;
+      // Surovina k prodeji pro úkol: rámeček s „!“ a „úkol x/y“ na řádku s cenou (jako u nákupu).
+      const sellMark = sellList[row.id];
+      if (sellMark) this.layer.add(questMarkObjects(this, X + 1198, y - 2, 632, 60, { quests: [] }, cardText).objects);
       shopItemHover(this, this.layer, row.id, X + 1208, y, 1290 - SELL_BUTTONS_W - 686, 56);
       this.icon(row.id, X + 1234, y + 26);
       const name = cardText(this, X + 1266, y + 4, `${item.name} ×${row.qty}`, { size: 20, bold: true, color });
       if (name.width > 160) name.setScale(160 / name.width);
       this.layer.add(name);
-      this.layer.add(coinAmount(this, X + 1266, y + 32, this.cart.sellUnit(sellPrice(row.id, wanted)), { size: 17, color: '#b8a890' }, { rest: '/ ks' }));
+      this.layer.add(coinAmount(this, X + 1266, y + 32, this.cart.sellUnit(sellPrice(row.id, wanted)), { size: 17, color: sellMark ? '#ffd76a' : '#b8a890' }, { rest: sellMark ? `/ ks · úkol ${Math.min(sellMark.need, sellMark.have)}/${sellMark.need}` : '/ ks' }));
       this.layer.add(sellButtons(this, this.cart, { x: X + 1820 - SELL_BUTTONS_W, y: y + 2, itemId: row.id, qty: row.qty, onSell: (n) => this.addSell(row.id, n) }));
     });
 

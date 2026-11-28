@@ -3,7 +3,10 @@ import { goldText } from '../ui/goldText.js';
 import { withSpend } from '../ui/spendConfirm.js';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config.js';
 import { SaveSystem } from '../systems/SaveSystem.js';
-import { getItem } from '../data/items.js';
+import { getItem, ITEM_CATEGORIES } from '../data/items.js';
+
+// Filtr inventáře ve skladu (stejné kategorie jako výkup u obchodníků, bez klíčů).
+const INV_FILTERS = ITEM_CATEGORIES.filter((c) => c.id !== 'keys');
 import { RARITY } from '../data/fishing.js';
 import { itemValue } from '../systems/ItemValueSystem.js';
 import { normalizeInventory } from '../systems/InventorySystem.js';
@@ -16,7 +19,7 @@ import {
   REGION_ECONOMY, diplomacyItemXp, GAME_DAY_MS
 } from '../data/diplomacy.js';
 import {
-  getShop, normalizeDiplomacy, diplomacyLevel, moveToStorage, moveToInventory, setSlot, setSlotPrice, setShopOpen,
+  getShop, normalizeDiplomacy, diplomacyLevel, moveToStorage, moveToInventory, setSlot, setSlotPrice, setShopOpen, collectTill,
   storageQty, marketSaturation, estimateDailySales, customersPerDay, onShopSale, CUSTOMER_TYPES, PROPERTY_TYPES, PROPERTIES
 } from '../systems/DiplomacySystem.js';
 
@@ -65,13 +68,16 @@ export default class OwnShopScene extends Phaser.Scene {
     cardButton(this, null, X + W - 36 - 220, Y + H - 82, 220, BTN_H, 'Zavřít (ESC)', () => this.close(), { danger: true, size: 22 });
 
     this.onKey = (event) => {
-      if (!event.repeat && event.code === 'Escape') this.close();
+      if (!event.repeat && event.code === 'Escape') {
+        if (this.filterMenu) this.closeFilterMenu(); // nejdřív zavřít rozbalený filtr
+        else this.close();
+      }
     };
     this.time.delayedCall(200, () => this.input.keyboard.on('keydown', this.onKey));
     // Prodej běží na pozadí: karta se obnoví po každém prodeji a jednou za 2 s (nasycení, čas).
     this.offSale = onShopSale(({ shop, itemId, qty, revenue }) => {
       if (shop.id !== this.shopId) return;
-      this.say(`Prodáno: ${getItem(itemId)?.name} ×${qty} za ${goldText(revenue)}.`);
+      this.say(`Prodáno: ${getItem(itemId)?.name} ×${qty} za ${goldText(revenue)} – v pokladně ${goldText(Math.floor(Number(shop.till) || 0))}.`);
       this.dirty = true;
     });
     this.timer = this.time.addEvent({ delay: 2000, loop: true, callback: () => { this.dirty = true; } });
@@ -154,7 +160,15 @@ export default class OwnShopScene extends Phaser.Scene {
       }, { active: this.tab === tab.id, disabled: false });
     });
     const status = shop.open ? 'Otevřeno' : shop.closedReason === 'unpaid' ? `Zavřeno – dluh ${goldText(shop.debt)}` : 'Zavřeno';
-    this.text(X + 1120, Y + 102, status, { size: 22, bold: true, color: shop.open ? '#7fd67a' : '#ff8a7a' });
+    this.text(X + 1100, Y + 102, status, { size: 22, bold: true, color: shop.open ? '#7fd67a' : '#ff8a7a', maxWidth: 150 });
+    // Pokladna: tržby zůstávají v obchodě, hráč si je vybere (platí se z nich i provoz).
+    const till = Math.floor(Number(shop.till) || 0);
+    this.button(X + 1264, Y + 86, 270, till ? `Vybrat ${goldText(till)}` : 'Pokladna prázdná', () => {
+      const amount = collectTill(this.state, this.shopId);
+      SaveSystem.save(this.state);
+      this.say(amount ? `Z pokladny jsi vybral ${goldText(amount)}.` : 'Pokladna je prázdná.');
+      this.refresh();
+    }, { disabled: !till, size: 20 });
     this.button(X + W - 36 - 300, Y + 86, 300, shop.open ? 'Zavřít obchod' : shop.debt ? `Uhradit ${goldText(shop.debt)} a otevřít` : 'Otevřít obchod', () => {
       withSpend(this, !shop.open ? shop.debt : 0, { title: 'Uhradit dluh za provoz', lines: ['Obchod se po úhradě znovu otevře.'] }, () => {
         const result = setShopOpen(this.state, this.shopId, !shop.open);
@@ -291,6 +305,37 @@ export default class OwnShopScene extends Phaser.Scene {
   }
 
   // ------------------------------------------------------------------ Sklad
+  // Rozbalený filtr inventáře: kategorie s počtem kusů; prázdné kategorie neaktivní.
+  toggleFilterMenu(x, y, w, rows) {
+    if (this.filterMenu) { this.closeFilterMenu(); return; }
+    const count = (id) => rows.filter(([itemId]) => !id || getItem(itemId)?.category === id).reduce((sum, [, qty]) => sum + qty, 0);
+    const options = [{ id: null, label: 'Vše' }, ...INV_FILTERS];
+    const objects = [];
+    const shade = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.001).setOrigin(0).setInteractive().setDepth(50);
+    shade.on('pointerdown', () => this.closeFilterMenu());
+    objects.push(shade);
+    const bg = this.add.graphics().setDepth(51);
+    bg.fillStyle(0x0b1626, 0.97).fillRoundedRect(x - 8, y - 8, w + 16, options.length * 62 + 10, 12).lineStyle(2, 0xd6a23a, 1).strokeRoundedRect(x - 8, y - 8, w + 16, options.length * 62 + 10, 12);
+    objects.push(bg);
+    options.forEach((opt, i) => {
+      const n = count(opt.id);
+      const b = cardButton(this, null, x, y + i * 62, w, 56, `${opt.label} (${n})`, () => {
+        this.invFilter = opt.id;
+        this.page.inv = 0;
+        this.closeFilterMenu();
+        this.refresh();
+      }, { size: 20, disabled: !n && opt.id !== null });
+      if (opt.id === (this.invFilter ?? null)) b.objects[1]?.setColor?.('#ffd76a');
+      for (const o of b.objects) { o.setDepth?.(52); objects.push(o); }
+    });
+    this.filterMenu = objects;
+  }
+
+  closeFilterMenu() {
+    for (const o of this.filterMenu ?? []) o.destroy();
+    this.filterMenu = null;
+  }
+
   renderStorage() {
     const shop = this.shop;
     const top = Y + 164;
@@ -306,11 +351,19 @@ export default class OwnShopScene extends Phaser.Scene {
       if (!s || !economicCategory(s.id)) continue;
       inv.set(s.id, (inv.get(s.id) ?? 0) + s.qty);
     }
-    const invRows = [...inv.entries()].sort((a, b) => getItem(a[0]).name.localeCompare(getItem(b[0]).name, 'cs'));
+    const allInvRows = [...inv.entries()].sort((a, b) => getItem(a[0]).name.localeCompare(getItem(b[0]).name, 'cs'));
+    // Filtr kategorie (tlačítko „Filtr: … ▾“ vpravo v nadpisu inventáře).
+    const invRows = this.invFilter ? allInvRows.filter(([id]) => getItem(id)?.category === this.invFilter) : allInvRows;
+    const filterLabel = INV_FILTERS.find((c) => c.id === this.invFilter)?.label ?? 'Vše';
+    const fw = 250;
+    const fx = X + 20 + half - 20 - fw;
+    const filterButton = this.button(fx, top + 4, fw, `Filtr: ${filterLabel} ▾`, () => this.toggleFilterMenu(fx, top + 70, fw, allInvRows), { size: 20, h: 54 });
+    if (this.invFilter) filterButton.objects[1]?.setColor?.('#ffd76a');
     const per = 9;
     const list = (rows, key, x, actions) => {
       if (!rows.length) {
-        this.text(x, top + 60, key === 'inv' ? 'V inventáři nemáš nic na prodej.' : 'Sklad je prázdný.', { size: 20, color: '#9aa4ae' });
+        const empty = key !== 'inv' ? 'Sklad je prázdný.' : this.invFilter ? `V kategorii ${filterLabel} nemáš nic na prodej.` : 'V inventáři nemáš nic na prodej.';
+        this.text(x, top + 70, empty, { size: 20, color: '#9aa4ae' });
         return;
       }
       const pages = Math.ceil(rows.length / per);

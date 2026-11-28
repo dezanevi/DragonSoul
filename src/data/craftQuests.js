@@ -12,7 +12,11 @@
 //         u volby Obchod; sellItem = co prodat (označení ve výkupu, filtr).
 // steps + deliver: stejné jako úvodní úkoly profesí (obstarat suroviny, vyrobit, odevzdat).
 
+import { RODS } from './fishing.js';
+
 const GV = 'Greenvale';
+// Kterýkoli rybářský prut (bez prutu nejde chytit rybu – nejdřív za Rybářem, ten dá starý prut).
+const ROD_IDS = RODS.map((rod) => rod.id);
 const B = (id, label, interaction = false) => ({ type: 'building', id, label, ...(interaction ? { interaction: true } : {}) });
 const FISHER = B('greenvale_fishing_hut', 'Rybářská chata');
 const MINER = B('greenvale_smithy', 'Kovárna');
@@ -26,6 +30,11 @@ const DOCK = { type: 'fishingSpot', location: 'greenvale_dock', label: 'Molo na 
 const POND = { type: 'fishingSpot', location: 'greenvale_pond', label: 'Rybník u Rybářské chaty' };
 const quarry = (deposit, label) => ({ type: 'miningSpot', deposit, label });
 const herbSite = (site, label) => ({ type: 'herbSite', site, label });
+
+// Kůže z monster, které jde na Koželužském stole zpracovat na Kůži (recept cr_hide_to_leather).
+const HIDES = ['mat_direwolfi_kozesina', 'mat_vetrna_kozesina', 'mat_zephyrova_kozesina', 'mat_mechem_pokryta_kozesina', 'mat_kometoocasa_kozesina',
+  'mat_medvedi_kuze', 'mat_trolli_kuze', 'mat_horska_trolli_kuze', 'mat_ogrska_kuze', 'mat_pekelna_kuze', 'mat_bahenni_uhori_kuze', 'mat_demonicka_kuze',
+  'mat_divoka_kuze', 'mat_berani_kuze', 'mat_trojita_psi_kuze', 'mat_drsna_obrska_kuze', 'mat_ropuchova_kuze', 'mat_kuze_lovce_noci'];
 
 const quest = (id, def) => ({ id, region: GV, ...def });
 const flags = (key) => ({ accepted: `${key}Accepted`, objective: `${key}Ready`, completed: `${key}Done` });
@@ -113,7 +122,7 @@ export const CRAFT_QUESTS = {
       offer: ['Kovárna žere měď jako hladový vlk. Vezmi krumpáč, v lomu vytěž pět kusů měděné rudy a pak se mi ukaž.'],
       active: ['Měděná žíla je v lomu hned u sjezdu. Hnědý kruh, E.'],
       ready: ['Pěkná ruda. Ruce ti slouží. Tady máš za práci.'],
-      done: ['Rudu ti vykoupím, nebo si z ní u výhně roztav ingoty.']
+      done: ['Rudu ti vykoupím, nebo si z ní u výhně vykovej ingoty.']
     }
   }),
   greenvale_mine_iron: quest('greenvale_mine_iron', {
@@ -128,7 +137,8 @@ export const CRAFT_QUESTS = {
     rewardXp: [{ prof: 'mining', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
       { key: 'mine:iron_ore', need: 3, text: 'Vytěž 3× Železnou rudu (lom, Železná žíla, Těžba 5)', target: quarry('N02', 'Lom – Železná žíla') },
-      { key: 'sell:MiningShop', need: 3, text: 'Prodej Hornickému mistrovi 3 suroviny z Těžby (obchod v Kovárně)', target: { ...MINER, interaction: true }, shop: 'miner' }
+      { key: 'sell:MiningShop', need: 3, text: 'Prodej Hornickému mistrovi 3 suroviny z Těžby (obchod v Kovárně)', target: { ...MINER, interaction: true }, shop: 'miner',
+        sellItem: ['iron_ore', 'copper_ore'] } // označení ve výkupu (prodat jde kterákoli surovina z Těžby)
     ],
     giverTarget: MINER,
     flags: flags('mineIron'),
@@ -173,7 +183,8 @@ export const CRAFT_QUESTS = {
     rewardXp: [{ prof: 'herbalism', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
       { key: 'herb:farm', need: 5, text: 'Nasbírej 5 bylin na statku (záhony u mlýna a ohrada za mostem)', target: herbSite('Z01', 'Záhony statku') },
-      { key: 'sell:HerbalistShop', need: 3, text: 'Prodej Bylinkářce 3 byliny (obchod v Domě Bylinkářky)', target: { ...HERBALIST, interaction: true }, shop: 'herbalist' }
+      { key: 'sell:HerbalistShop', need: 3, text: 'Prodej Bylinkářce 3 byliny (obchod v Domě Bylinkářky)', target: { ...HERBALIST, interaction: true }, shop: 'herbalist',
+        sellItem: ['healing_herbs', 'cleansing_herbs', 'wayfarer_thyme', 'blue_herbs', 'forest_sage', 'bitter_root'] } // byliny ze statku
     ],
     giverTarget: HERBALIST,
     flags: flags('herbFarm'),
@@ -181,12 +192,12 @@ export const CRAFT_QUESTS = {
       offer: ['Záhony na statku za mostem obnovuju každou chvíli. Nasbírej tam pět bylin – a co nepotřebuješ, prodej mi. Aspoň tři kusy.'],
       active: ['Statek je za mostem, záhony u mlýna. A přebytky mi prodej v obchodě.'],
       ready: ['Krásné, čerstvé byliny. Se mnou se vyplatí obchodovat, uvidíš.'],
-      done: ['Na tůňkách u řeky rostou i vzácnější květy. Až budeš umět víc, zajdi tam.']
+      done: ['V tůňce na statku roste i vzácnější květ. Až budeš umět víc, zajdi tam.']
     }
   }),
   greenvale_herb_rare: quest('greenvale_herb_rare', {
     title: 'Byliny III – Vzácný květ',
-    brief: 'Nasbírej 2× Vodní květ (Sběr bylin 8) na Tůňkách u řeky a přines ho Bylinkářce.',
+    brief: 'Nasbírej 2× Vodní květ (Sběr bylin 7) v tůňce na statku a přines ho Bylinkářce.',
     giver: 'Bylinkářka',
     description: 'Vodní květ je neobvyklá rostlina z tůněk u řeky. Alchymisté z něj dělají vodní extrakt.',
     returnTo: 'Přines 2× Vodní květ Bylinkářce (Dům Bylinkářky).',
@@ -195,15 +206,15 @@ export const CRAFT_QUESTS = {
     rewardGold: 35,
     rewardXp: { prof: 'herbalism', amount: 300 },
     steps: [
-      { kind: 'gather', item: 'mat_vodni_kvet', qty: 2, text: 'Nasbírej 2× Vodní květ na Tůňkách u řeky (Sběr bylin 8, zelený kruh, E).',
-        target: herbSite('H07', 'Tůňky u řeky') }
+      { kind: 'gather', item: 'mat_vodni_kvet', qty: 2, text: 'Nasbírej 2× Vodní květ v tůňce na statku (Sběr bylin 7, zelený kruh, E).',
+        target: herbSite('L07', 'Statek – tůňka') } // statek: daleko od luk s monstry
     ],
     deliver: { id: 'mat_vodni_kvet', qty: 2 },
     giverTarget: HERBALIST,
     flags: flags('herbRare'),
     dialog: {
-      offer: ['Na tůňkách u řeky kvete vodní květ – bílomodrý, na hladině. Natrhej mi dva, až budeš mít Sběr bylin na osmičce.'],
-      active: ['Tůňky u řeky, severně od náměstí. Vodní květ chce zkušenou ruku – Sběr bylin osm.'],
+      offer: ['V tůňce na statku kvete vodní květ – bílomodrý, na hladině. Natrhej mi dva, až budeš mít Sběr bylin na sedmičce.'],
+      active: ['Tůňka je na statku za mostem, v ohradě. Vodní květ chce zkušenou ruku – Sběr bylin sedm.'],
       ready: ['Vodní květy! Ty se mi do sbírky hodí. Děkuju.'],
       done: ['V lesích za Greenvale rostou ještě vzácnější rostliny. Ale to už je jiný příběh.']
     }
@@ -249,6 +260,8 @@ export const CRAFT_QUESTS = {
     goals: [
       { key: 'craft:cooking:V013', need: 1, text: 'Uvař Pečenou plotici v Hostinské kuchyni (nebo na sporáku)', target: B('greenvale_tavern', 'Hostinská kuchyně'), craftItem: 'meal_V013',
         needs: [
+          // fromNpc: krok se splní rozhovorem (Rybář dá prut) – po něm bez obchodu, hláška s dalším krokem.
+          { anyOf: ROD_IDS, qty: 1, fromNpc: 'fisher', text: 'Zajdi za Rybářem pro rybářský prut (Rybářská chata)', target: { ...FISHER, interaction: true } },
           { item: 'fish_roach', qty: 1, text: 'Chyť Plotici (rybník u Rybářské chaty nebo molo, modrý kruh, E)', target: POND },
           { item: 'healing_herbs', qty: 1, kind: 'buy', text: 'Obstarej Léčivé byliny (Bylinkářka – obchod, nebo nasbírat)', target: { ...HERBALIST, interaction: true } }
         ] },
@@ -290,7 +303,7 @@ export const CRAFT_QUESTS = {
     title: 'Alchymie II – Tonik many',
     brief: 'Nasbírej modré byliny, uvař z nich Tonik many a jeden prodej na tržišti.',
     giver: 'Alchymista',
-    description: 'Tonik many vrátí hrdinovi manu na kouzla. Modré byliny rostou ve stínu u vodopádu a v zahrádkách, čistou vodu prodává Trhovkyně.',
+    description: 'Tonik many vrátí hrdinovi manu na kouzla. Modré byliny rostou v zahrádkách ve vesnici, čistou vodu prodává Trhovkyně.',
     returnTo: 'Vrať se za Alchymistou do Alchymistického obchodu.',
     reward: '15 zlata, 300 XP Alchymie a 30 XP Diplomacie.',
     requires: ['greenvale_clean_water'],
@@ -299,7 +312,7 @@ export const CRAFT_QUESTS = {
     goals: [
       { key: 'craft:alchemy:L015', need: 1, text: 'Uvař Tonik many na Alchymistickém stole (Alchymistický obchod)', target: ALCHEMIST, craftItem: 'mana_potion',
         needs: [
-          { item: 'blue_herbs', qty: 2, text: 'Nasbírej 2× Modré byliny (Stín u vodopádu, zelený kruh, E)', target: herbSite('H03', 'Stín u vodopádu') },
+          { item: 'blue_herbs', qty: 2, text: 'Nasbírej 2× Modré byliny (zahrádka u domu ve vesnici, zelený kruh, E)', target: herbSite('G06', 'Zahrádka u domu') }, // ve vesnici, daleko od luk s monstry
           { item: 'clean_water', qty: 1, kind: 'buy', text: 'Kup Čistou vodu u Trhovkyně (Tržiště – potraviny)', target: { ...MARKET, interaction: true } }
         ] },
       { key: 'sold:mana_potion', need: 1, text: 'Prodej 1× Tonik many Trhovkyni (Tržiště – potraviny → Obchod → filtr Potiony)', target: { ...MARKET, interaction: true },
@@ -308,7 +321,7 @@ export const CRAFT_QUESTS = {
     giverTarget: ALCHEMIST,
     flags: flags('alchMana'),
     dialog: {
-      offer: ['Kouzla stojí manu a mana se dá vrátit. Nasbírej modré byliny ve stínu u vodopádu, uvař z nich tonik many a jeden prodej na tržišti – ať víš, co má lektvar za cenu.'],
+      offer: ['Kouzla stojí manu a mana se dá vrátit. Nasbírej modré byliny v zahrádce u domu ve vesnici, uvař z nich tonik many a jeden prodej na tržišti – ať víš, co má lektvar za cenu.'],
       active: ['Modré byliny, čistá voda, můj stůl. A jeden tonik prodej na tržišti.'],
       ready: ['Vlastní byliny, vlastní lektvar, vlastní zisk. Tak se z učedníka stává alchymista.'],
       done: ['Ochranné přípravky jsou těžší. Ale jeden ti ukážu.']
@@ -327,7 +340,7 @@ export const CRAFT_QUESTS = {
     goals: [
       { key: 'craft:alchemy:L089', need: 1, text: 'Uvař Odpuzovač zvěře na Alchymistickém stole (Alchymie 2)', target: ALCHEMIST, craftItem: 'alch_L089',
         needs: [
-          { item: 'bitter_root', qty: 1, text: 'Nasbírej Hořký kořen (Les, zelený kruh, E)', target: herbSite('H04', 'Les') },
+          { item: 'bitter_root', qty: 1, text: 'Nasbírej Hořký kořen (Zahrádka Řemeslné dílny, zelený kruh, E)', target: herbSite('G04', 'Zahrádka Řemeslné dílny') }, // ve vesnici
           { item: 'cleansing_herbs', qty: 1, text: 'Nasbírej Čisticí byliny (Břeh řeky, zelený kruh, E)', target: herbSite('H02', 'Břeh řeky') }
         ] },
       { key: 'use:alchemy:L089', need: 1, text: 'Použij Odpuzovač zvěře (inventář, Použít)', target: null }
@@ -335,8 +348,8 @@ export const CRAFT_QUESTS = {
     giverTarget: ALCHEMIST,
     flags: flags('alchRepel'),
     dialog: {
-      offer: ['Ne každý souboj stojí za to. Hořký kořen z lesa a čisticí byliny dají odpuzovač zvěře – monstra se ti budou chvíli vyhýbat. Uvař ho a vyzkoušej.'],
-      active: ['Hořký kořen roste v lese, čisticí byliny u řeky. Uvař odpuzovač a použij ho v inventáři.'],
+      offer: ['Ne každý souboj stojí za to. Hořký kořen ze zahrádky u Řemeslné dílny a čisticí byliny dají odpuzovač zvěře – monstra se ti budou chvíli vyhýbat. Uvař ho a vyzkoušej.'],
+      active: ['Hořký kořen roste v zahrádce u Řemeslné dílny, čisticí byliny u řeky. Uvař odpuzovač a použij ho v inventáři.'],
       ready: ['Cítíš, jak se ti zvěř vyhýbá? Dobrá práce.'],
       done: ['Ochranné oleje proti živlům tě naučím, až budeš mnohem zkušenější.']
     }
@@ -345,16 +358,16 @@ export const CRAFT_QUESTS = {
   // ------------------------------------------------------------------ Kovářství (Hornický mistr)
   greenvale_smith_ingot: quest('greenvale_smith_ingot', {
     title: 'Kovářství II – Vlastní ingot',
-    brief: 'Roztav vlastní měděnou rudu na Měděný ingot a jeden ingot prodej na tržišti.',
+    brief: 'Z vlastní měděné rudy vykovej Měděný ingot a jeden ingot prodej na tržišti.',
     giver: 'Hornický mistr',
-    description: 'Měděný ingot je 2× Měděná ruda a 1× Uhlí (obojí z lomu) – roztavíš ho u výhně v Kovárně.',
+    description: 'Měděný ingot je 2× Měděná ruda a 1× Uhlí (obojí z lomu) – vykováš ho u výhně v Kovárně.',
     returnTo: 'Vrať se za Hornickým mistrem do Kovárny.',
     reward: '15 zlata, 300 XP Kovářství a 30 XP Diplomacie.',
     requires: ['greenvale_leather_strap'],
     rewardGold: 15,
     rewardXp: [{ prof: 'smithing', amount: 300 }, { prof: 'diplomacy', amount: 30 }],
     goals: [
-      { key: 'craft:smithing:sm_copper_ingot', need: 1, text: 'Roztav Měděný ingot u výhně (Kovárna)', target: MINER, craftItem: 'sm_copper_ingot',
+      { key: 'craft:smithing:sm_copper_ingot', need: 1, text: 'Vykovej Měděný ingot u výhně (Kovárna)', target: MINER, craftItem: 'sm_copper_ingot',
         needs: [
           { item: 'copper_ore', qty: 2, text: 'Vytěž 2× Měděnou rudu (lom, Měděná žíla, E)', target: quarry('N01', 'Lom – Měděná žíla') },
           { item: 'coal', qty: 1, text: 'Vytěž 1× Uhlí (lom, Uhelná sloj, E)', target: quarry('N33', 'Lom – Uhelná sloj') }
@@ -365,7 +378,7 @@ export const CRAFT_QUESTS = {
     giverTarget: MINER,
     flags: flags('smithIngot'),
     dialog: {
-      offer: ['Ruda je jen kámen, dokud ji neroztavíš. Vytěž měď a uhlí, u výhně z nich slij ingot a jeden prodej na tržišti – ať víš, co tvá práce stojí.'],
+      offer: ['Ruda je jen kámen, dokud z ní nevykováš ingot. Vytěž měď a uhlí, u výhně z nich vykovej ingot a jeden prodej na tržišti – ať víš, co tvá práce stojí.'],
       active: ['Dvě měděné rudy a uhlí, výheň je tady. Ingot pak prodej na tržišti.'],
       ready: ['Čistý ingot. Teď už z tebe není jen horník, ale i kovář.'],
       done: ['Z ingotů ukuješ zbraně a zbroje. Zkus to.']
@@ -383,7 +396,7 @@ export const CRAFT_QUESTS = {
     rewardXp: { prof: 'smithing', amount: 400 },
     goals: [{ key: 'craft:smithing:A01', need: 1, text: 'Vykovej Měděnou dýku u výhně (Kovárna)', target: MINER, craftItem: 'smith_A01',
       needs: [
-        { item: 'sm_copper_ingot', qty: 2, text: 'Roztav 2× Měděný ingot u výhně (každý 2× Měděná ruda + Uhlí)', target: MINER },
+        { item: 'sm_copper_ingot', qty: 2, text: 'Vykovej 2× Měděný ingot u výhně (každý 2× Měděná ruda + Uhlí)', target: MINER },
         { item: 'leather_strap', qty: 1, text: 'Vyrob Kožený řemínek (Kůže od Obchodníka s látkami, Koželužský stůl v Řemeslné dílně)', target: WORKSHOP }
       ] }],
     giverTarget: MINER,
@@ -407,7 +420,9 @@ export const CRAFT_QUESTS = {
     requires: ['greenvale_visit_healer'],
     rewardGold: 10,
     rewardXp: { prof: 'crafting', amount: 200 },
-    goals: [{ key: 'craft:crafting:cr_hide_to_leather', need: 2, text: 'Získej v soubojích kůže z monster a zpracuj 2× na Kůži (Koželužský stůl, Řemeslná dílna)', target: { type: 'meadow', species: 'wild_boar', label: 'Louka s divočáky' }, craftItem: 'leather' }],
+    // Dokud hráč nemá žádnou kůži z monstra, vede na louku; s kůží v inventáři do Řemeslné dílny.
+    goals: [{ key: 'craft:crafting:cr_hide_to_leather', need: 2, text: 'Zpracuj kůže z monster na Kůži (Koželužský stůl, Řemeslná dílna)', target: WORKSHOP, craftItem: 'leather',
+      needs: [{ anyOf: HIDES, qty: 1, text: 'Získej v soubojích kůži z monstra (např. Wild Boar, Dire Wolf)', target: { type: 'meadow', species: 'wild_boar', label: 'Louka s divočáky' } }] }],
     giverTarget: WORKSHOP,
     flags: flags('craftHide'),
     dialog: {

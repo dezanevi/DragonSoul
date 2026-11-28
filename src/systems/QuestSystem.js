@@ -299,8 +299,9 @@ export const QUESTS = {
       setBase(state, 'greenvale_new_companion', ownedMonsters(state).length);
       addItem(state, 'mage_crystal', 2);
     },
-    objectiveCheck: (state) => sinceBase(state, 'greenvale_new_companion', ownedMonsters(state).length) >= 1,
-    progress: (state) => ({ have: sinceBase(state, 'greenvale_new_companion', ownedMonsters(state).length), need: 1 }),
+    // Hráč, který už má víc než 2 monstra (Dire Wolf, Air Elemental a další), má úkol splněný hned.
+    objectiveCheck: (state) => ownedMonsters(state).length > 2 || sinceBase(state, 'greenvale_new_companion', ownedMonsters(state).length) >= 1,
+    progress: (state) => ({ have: ownedMonsters(state).length > 2 ? 1 : sinceBase(state, 'greenvale_new_companion', ownedMonsters(state).length), need: 1 }),
     giverTarget: { type: 'building', id: 'greenvale_observatory', label: 'Hvězdárna' },
     objectiveTarget: { type: 'meadow', label: 'Skalní stráň', zone: 'rocky_slope' },
     flags: { accepted: 'newCompanionAccepted', objective: 'newCompanionTamed', completed: 'newCompanionDone' },
@@ -413,10 +414,13 @@ export function currentQuestGoal(state, questId) {
 // Aktuální krok cíle: první chybějící surovina (goal.needs – nasbírat, vytěžit, koupit, vyrobit),
 // když má hráč všechny, cíl sám (výroba, prodej…). Sledovat a text úkolu se tak posouvají krok
 // po kroku (modré byliny → stůl, měď → uhlí → výheň). null = žádný nesplněný cíl.
+// Kolik kusů suroviny hráč má (anyOf = kterákoli z možností, např. kůže z monster).
+export const needCount = (state, need) => (need.anyOf ?? [need.item]).reduce((sum, id) => sum + getItemCount(state, id), 0);
+
 export function currentGoalStep(state, questId) {
   const goal = currentQuestGoal(state, questId);
   if (!goal) return null;
-  const need = (goal.needs ?? []).find((n) => getItemCount(state, n.item) < n.qty);
+  const need = (goal.needs ?? []).find((n) => needCount(state, n) < n.qty);
   return need ? { ...need, goal, isNeed: true } : { goal, text: goal.text, target: goal.target, craftItem: goal.craftItem };
 }
 
@@ -453,7 +457,7 @@ export function questNeededItems(state) {
     if (quest.deliver) ids.add(quest.deliver.id);
     if (quest.objectiveItem) ids.add(quest.objectiveItem.id);
     if (status === QUEST_STATUS.active) for (const step of quest.steps ?? []) if (step.item) ids.add(step.item);
-    if (status === QUEST_STATUS.active && quest.goals) for (const need of currentQuestGoal(state, quest.id)?.needs ?? []) ids.add(need.item);
+    if (status === QUEST_STATUS.active && quest.goals) for (const need of currentQuestGoal(state, quest.id)?.needs ?? []) for (const id of need.anyOf ?? [need.item]) ids.add(id);
   }
   return ids;
 }
@@ -501,7 +505,9 @@ export function questSellList(state) {
   return questMarkList(state, (quest) => {
     if (!quest.goals) return [];
     const step = currentGoalStep(state, quest.id);
-    return step && !step.isNeed && step.goal.sellItem ? [{ item: step.goal.sellItem, qty: step.goal.need, have: goalHave(state, quest.id, step.goal) }] : [];
+    if (!step || step.isNeed || !step.goal.sellItem) return [];
+    const have = goalHave(state, quest.id, step.goal);
+    return [step.goal.sellItem].flat().map((item) => ({ item, qty: step.goal.need, have }));
   });
 }
 
@@ -512,7 +518,7 @@ export function questCraftList(state) {
       const step = currentGoalStep(state, quest.id);
       if (!step) return [];
       // Chybějící surovina, kterou jde vyrobit (ingot, řemínek, drát): označit ji (stav = zásoba).
-      if (step.isNeed) return [{ item: step.item, qty: step.qty, have: getItemCount(state, step.item) }];
+      if (step.isNeed) return step.item ? [{ item: step.item, qty: step.qty, have: needCount(state, step) }] : [];
       // have = vyrobeno od přijetí (ne zásoba v inventáři – ta se nepočítá)
       return step.craftItem ? [{ item: step.craftItem, qty: step.goal.need, have: goalHave(state, quest.id, step.goal) }] : [];
     }
@@ -640,7 +646,7 @@ export function questStep(state, questId) {
   if (status === QUEST_STATUS.notStarted) return `Zadává: ${quest.giver}.`;
   if (status === QUEST_STATUS.active && quest.goals) {
     const step = currentGoalStep(state, questId);
-    if (step?.isNeed) return `${step.text}: ${Math.min(step.qty, getItemCount(state, step.item))}/${step.qty}.`;
+    if (step?.isNeed) return `${step.text}: ${Math.min(step.qty, needCount(state, step))}/${step.qty}.`;
     const goal = step?.goal;
     return goal ? `${goal.text}: ${Math.min(goal.need, goalHave(state, questId, goal))}/${goal.need}.` : quest.returnTo;
   }
@@ -662,7 +668,7 @@ export function questProgress(state, questId) {
   const part = goal && quest.goals.length > 1 ? `Část ${quest.goals.indexOf(goal) + 1}/${quest.goals.length}` : null;
   // Příprava surovin: ukazatel počtu té suroviny; jinak postup cíle.
   const goalProgress = goalStep?.isNeed
-    ? { have: getItemCount(state, goalStep.item), need: goalStep.qty, label: part ? `${part} · suroviny` : 'Suroviny' }
+    ? { have: needCount(state, goalStep), need: goalStep.qty, label: part ? `${part} · suroviny` : 'Suroviny' }
     : goal ? { have: goalHave(state, questId, goal), need: goal.need, label: part } : null;
   if (quest.progress || goalProgress) {
     const { have, need, label, unit } = goalProgress ?? quest.progress(state);

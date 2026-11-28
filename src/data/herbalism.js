@@ -63,7 +63,7 @@ const CATALOG_ROWS = [
   [4, 'bitter_root', 'Hořký kořen', 'Tmavý zkroucený kořen s hořkou vůní.', 'common', 2, 'forest', 'meadow'],
   [5, 'forest_sage', 'Lesní šalvěj', 'Šedozelené sametové listy na mýtinách.', 'uncommon', 4, 'forest', 'meadow'],
   [6, 'wayfarer_thyme', 'Poutnický tymián', 'Drobné fialové kvítky podél cest.', 'uncommon', 8, 'meadow', 'mountain'],
-  [7, 'mat_vodni_kvet', 'Vodní květ', 'Bílomodrý květ na hladině.', 'uncommon', 8, 'wetland', 'shade'],
+  [7, 'mat_vodni_kvet', 'Vodní květ', 'Bílomodrý květ na hladině.', 'uncommon', 7, 'wetland', 'shade'], // úroveň 7 (úkol Byliny III)
   [8, 'mat_svitici_list', 'Svítící list', 'List s jemně zářícími žilkami.', 'uncommon', 8, 'forest', 'magic'],
   [9, 'mountain_root', 'Horský kořen', 'Tvrdý kořen obalený drobnými kamínky.', 'uncommon', 8, 'mountain', 'forest'],
   [10, 'storm_fern', 'Bouřková kapradina', 'Kapradina s jiskřícími okraji listů.', 'rare', 16, 'mountain', 'magic'],

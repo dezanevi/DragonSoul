@@ -1076,6 +1076,13 @@ export default class InteriorScene extends Phaser.Scene {
   talkToFisher() {
     this.state.flags ??= {};
     const lines = [];
+    // Úkol čeká na prut (Vaření II – Ryba na talíř): Rybář ho dá i hráči, který ho už jednou dostal.
+    const rodQuests = this.npcNeedQuests('fisher');
+    if (rodQuests.length && this.state.flags.fishingStarterGiven) {
+      addItem(this.state, 'old_rod', 1);
+      if (getItemCount(this.state, 'bread_bait') < 3) addItem(this.state, 'bread_bait', 5);
+      lines.push('Bez prutu ryby nechytíš. Tumáš starý prut a pár chlebových návnad – ať ti ta plotice neuteče.');
+    }
     if (!this.state.flags.fishingStarterGiven) {
       this.state.flags.fishingStarterGiven = true;
       addItem(this.state, 'old_rod', 1);
@@ -1087,11 +1094,28 @@ export default class InteriorScene extends Phaser.Scene {
         'Rybářská místa poznáš podle modrého kruhu u vody – na molu a podél břehu. Stoupni si k nim a stiskni E.',
         'Úlovky ti vykoupím za dobrou cenu a každý den hledám jeden druh ryby, za ten zaplatím víc.'
       );
-    } else {
+    } else if (!rodQuests.length) {
       lines.push('Tak co, berou? Podívej se, co mám na prodej, nebo mi ukaž úlovek.');
     }
-    this.afterDialog = () => this.openFishingShop();
+    // Prut pro úkol: bez obchodu – rozhovor skončí, hra ohlásí splněný krok a ukáže další (ven, k rybníku).
+    if (rodQuests.length) {
+      SaveSystem.save(this.state);
+      const quest = rodQuests[0];
+      this.refreshQuestMarker();
+      this.afterDialog = () => {
+        this.registry.set('pendingWorldMessage', `Splněno: rybářský prut od Rybáře. Další krok (${quest.title}): ${questStep(this.state, quest.id)}`);
+        this.leaveInterior();
+      };
+    } else {
+      this.afterDialog = () => this.openFishingShop();
+    }
     this.showDialog('Rybář', lines);
+  }
+
+  // Úkoly, jejichž aktuální krok splní rozhovor s postavou (např. prut od Rybáře).
+  npcNeedQuests(npc) {
+    return Object.values(QUESTS).filter((q) => q.goals && getQuestStatus(this.state, q.id) === QUEST_STATUS.active
+      && currentGoalStep(this.state, q.id)?.fromNpc === npc);
   }
 
   // Hornický mistr: poprvé daruje Starý krumpáč, pak otevře obchod (MiningShopScene).
@@ -1178,7 +1202,8 @@ export default class InteriorScene extends Phaser.Scene {
         talk(NPC_TALK.herbalist);
         break;
       case 'fisher':
-        if (!flags.fishingStarterGiven) return null;
+        // Bez prutu pro úkol: rovnou rozhovor (Rybář dá prut), bez nabídky.
+        if (!flags.fishingStarterGiven || this.npcNeedQuests('fisher').length) return null;
         spotQuests();
         options.push({ label: 'Obchod a výkup ryb', run: () => this.openFishingShop(), mark: questWantsShop(this.state, 'fisher') ? { char: '?', color: QUEST_MARK_BLUE } : null });
         talk(NPC_TALK.fisher);

@@ -170,7 +170,9 @@ export function eatMeal(state, recipeId, now = Date.now()) {
       regen: e.regen ?? 0,
       manaRegen: e.manaRegen ?? 0,
       buffs: { ...(e.buffs ?? {}) },
-      travelUntil: e.move || e.explore ? now + (e.minutes ?? 0) * 60000 * (1 + getTalentBonuses(state).foodDuration) : 0,
+      // Časový bonus bez soubojů (Charisma): trvá minuty jako cestovní účinky.
+      timedBuffs: Boolean(e.buffs && e.minutes && !e.battles),
+      travelUntil: e.move || e.explore || (e.buffs && e.minutes && !e.battles) ? now + (e.minutes ?? 0) * 60000 * (1 + getTalentBonuses(state).foodDuration) : 0,
       move: e.move ?? 0,
       explore: e.explore ?? 0
     };
@@ -183,7 +185,9 @@ export function eatMeal(state, recipeId, now = Date.now()) {
 // Bonus statistiky z jídla v % (souboj). Platí jen s aktivním pokrmem.
 export function mealBuff(state, stat) {
   const meal = activeMeal(state);
-  return meal && meal.battlesLeft > 0 ? Number(meal.buffs?.[stat]) || 0 : 0;
+  // Bonus na souboje, nebo časový bonus (Charisma z jídla – minuty).
+  const on = meal && (meal.battlesLeft > 0 || (meal.timedBuffs && (meal.travelUntil ?? 0) > Date.now()));
+  return on ? Number(meal.buffs?.[stat]) || 0 : 0;
 }
 
 // Po každém souboji: regenerace HP monstrům a many hrdinovi, odečet souboje.

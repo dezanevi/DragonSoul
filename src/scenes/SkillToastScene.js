@@ -9,7 +9,8 @@ import { TAB_STRIP } from '../ui/cardTabBar.js';
 // zlatou hvězdičkou. Jeho posluchač se registruje při importu, tedy dřív než tahle scéna.
 import '../systems/NewRecipeSystem.js';
 const unlockedRecipes = (event) => event.unlocked ?? 0;
-const itemsWord = (n) => (n === 1 ? 'předmět' : n >= 2 && n <= 4 ? 'předměty' : 'předmětů');
+// „Odemkl se 1 recept“, „Odemkly se 3 recepty“, „Odemklo se 5 receptů“.
+const unlockedText = (n) => (n === 1 ? 'Odemkl se 1 recept' : n >= 2 && n <= 4 ? `Odemkly se ${n} recepty` : `Odemklo se ${n} receptů`);
 
 // Vyskakovací okno zisku XP v dovednosti: shora vyjede nahoru doprostřed (pod lištu karet) dlaždice dovednosti z karty
 // Hrdiny (Dovednosti), ukazatel se posune o získané XP; při nové úrovni se naplní, zazáří
@@ -20,7 +21,7 @@ const TS = 1.35; // zvětšení dlaždice (karta Hrdiny: 185 × 73)
 const TILE = { w: 185 * TS, h: 73 * TS };
 const BAR = { x: 58 * TS, y: 44 * TS, w: 114 * TS, h: 18 * TS }; // jako SkillsPanel
 // Nahoře uprostřed, hned pod lištou karet (lištu nezakryje); vyjede shora a zajede zpět nahoru.
-// Texty (+XP, Nová úroveň, Odemkl jsi…) jsou pod dlaždicí.
+// Texty (+XP, Nová úroveň, Odemklo se N receptů) jsou pod dlaždicí.
 const SHOW_Y = TAB_STRIP.y + TAB_STRIP.h + 14 + TILE.h / 2;
 const OFF_Y = -(TILE.h / 2 + 200); // nad obrazovkou i s texty pod dlaždicí
 const MAX_LEVEL = 100;
@@ -128,7 +129,7 @@ export default class SkillToastScene extends Phaser.Scene {
         // Nová úroveň odemkla recepty: informační hláška nad oknem.
         const unlocked = unlockedRecipes(event);
         if (unlocked > 0) {
-          const info = this.add.text(0, -top + 100, `Odemkl jsi ${unlocked} ${itemsWord(unlocked)}`, {
+          const info = this.add.text(0, -top + 100, unlockedText(unlocked), {
             fontFamily: CARD_FONT, fontSize: '21px', fontStyle: 'bold', color: '#9fe3ff', stroke: '#06121f', strokeThickness: 5
           }).setOrigin(0.5).setAlpha(0);
           box.add(info);
